@@ -1,0 +1,57 @@
+import json
+M={1:"M1 Foundations & PayPal sandbox",2:"M2 Buyer & seller agents + negotiation",3:"M3 Payments: authorize/capture, approvals, webhooks, disputes",4:"M4 Dashboard + AP automation + polish",5:"M5 Deploy, video, submission"}
+# (title, milestone, labels, blocked_by, acceptance criteria)
+I=[
+("Monorepo scaffold (pnpm, apps/web, apps/api, packages/*)",1,"infra,devops",[],"pnpm dev starts web+api; lint+typecheck pass; CI workflow runs on PR"),
+("Postgres schema + Drizzle migrations for all tables",1,"infra",[1],"All tables in ARCHITECTURE §4 migrate up/down; seed script creates 4 sellers"),
+("PayPal sandbox app + 6 test accounts",1,"paypal-api,infra",[],"REST app has Payouts+Invoicing on; buyer, 4 merchants, client created; IDs recorded in SETUP.md (no secrets)"),
+("PayPal REST client with OAuth token cache + PayPal-Request-Id",1,"paypal-api",[1,3],"Token refresh on 401/expiry; every POST sends PayPal-Request-Id; unit tests with mocked responses"),
+("Spike: create(AUTHORIZE) -> authorize -> capture -> void script",1,"paypal-api",[4],"Script proves full lifecycle in sandbox; authorization_id and capture_id logged"),
+("Webhook receiver with signature verification + idempotent store",1,"paypal-api,infra",[2,4],"verify-webhook-signature called; duplicate event IDs ignored; events in webhook_events"),
+("Azure AI Foundry gateway client with model routing",1,"ai-agent,infra",[1],"MODEL_BUYER/SELLER/JUDGE routed; request logging; token budget per run enforced"),
+("Early Render deploy (api + web + Postgres) via render.yaml",1,"devops",[1,2],"Public URL live; webhook URL reachable by PayPal sandbox"),
+("Negotiation protocol schema (zod) + message bus",2,"ai-agent",[1],"OFFER/COUNTER/ACCEPT/REJECT validated; invalid messages rejected and logged"),
+("Seller agent template with config (floor, stock, lead time, persona)",2,"ai-agent",[7,9],"Floor enforced in code; seller never offers below floor across 100 fuzz runs"),
+("Four seller strategies: anchorer, bundler, cheap-slow, premium-fast",2,"ai-agent,feature",[10],"Each strategy has distinct behaviour visible in transcripts"),
+("Buyer agent: parallel RFQ fan-out",2,"ai-agent",[9,10],"Quotes from all sellers gathered concurrently within 15s"),
+("Buyer multi-round negotiation with BATNA",2,"ai-agent,feature",[12],"Max 4 rounds; buyer counters using best alternative; budget never revealed"),
+("Deterministic offer scoring + recommendation rationale",2,"ai-agent",[13],"Weighted score price/delivery/reputation; rationale cites numbers"),
+("Chat UI with streaming negotiation feed (SSE)",2,"frontend",[12],"Messages stream live per seller; request form parses items/budget/deadline"),
+("Eval harness v0: scenarios + savings vs list price",2,"ai-agent,feature",[14],"50 scenarios run headless; report shows avg savings and policy violations"),
+("LLM-as-judge for rationale quality + negotiation fairness",2,"ai-agent,enhancement",[16],"Judge score per run in report; prompts versioned"),
+("Policy engine: budget, allow-list, currency, approval tiers",3,"ai-agent,feature",[2],"Payment tools refuse when rules fail; tiers configurable via APPROVAL_TIERS; tests"),
+("Approval cards (approve/reject/renegotiate)",3,"frontend,feature",[18,15],"Card shows winner, runner-up, savings, risk flags; decision persisted in approvals"),
+("Mandate tokens (signed JWT) for agent-to-agent trust",3,"ai-agent,enhancement",[18],"Mandate carries scope/max/expiry; seller and payment tools verify signature"),
+("Order state machine implementation",3,"paypal-api",[2],"Only legal transitions allowed (ARCHITECTURE §4); illegal transition throws + audit"),
+("Payment tools: create_authorized_order, capture, void, refund",3,"paypal-api,ai-agent",[5,18,21],"Tools take po_id only; amounts from DB; idempotent"),
+("Payer approval flow for sandbox buyer (PayPal button/approve link)",3,"paypal-api,frontend",[22],"Owner approves in PayPal sandbox; return URL triggers authorize"),
+("Seller mark_shipped + add tracking to PayPal order",3,"paypal-api",[22],"POST /v2/checkout/orders/{id}/track called; state SHIPPED"),
+("Delivery confirmation -> capture",3,"paypal-api",[24],"Confirm triggers capture; PAYMENT.CAPTURE.COMPLETED updates ledger"),
+("Auto-void on missed deadline / seller failure + expiry job",3,"paypal-api,feature",[22],"Timeout voids authorization; expiring auths reauthorized or voided"),
+("Webhook -> ledger projections for all subscribed events",3,"paypal-api",[6,21],"Each event type updates payments/disputes/invoices; replay-safe"),
+("Dispute handling: list/get via Agent Toolkit, agent drafts response",3,"paypal-api,ai-agent",[27],"CUSTOMER.DISPUTE.CREATED shown; agent draft stored; accept_dispute_claim callable behind approval"),
+("Hash-chained audit log + viewer",3,"feature",[2],"Each row hashes previous; tamper check endpoint; UI timeline per order"),
+("AG Grid dashboard: negotiation feed, approvals, held, captured, disputes",4,"dashboard,frontend",[15,27],"Live row updates via applyTransaction; Community features only by default"),
+("AG Grid Enterprise extras behind flag (grouping, master/detail, charts, export)",4,"dashboard,enhancement",[30],"Flag off = no Enterprise import; with trial key no watermark"),
+("Supplier reputation scoring (persistent)",4,"ai-agent,feature",[27],"On-time/dispute/price-honesty update after each order; feeds scoring"),
+("Invoice PDF ingestion + LLM extraction",4,"ai-agent,feature",[7,2],"Vendor/amount/due/lines extracted to invoices with confidence; low confidence flagged"),
+("Three-way match (PO vs receipt vs invoice)",4,"feature",[33,25],"Mismatch >2% flagged; matched invoices queue for payment"),
+("Payouts for matched supplier invoices",4,"paypal-api,feature",[34,18],"POST /v1/payments/payouts; batch status via webhook"),
+("Client invoicing via Agent Toolkit create_invoice/send_invoice",4,"paypal-api,ai-agent",[4],"Chat command creates+sends invoice to sandbox client; INVOICING.INVOICE.PAID updates ledger"),
+("Recurring replenishment rule (stretch)",4,"enhancement",[13],"Low-stock rule triggers new sourcing request"),
+("Multi-currency quotes + FX normalisation (stretch)",4,"enhancement",[14],"USD/SGD/INR quotes compared in base currency"),
+("Slack approval interface (stretch)",4,"enhancement",[19],"Approval card posted to Slack; button decision persisted"),
+("Spend forecasting from ledger (Databricks/Snowflake stretch)",4,"enhancement",[27],"Simple trend chart; optional warehouse export"),
+("UI polish, empty states, seeded demo data",4,"frontend,good-first-issue",[30],"Fresh deploy shows meaningful demo state in 1 click"),
+("Security pass: secrets, sandbox-only guard, rate limits",4,"devops",[22],"No secrets in repo (scan); startup fails if PAYPAL_ENV!=sandbox; per-run limits"),
+("Production Render deploy + smoke test",5,"devops",[8,25,30],"Full flow passes on hosted URL 3x"),
+("Eval report final + chart for video",5,"ai-agent,docs",[16,17],"Report committed in docs/evals.md with numbers"),
+("README final: architecture image, setup, tools used, changes since Oct 1",5,"docs",[43],"Judges can run locally from README"),
+("Record & edit demo video (<3 min) and upload to YouTube (public)",5,"hackathon",[43,44],"Under 2:55; shows end-to-end; link in README"),
+("Devpost submission package (text, tools, links) — Suhail submits",5,"hackathon,docs",[45,46],"Draft reviewed; Suhail submits before 12 Nov 18:00 IST"),
+]
+out=[]
+for i,(t,m,l,b,ac) in enumerate(I,1):
+    body=f"**Acceptance criteria**\n- "+ac.replace('; ','\n- ')+f"\n\n**Milestone:** {M[m]}\n"+("**Blocked by:** "+", ".join(f"#{x}" for x in b) if b else "**Blocked by:** none")+"\n\nSee docs/ARCHITECTURE.md."
+    out.append({"number":i,"title":t,"milestone":M[m],"labels":l.split(',')+["hackathon"] if "hackathon" not in l else l.split(','),"body":body})
+json.dump(out,open('issues.json','w'),indent=1);print(len(out))

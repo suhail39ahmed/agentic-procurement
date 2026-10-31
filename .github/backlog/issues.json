@@ -1,0 +1,494 @@
+[
+ {
+  "number": 1,
+  "title": "Monorepo scaffold (pnpm, apps/web, apps/api, packages/*)",
+  "milestone": "M1 Foundations & PayPal sandbox",
+  "labels": [
+   "infra",
+   "devops",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- pnpm dev starts web+api\n- lint+typecheck pass\n- CI workflow runs on PR\n\n**Milestone:** M1 Foundations & PayPal sandbox\n**Blocked by:** none\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 2,
+  "title": "Postgres schema + Drizzle migrations for all tables",
+  "milestone": "M1 Foundations & PayPal sandbox",
+  "labels": [
+   "infra",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- All tables in ARCHITECTURE \u00a74 migrate up/down\n- seed script creates 4 sellers\n\n**Milestone:** M1 Foundations & PayPal sandbox\n**Blocked by:** #1\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 3,
+  "title": "PayPal sandbox app + 6 test accounts",
+  "milestone": "M1 Foundations & PayPal sandbox",
+  "labels": [
+   "paypal-api",
+   "infra",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- REST app has Payouts+Invoicing on\n- buyer, 4 merchants, client created\n- IDs recorded in SETUP.md (no secrets)\n\n**Milestone:** M1 Foundations & PayPal sandbox\n**Blocked by:** none\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 4,
+  "title": "PayPal REST client with OAuth token cache + PayPal-Request-Id",
+  "milestone": "M1 Foundations & PayPal sandbox",
+  "labels": [
+   "paypal-api",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Token refresh on 401/expiry\n- every POST sends PayPal-Request-Id\n- unit tests with mocked responses\n\n**Milestone:** M1 Foundations & PayPal sandbox\n**Blocked by:** #1, #3\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 5,
+  "title": "Spike: create(AUTHORIZE) -> authorize -> capture -> void script",
+  "milestone": "M1 Foundations & PayPal sandbox",
+  "labels": [
+   "paypal-api",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Script proves full lifecycle in sandbox\n- authorization_id and capture_id logged\n\n**Milestone:** M1 Foundations & PayPal sandbox\n**Blocked by:** #4\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 6,
+  "title": "Webhook receiver with signature verification + idempotent store",
+  "milestone": "M1 Foundations & PayPal sandbox",
+  "labels": [
+   "paypal-api",
+   "infra",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- verify-webhook-signature called\n- duplicate event IDs ignored\n- events in webhook_events\n\n**Milestone:** M1 Foundations & PayPal sandbox\n**Blocked by:** #2, #4\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 7,
+  "title": "Azure AI Foundry gateway client with model routing",
+  "milestone": "M1 Foundations & PayPal sandbox",
+  "labels": [
+   "ai-agent",
+   "infra",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- MODEL_BUYER/SELLER/JUDGE routed\n- request logging\n- token budget per run enforced\n\n**Milestone:** M1 Foundations & PayPal sandbox\n**Blocked by:** #1\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 8,
+  "title": "Early Render deploy (api + web + Postgres) via render.yaml",
+  "milestone": "M1 Foundations & PayPal sandbox",
+  "labels": [
+   "devops",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Public URL live\n- webhook URL reachable by PayPal sandbox\n\n**Milestone:** M1 Foundations & PayPal sandbox\n**Blocked by:** #1, #2\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 9,
+  "title": "Negotiation protocol schema (zod) + message bus",
+  "milestone": "M2 Buyer & seller agents + negotiation",
+  "labels": [
+   "ai-agent",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- OFFER/COUNTER/ACCEPT/REJECT validated\n- invalid messages rejected and logged\n\n**Milestone:** M2 Buyer & seller agents + negotiation\n**Blocked by:** #1\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 10,
+  "title": "Seller agent template with config (floor, stock, lead time, persona)",
+  "milestone": "M2 Buyer & seller agents + negotiation",
+  "labels": [
+   "ai-agent",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Floor enforced in code\n- seller never offers below floor across 100 fuzz runs\n\n**Milestone:** M2 Buyer & seller agents + negotiation\n**Blocked by:** #7, #9\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 11,
+  "title": "Four seller strategies: anchorer, bundler, cheap-slow, premium-fast",
+  "milestone": "M2 Buyer & seller agents + negotiation",
+  "labels": [
+   "ai-agent",
+   "feature",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Each strategy has distinct behaviour visible in transcripts\n\n**Milestone:** M2 Buyer & seller agents + negotiation\n**Blocked by:** #10\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 12,
+  "title": "Buyer agent: parallel RFQ fan-out",
+  "milestone": "M2 Buyer & seller agents + negotiation",
+  "labels": [
+   "ai-agent",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Quotes from all sellers gathered concurrently within 15s\n\n**Milestone:** M2 Buyer & seller agents + negotiation\n**Blocked by:** #9, #10\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 13,
+  "title": "Buyer multi-round negotiation with BATNA",
+  "milestone": "M2 Buyer & seller agents + negotiation",
+  "labels": [
+   "ai-agent",
+   "feature",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Max 4 rounds\n- buyer counters using best alternative\n- budget never revealed\n\n**Milestone:** M2 Buyer & seller agents + negotiation\n**Blocked by:** #12\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 14,
+  "title": "Deterministic offer scoring + recommendation rationale",
+  "milestone": "M2 Buyer & seller agents + negotiation",
+  "labels": [
+   "ai-agent",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Weighted score price/delivery/reputation\n- rationale cites numbers\n\n**Milestone:** M2 Buyer & seller agents + negotiation\n**Blocked by:** #13\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 15,
+  "title": "Chat UI with streaming negotiation feed (SSE)",
+  "milestone": "M2 Buyer & seller agents + negotiation",
+  "labels": [
+   "frontend",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Messages stream live per seller\n- request form parses items/budget/deadline\n\n**Milestone:** M2 Buyer & seller agents + negotiation\n**Blocked by:** #12\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 16,
+  "title": "Eval harness v0: scenarios + savings vs list price",
+  "milestone": "M2 Buyer & seller agents + negotiation",
+  "labels": [
+   "ai-agent",
+   "feature",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- 50 scenarios run headless\n- report shows avg savings and policy violations\n\n**Milestone:** M2 Buyer & seller agents + negotiation\n**Blocked by:** #14\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 17,
+  "title": "LLM-as-judge for rationale quality + negotiation fairness",
+  "milestone": "M2 Buyer & seller agents + negotiation",
+  "labels": [
+   "ai-agent",
+   "enhancement",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Judge score per run in report\n- prompts versioned\n\n**Milestone:** M2 Buyer & seller agents + negotiation\n**Blocked by:** #16\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 18,
+  "title": "Policy engine: budget, allow-list, currency, approval tiers",
+  "milestone": "M3 Payments: authorize/capture, approvals, webhooks, disputes",
+  "labels": [
+   "ai-agent",
+   "feature",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Payment tools refuse when rules fail\n- tiers configurable via APPROVAL_TIERS\n- tests\n\n**Milestone:** M3 Payments: authorize/capture, approvals, webhooks, disputes\n**Blocked by:** #2\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 19,
+  "title": "Approval cards (approve/reject/renegotiate)",
+  "milestone": "M3 Payments: authorize/capture, approvals, webhooks, disputes",
+  "labels": [
+   "frontend",
+   "feature",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Card shows winner, runner-up, savings, risk flags\n- decision persisted in approvals\n\n**Milestone:** M3 Payments: authorize/capture, approvals, webhooks, disputes\n**Blocked by:** #18, #15\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 20,
+  "title": "Mandate tokens (signed JWT) for agent-to-agent trust",
+  "milestone": "M3 Payments: authorize/capture, approvals, webhooks, disputes",
+  "labels": [
+   "ai-agent",
+   "enhancement",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Mandate carries scope/max/expiry\n- seller and payment tools verify signature\n\n**Milestone:** M3 Payments: authorize/capture, approvals, webhooks, disputes\n**Blocked by:** #18\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 21,
+  "title": "Order state machine implementation",
+  "milestone": "M3 Payments: authorize/capture, approvals, webhooks, disputes",
+  "labels": [
+   "paypal-api",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Only legal transitions allowed (ARCHITECTURE \u00a74)\n- illegal transition throws + audit\n\n**Milestone:** M3 Payments: authorize/capture, approvals, webhooks, disputes\n**Blocked by:** #2\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 22,
+  "title": "Payment tools: create_authorized_order, capture, void, refund",
+  "milestone": "M3 Payments: authorize/capture, approvals, webhooks, disputes",
+  "labels": [
+   "paypal-api",
+   "ai-agent",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Tools take po_id only\n- amounts from DB\n- idempotent\n\n**Milestone:** M3 Payments: authorize/capture, approvals, webhooks, disputes\n**Blocked by:** #5, #18, #21\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 23,
+  "title": "Payer approval flow for sandbox buyer (PayPal button/approve link)",
+  "milestone": "M3 Payments: authorize/capture, approvals, webhooks, disputes",
+  "labels": [
+   "paypal-api",
+   "frontend",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Owner approves in PayPal sandbox\n- return URL triggers authorize\n\n**Milestone:** M3 Payments: authorize/capture, approvals, webhooks, disputes\n**Blocked by:** #22\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 24,
+  "title": "Seller mark_shipped + add tracking to PayPal order",
+  "milestone": "M3 Payments: authorize/capture, approvals, webhooks, disputes",
+  "labels": [
+   "paypal-api",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- POST /v2/checkout/orders/{id}/track called\n- state SHIPPED\n\n**Milestone:** M3 Payments: authorize/capture, approvals, webhooks, disputes\n**Blocked by:** #22\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 25,
+  "title": "Delivery confirmation -> capture",
+  "milestone": "M3 Payments: authorize/capture, approvals, webhooks, disputes",
+  "labels": [
+   "paypal-api",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Confirm triggers capture\n- PAYMENT.CAPTURE.COMPLETED updates ledger\n\n**Milestone:** M3 Payments: authorize/capture, approvals, webhooks, disputes\n**Blocked by:** #24\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 26,
+  "title": "Auto-void on missed deadline / seller failure + expiry job",
+  "milestone": "M3 Payments: authorize/capture, approvals, webhooks, disputes",
+  "labels": [
+   "paypal-api",
+   "feature",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Timeout voids authorization\n- expiring auths reauthorized or voided\n\n**Milestone:** M3 Payments: authorize/capture, approvals, webhooks, disputes\n**Blocked by:** #22\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 27,
+  "title": "Webhook -> ledger projections for all subscribed events",
+  "milestone": "M3 Payments: authorize/capture, approvals, webhooks, disputes",
+  "labels": [
+   "paypal-api",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Each event type updates payments/disputes/invoices\n- replay-safe\n\n**Milestone:** M3 Payments: authorize/capture, approvals, webhooks, disputes\n**Blocked by:** #6, #21\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 28,
+  "title": "Dispute handling: list/get via Agent Toolkit, agent drafts response",
+  "milestone": "M3 Payments: authorize/capture, approvals, webhooks, disputes",
+  "labels": [
+   "paypal-api",
+   "ai-agent",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- CUSTOMER.DISPUTE.CREATED shown\n- agent draft stored\n- accept_dispute_claim callable behind approval\n\n**Milestone:** M3 Payments: authorize/capture, approvals, webhooks, disputes\n**Blocked by:** #27\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 29,
+  "title": "Hash-chained audit log + viewer",
+  "milestone": "M3 Payments: authorize/capture, approvals, webhooks, disputes",
+  "labels": [
+   "feature",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Each row hashes previous\n- tamper check endpoint\n- UI timeline per order\n\n**Milestone:** M3 Payments: authorize/capture, approvals, webhooks, disputes\n**Blocked by:** #2\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 30,
+  "title": "AG Grid dashboard: negotiation feed, approvals, held, captured, disputes",
+  "milestone": "M4 Dashboard + AP automation + polish",
+  "labels": [
+   "dashboard",
+   "frontend",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Live row updates via applyTransaction\n- Community features only by default\n\n**Milestone:** M4 Dashboard + AP automation + polish\n**Blocked by:** #15, #27\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 31,
+  "title": "AG Grid Enterprise extras behind flag (grouping, master/detail, charts, export)",
+  "milestone": "M4 Dashboard + AP automation + polish",
+  "labels": [
+   "dashboard",
+   "enhancement",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Flag off = no Enterprise import\n- with trial key no watermark\n\n**Milestone:** M4 Dashboard + AP automation + polish\n**Blocked by:** #30\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 32,
+  "title": "Supplier reputation scoring (persistent)",
+  "milestone": "M4 Dashboard + AP automation + polish",
+  "labels": [
+   "ai-agent",
+   "feature",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- On-time/dispute/price-honesty update after each order\n- feeds scoring\n\n**Milestone:** M4 Dashboard + AP automation + polish\n**Blocked by:** #27\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 33,
+  "title": "Invoice PDF ingestion + LLM extraction",
+  "milestone": "M4 Dashboard + AP automation + polish",
+  "labels": [
+   "ai-agent",
+   "feature",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Vendor/amount/due/lines extracted to invoices with confidence\n- low confidence flagged\n\n**Milestone:** M4 Dashboard + AP automation + polish\n**Blocked by:** #7, #2\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 34,
+  "title": "Three-way match (PO vs receipt vs invoice)",
+  "milestone": "M4 Dashboard + AP automation + polish",
+  "labels": [
+   "feature",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Mismatch >2% flagged\n- matched invoices queue for payment\n\n**Milestone:** M4 Dashboard + AP automation + polish\n**Blocked by:** #33, #25\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 35,
+  "title": "Payouts for matched supplier invoices",
+  "milestone": "M4 Dashboard + AP automation + polish",
+  "labels": [
+   "paypal-api",
+   "feature",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- POST /v1/payments/payouts\n- batch status via webhook\n\n**Milestone:** M4 Dashboard + AP automation + polish\n**Blocked by:** #34, #18\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 36,
+  "title": "Client invoicing via Agent Toolkit create_invoice/send_invoice",
+  "milestone": "M4 Dashboard + AP automation + polish",
+  "labels": [
+   "paypal-api",
+   "ai-agent",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Chat command creates+sends invoice to sandbox client\n- INVOICING.INVOICE.PAID updates ledger\n\n**Milestone:** M4 Dashboard + AP automation + polish\n**Blocked by:** #4\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 37,
+  "title": "Recurring replenishment rule (stretch)",
+  "milestone": "M4 Dashboard + AP automation + polish",
+  "labels": [
+   "enhancement",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Low-stock rule triggers new sourcing request\n\n**Milestone:** M4 Dashboard + AP automation + polish\n**Blocked by:** #13\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 38,
+  "title": "Multi-currency quotes + FX normalisation (stretch)",
+  "milestone": "M4 Dashboard + AP automation + polish",
+  "labels": [
+   "enhancement",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- USD/SGD/INR quotes compared in base currency\n\n**Milestone:** M4 Dashboard + AP automation + polish\n**Blocked by:** #14\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 39,
+  "title": "Slack approval interface (stretch)",
+  "milestone": "M4 Dashboard + AP automation + polish",
+  "labels": [
+   "enhancement",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Approval card posted to Slack\n- button decision persisted\n\n**Milestone:** M4 Dashboard + AP automation + polish\n**Blocked by:** #19\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 40,
+  "title": "Spend forecasting from ledger (Databricks/Snowflake stretch)",
+  "milestone": "M4 Dashboard + AP automation + polish",
+  "labels": [
+   "enhancement",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Simple trend chart\n- optional warehouse export\n\n**Milestone:** M4 Dashboard + AP automation + polish\n**Blocked by:** #27\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 41,
+  "title": "UI polish, empty states, seeded demo data",
+  "milestone": "M4 Dashboard + AP automation + polish",
+  "labels": [
+   "frontend",
+   "good-first-issue",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Fresh deploy shows meaningful demo state in 1 click\n\n**Milestone:** M4 Dashboard + AP automation + polish\n**Blocked by:** #30\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 42,
+  "title": "Security pass: secrets, sandbox-only guard, rate limits",
+  "milestone": "M4 Dashboard + AP automation + polish",
+  "labels": [
+   "devops",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- No secrets in repo (scan)\n- startup fails if PAYPAL_ENV!=sandbox\n- per-run limits\n\n**Milestone:** M4 Dashboard + AP automation + polish\n**Blocked by:** #22\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 43,
+  "title": "Production Render deploy + smoke test",
+  "milestone": "M5 Deploy, video, submission",
+  "labels": [
+   "devops",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Full flow passes on hosted URL 3x\n\n**Milestone:** M5 Deploy, video, submission\n**Blocked by:** #8, #25, #30\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 44,
+  "title": "Eval report final + chart for video",
+  "milestone": "M5 Deploy, video, submission",
+  "labels": [
+   "ai-agent",
+   "docs",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Report committed in docs/evals.md with numbers\n\n**Milestone:** M5 Deploy, video, submission\n**Blocked by:** #16, #17\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 45,
+  "title": "README final: architecture image, setup, tools used, changes since Oct 1",
+  "milestone": "M5 Deploy, video, submission",
+  "labels": [
+   "docs",
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Judges can run locally from README\n\n**Milestone:** M5 Deploy, video, submission\n**Blocked by:** #43\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 46,
+  "title": "Record & edit demo video (<3 min) and upload to YouTube (public)",
+  "milestone": "M5 Deploy, video, submission",
+  "labels": [
+   "hackathon"
+  ],
+  "body": "**Acceptance criteria**\n- Under 2:55\n- shows end-to-end\n- link in README\n\n**Milestone:** M5 Deploy, video, submission\n**Blocked by:** #43, #44\n\nSee docs/ARCHITECTURE.md."
+ },
+ {
+  "number": 47,
+  "title": "Devpost submission package (text, tools, links) \u2014 Suhail submits",
+  "milestone": "M5 Deploy, video, submission",
+  "labels": [
+   "hackathon",
+   "docs"
+  ],
+  "body": "**Acceptance criteria**\n- Draft reviewed\n- Suhail submits before 12 Nov 18:00 IST\n\n**Milestone:** M5 Deploy, video, submission\n**Blocked by:** #45, #46\n\nSee docs/ARCHITECTURE.md."
+ }
+]
