@@ -1,0 +1,2 @@
+{ "name": "@ap/api", "private": true, "type": "module", "scripts": { "dev": "tsx watch src/index.ts", "build": "tsc", "typecheck": "tsc --noEmit" },
+  "dependencies": { "@ap/paypal": "workspace:*", "@ap/agents": "workspace:*" } }
