@@ -107,9 +107,14 @@ This time, after the hold, it **voids**, so the money is released and nobody is 
 
 **Check your work.** Log in at https://www.sandbox.paypal.com as `owner-buyer` and as `seller-a`. You should see a completed $25 payment from the first run and a voided authorization from the second.
 
+**If `corepack enable` fails** (permission error), skip it and use `npx pnpm@9.12.0 install` and `npx pnpm@9.12.0 spike:paypal`. Or install pnpm once with `npm i -g pnpm@9`.
+
+**Quick check before real credentials:** with blank values in `.env`, the script stops with "Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET". That means everything is wired up correctly and it's only waiting for your keys.
+
 **If something fails:**
 - `401` / OAuth failed: the ID or secret is wrong, or the dashboard was set to Live. Re-copy them from the Sandbox app.
 - `PAYEE_ACCOUNT_INVALID`: `SPIKE_SELLER_EMAIL` doesn't match a sandbox business account.
+- `Set SPIKE_SELLER_EMAIL`: add seller-a's sandbox email to `.env`.
 - `ORDER_NOT_APPROVED`: you pressed Enter before approving in the browser.
 
 ---
