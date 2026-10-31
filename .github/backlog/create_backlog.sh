@@ -7,5 +7,5 @@ for m in "M1 Foundations & PayPal sandbox|2026-11-02" "M2 Buyer & seller agents 
 python3 - <<'PY'
 import json,subprocess
 for i in json.load(open('issues.json')):
-    subprocess.run(['gh','issue','create','-R','suhail39ahmed/agentic-procurement','-t',i['title'],'-b',i['body'],'-m',i['milestone'],'-l',','.join(i['labels'])],check=True)
+    subprocess.run(['gh','issue','create','-R','suhail39ahmed/agentic-procurement','-t',i['title'],'-b',i['body'],'-m',i['milestone'],'-l',','.join(i['labels']),'-a','suhail39ahmed'],check=True)
 PY
