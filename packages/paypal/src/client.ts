@@ -68,7 +68,18 @@ export class PayPalClient {
 
   // TODO(#22): refund POST /v2/payments/captures/{id}/refund
   // TODO(#24): tracking POST /v2/checkout/orders/{id}/track
-  // TODO(#6):  webhook verify POST /v1/notifications/verify-webhook-signature
+  /** POST /v1/notifications/verify-webhook-signature. Returns true only if verification_status === "SUCCESS". */
+  async verifyWebhook(headers: Record<string, string | undefined>, event: unknown, webhookId: string): Promise<boolean> {
+    const h = (k: string) => headers[k] ?? headers[k.toLowerCase()];
+    const body = {
+      auth_algo: h("paypal-auth-algo"), cert_url: h("paypal-cert-url"), transmission_id: h("paypal-transmission-id"),
+      transmission_sig: h("paypal-transmission-sig"), transmission_time: h("paypal-transmission-time"),
+      webhook_id: webhookId, webhook_event: event,
+    };
+    if (!body.transmission_id || !body.transmission_sig) return false;
+    const r = await this.post<{ verification_status: string }>("/v1/notifications/verify-webhook-signature", body);
+    return r.verification_status === "SUCCESS";
+  }
 }
 
 export function clientFromEnv() {
