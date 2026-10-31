@@ -39,7 +39,7 @@ export class PayPalClient {
   createAuthorizeOrder(i: CreateOrderInput) {
     return this.post<any>("/v2/checkout/orders", {
       intent: "AUTHORIZE",
-      purchase_units: [{ reference_id: i.poId, description: i.description, amount: i.amount, payee: { email_address: i.payeeEmail } }],
+      purchase_units: [{ reference_id: i.poId, description: i.description, amount: i.amount, ...(i.payeeEmail ? { payee: { email_address: i.payeeEmail } } : {}) }],
       payment_source: { paypal: { experience_context: { return_url: i.returnUrl ?? "http://localhost:3000/return", cancel_url: i.cancelUrl ?? "http://localhost:3000/cancel" } } },
     }, `${i.poId}:create`);
   }
@@ -54,7 +54,10 @@ export class PayPalClient {
     return this.post<any>(`/v2/payments/authorizations/${authorizationId}/capture`, { final_capture: true }, `${poId}:capture`);
   }
 
-  /** Payments v2: POST /v2/payments/authorizations/{id}/void. TODO(#26): call from timeout/expiry job. Returns 204 on success. */
+  /** Payments v2: POST /v2/payments/authorizations/{id}/void.
+   *  NOTE: only the payee merchant (or a partner holding its permissions) may void.
+   *  Voiding an auth whose payee is a different sandbox merchant returns 403 PERMISSION_DENIED,
+   *  even though capture by the order creator succeeds. Use payee = our own merchant for voidable holds. TODO(#26): call from timeout/expiry job. Returns 204 on success. */
   async voidAuthorization(authorizationId: string, poId: string) {
     const res = await fetch(`${BASE}/v2/payments/authorizations/${authorizationId}/void`, {
       method: "POST", headers: { Authorization: `Bearer ${await this.accessToken()}`, "PayPal-Request-Id": `${poId}:void` },
