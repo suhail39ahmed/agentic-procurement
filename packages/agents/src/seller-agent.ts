@@ -56,7 +56,16 @@ export async function sellerRespond(
     { role: "user", content: user },
   ], { json: true });
 
-  const decision = SellerDecision.safeParse(JSON.parse(result.content || "{}"));
+  let raw: unknown = {};
+  try {
+    raw = JSON.parse(result.content || "{}");
+  } catch {
+    raw = {};
+  }
+  const decision = SellerDecision.safeParse(raw);
+  if (!decision.success) {
+    console.warn(`[seller] ${seller.id} invalid reply: ${decision.error.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ")}`);
+  }
   if (!decision.success || decision.data.action === "REJECT" || !decision.data.unitPrice) {
     return { ...base, type: "REJECT", reason: decision.success ? decision.data.message : "Invalid seller response" };
   }

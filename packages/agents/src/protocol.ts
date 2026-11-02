@@ -24,6 +24,7 @@ export const Rfq = Base.extend({
   maxUnitPrice: Money,
   currency: Currency,
   neededByDays: z.number().int().positive().max(365),
+  brief: z.string().max(500).optional(),
 });
 
 export const Offer = Base.extend({

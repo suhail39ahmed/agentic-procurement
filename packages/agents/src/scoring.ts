@@ -13,6 +13,18 @@ export type Weights = { price: number; speed: number };
 
 export const DEFAULT_WEIGHTS: Weights = { price: 0.7, speed: 0.3 };
 
+const MIN_WEIGHT = 0.1;
+const MAX_WEIGHT = 0.9;
+
+export function normalizeWeights(weights: Weights): Weights {
+  const clamp = (value: number) =>
+    Number.isFinite(value) ? Math.min(MAX_WEIGHT, Math.max(MIN_WEIGHT, value)) : 0.5;
+  const price = clamp(weights.price);
+  const speed = clamp(weights.speed);
+  const share = Math.round((price / (price + speed)) * 100) / 100;
+  return { price: share, speed: Math.round((1 - share) * 100) / 100 };
+}
+
 export function scoreOffers(
   rfq: RfqMessage,
   offers: OfferMessage[],

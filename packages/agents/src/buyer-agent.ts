@@ -1,8 +1,9 @@
 import { chat } from "ai";
 import { MAX_ROUNDS, type CounterMessage, type NegotiationMessage, type OfferMessage, type RfqMessage } from "./protocol";
 import { sellerRespond } from "./seller-agent";
-import { scoreOffers, batna, type ScoredOffer } from "./scoring";
-import type { SellerConfig } from "./sellers";
+import { scoreOffers, batna, DEFAULT_WEIGHTS, type ScoredOffer, type Weights } from "./scoring";
+import { inferIntent, type Intent } from "./intent";
+import type { SellerConfig } from "./seller";
 
 export type NegotiationEvent = { round: number; message: NegotiationMessage };
 
@@ -10,6 +11,7 @@ export type NegotiationResult = {
   rfq: RfqMessage;
   winner?: ScoredOffer;
   ranking: ScoredOffer[];
+  intent: Intent;
   rationale: string;
   events: NegotiationEvent[];
 };
@@ -35,18 +37,39 @@ async function counterMessage(offer: OfferMessage, target: number, batnaPrice?: 
   return result.content.slice(0, 500);
 }
 
-async function explain(rfq: RfqMessage, ranking: ScoredOffer[], winner?: ScoredOffer): Promise<string> {
+async function explain(
+  rfq: RfqMessage,
+  ranking: ScoredOffer[],
+  sellers: SellerConfig[],
+  intent: Intent,
+  winner?: ScoredOffer
+): Promise<string> {
+  const quantity = rfq.items.reduce((n, i) => n + i.quantity, 0);
+  const listPrice = (id: string) => sellers.find((s) => s.id === id)?.listPrice;
+  const winnerList = winner && listPrice(winner.offer.from);
+  const summary = winner && {
+    seller: winner.offer.from,
+    unitPrice: winner.offer.unitPrice,
+    leadTimeDays: winner.offer.leadTimeDays,
+    score: winner.score,
+    quantity,
+    totalCost: roundCents(winner.offer.unitPrice * quantity),
+    listUnitPrice: winnerList,
+    totalSavingsVsList: winnerList === undefined ? undefined : roundCents((winnerList - winner.offer.unitPrice) * quantity),
+  };
+
   const result = await chat("buyer", [
     {
       role: "system",
       content:
-        "You explain procurement decisions to a business owner in three short sentences. Use only the numbers provided. Do not invent facts.",
+        "You explain a procurement decision to a small-business owner in two or three crisp sentences. Name the winning supplier, its unit price, lead time, total cost and totalSavingsVsList, how the owner's priority shaped the choice, and why each runner-up lost (over budget, misses deadline, or lower score). Quote every figure exactly as provided, formatted as dollars or days. Never calculate, derive or round numbers yourself. Write plain text with no markdown and no field names.",
     },
     {
       role: "user",
       content: JSON.stringify({
         need: { items: rfq.items, maxUnitPrice: rfq.maxUnitPrice, neededByDays: rfq.neededByDays },
-        winner: winner && { seller: winner.offer.from, unitPrice: winner.offer.unitPrice, leadTimeDays: winner.offer.leadTimeDays, score: winner.score },
+        ownerPriority: { priority: intent.priority, weights: intent.weights, reason: intent.reason },
+        winner: summary,
         ranking: ranking.map((s) => ({
           seller: s.offer.from,
           unitPrice: s.offer.unitPrice,
@@ -64,8 +87,10 @@ async function explain(rfq: RfqMessage, ranking: ScoredOffer[], winner?: ScoredO
 export async function negotiate(
   rfq: RfqMessage,
   sellers: SellerConfig[],
-  onEvent: (event: NegotiationEvent) => void = () => {}
+  onEvent: (event: NegotiationEvent) => void = () => {},
+  learnedWeights: Weights = DEFAULT_WEIGHTS
 ): Promise<NegotiationResult> {
+  const intent = await inferIntent(rfq, learnedWeights);
   const events: NegotiationEvent[] = [];
   const histories = new Map<string, NegotiationMessage[]>(sellers.map((s) => [s.id, []]));
   const latest = new Map<string, OfferMessage>();
@@ -89,13 +114,16 @@ export async function negotiate(
   await collect(sellers);
 
   for (let round = 1; round <= MAX_ROUNDS; round++) {
-    const ranking = scoreOffers(rfq, [...latest.values()]);
+    const ranking = scoreOffers(rfq, [...latest.values()], intent.weights);
     const best = batna(ranking);
     const ceiling = best ? best.offer.unitPrice : rfq.maxUnitPrice;
     const target = roundCents(ceiling * 0.95);
 
     const toCounter = ranking.filter(
-      (s) => s.meetsDeadline && s.offer.unitPrice > target
+      (s) =>
+        s.meetsDeadline &&
+        s.offer.unitPrice > target &&
+        s.offer.unitPrice <= rfq.maxUnitPrice * 1.15
     );
     if (toCounter.length === 0) break;
 
@@ -119,9 +147,9 @@ export async function negotiate(
     await collect(sellers.filter((s) => toCounter.some((c) => c.offer.from === s.id)));
   }
 
-  const ranking = scoreOffers(rfq, [...latest.values()]);
+  const ranking = scoreOffers(rfq, [...latest.values()], intent.weights);
   const winner = batna(ranking);
-  const rationale = await explain(rfq, ranking, winner);
+  const rationale = await explain(rfq, ranking, sellers, intent, winner);
 
-  return { rfq, winner, ranking, rationale, events };
+  return { rfq, winner, ranking, intent, rationale, events };
 }

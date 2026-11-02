@@ -1,6 +1,12 @@
 import { negotiate } from "./buyer-agent";
 import { sellers } from "./seller";
 import type { RfqMessage } from "./protocol";
+import { getLearnedWeights, recordChoice } from "./preferences";
+
+const OWNER_ID = "owner-demo";
+const brief =
+  process.argv.slice(2).filter((arg) => arg !== "--").join(" ") ||
+  "Standard office refresh for the new floor. Keep costs sensible.";
 
 const rfq: RfqMessage = {
   type: "RFQ",
@@ -13,6 +19,7 @@ const rfq: RfqMessage = {
   maxUnitPrice: 200,
   currency: "USD",
   neededByDays: 30,
+  brief,
 };
 
 function describe(event: Parameters<Parameters<typeof negotiate>[2] & {}>[0]): string {
@@ -30,7 +37,15 @@ function describe(event: Parameters<Parameters<typeof negotiate>[2] & {}>[0]): s
 }
 
 async function main() {
-  const result = await negotiate(rfq, sellers, (event) => console.log(describe(event)));
+  const learned = await getLearnedWeights(OWNER_ID);
+  console.log(`Brief    ${brief}`);
+  console.log(`Learned  price ${learned.weights.price} / speed ${learned.weights.speed} from ${learned.decisions} decisions\n`);
+
+  const result = await negotiate(rfq, sellers, (event) => console.log(describe(event)), learned.weights);
+
+  console.log(
+    `\nPriority ${result.intent.priority} (price ${result.intent.weights.price} / speed ${result.intent.weights.speed}, ${result.intent.source}): ${result.intent.reason}`
+  );
 
   console.log("\nRanking");
   for (const s of result.ranking) {
@@ -41,12 +56,18 @@ async function main() {
 
   if (result.winner) {
     const list = sellers.find((s) => s.id === result.winner!.offer.from)!.listPrice;
-    const saved = (list - result.winner.offer.unitPrice) * 50;
+    const quantity = rfq.items.reduce((n, i) => n + i.quantity, 0);
+    const saved = (list - result.winner.offer.unitPrice) * quantity;
     console.log(`\nWinner ${result.winner.offer.from} at $${result.winner.offer.unitPrice.toFixed(2)} (saved $${saved.toFixed(2)} vs list)`);
   } else {
     console.log("\nNo eligible offer");
   }
   console.log(`\n${result.rationale}`);
+
+  if (result.winner) {
+    const next = await recordChoice(OWNER_ID, result.winner);
+    console.log(`\nLearned  price ${next.price} / speed ${next.speed} after this decision`);
+  }
 }
 
 main().catch((err) => {
