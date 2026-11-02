@@ -4,7 +4,8 @@
     "type": "module",
     "scripts": {
       "demo": "tsx src/demo.ts",
-      "seller-demo": "tsx src/seller-demo.ts"
+      "seller-demo": "tsx src/seller-demo.ts",
+      "negotiate-demo": "tsx src/negotiate-demo.ts"
     },
     "dependencies": {
       "ai": "workspace:*",
