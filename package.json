@@ -1,8 +1,12 @@
 {
-    "name": "agentic-procurement",
-    "private": true,
-    "type": "module",
-    "scripts": {
-      "spike:paypal": "pnpm --filter paypal spike"
-    }
+  "name": "agentic-procurement",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "spike:paypal": "pnpm --filter paypal spike"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3"
   }
+}
