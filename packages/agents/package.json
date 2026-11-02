@@ -5,7 +5,8 @@
     "scripts": {
       "demo": "tsx src/demo.ts",
       "seller-demo": "tsx src/seller-demo.ts",
-      "negotiate-demo": "tsx src/negotiate-demo.ts"
+      "negotiate-demo": "tsx src/negotiate-demo.ts",
+      "policy-demo": "tsx src/policy-demo.ts"
     },
     "dependencies": {
       "ai": "workspace:*",
