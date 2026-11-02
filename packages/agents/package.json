@@ -6,10 +6,12 @@
       "demo": "tsx src/demo.ts",
       "seller-demo": "tsx src/seller-demo.ts",
       "negotiate-demo": "tsx src/negotiate-demo.ts",
-      "policy-demo": "tsx src/policy-demo.ts"
+      "policy-demo": "tsx src/policy-demo.ts",
+      "checkout-demo": "tsx src/checkout-demo.ts"
     },
     "dependencies": {
       "ai": "workspace:*",
+      "paypal": "workspace:*",
       "zod": "^3.23.8"
     },
     "devDependencies": {

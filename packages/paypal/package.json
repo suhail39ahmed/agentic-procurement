@@ -2,6 +2,7 @@
     "name": "paypal",
     "private": true,
     "type": "module",
+    "exports": { ".": "./src/client.ts" },
     "scripts": {
       "spike": "tsx src/spike.ts"
     },

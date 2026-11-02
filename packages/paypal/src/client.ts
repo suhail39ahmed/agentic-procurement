@@ -86,7 +86,7 @@ export async function paypalRequest<T = unknown>(
 
   if (!res.ok) {
     throw new Error(
-      `PayPal ${options.method ?? "GET"} ${path} → ${res.status}: ${text}`
+      `PayPal ${options.method ?? "GET"} ${path} -> ${res.status}: ${text}`
     );
   }
   return data;
