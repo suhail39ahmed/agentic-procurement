@@ -1,12 +1,6 @@
 node_modules/
-.next/
-dist/
 .env
 .env.*
 !.env.example
+dist/
 *.log
-.DS_Store
-coverage/
-.turbo/
-evals/out/
-data/

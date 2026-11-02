@@ -1,18 +1,8 @@
 {
-  "name": "agentic-procurement",
-  "private": true,
-  "packageManager": "pnpm@9.12.0",
-  "scripts": {
-    "dev": "pnpm -r --parallel dev",
-    "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
-    "spike:paypal": "pnpm --filter @ap/paypal spike",
-    "dev:api": "pnpm --filter @ap/api dev",
-    "tunnel": "npx -y localtunnel --port 4000"
-  },
-  "devDependencies": {
-    "typescript": "^5.6.0",
-    "tsx": "^4.19.0",
-    "@types/node": "^22.0.0"
+    "name": "agentic-procurement",
+    "private": true,
+    "type": "module",
+    "scripts": {
+      "spike:paypal": "pnpm --filter paypal spike"
+    }
   }
-}
