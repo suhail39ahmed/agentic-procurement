@@ -3,7 +3,8 @@
     "private": true,
     "type": "module",
     "scripts": {
-      "demo": "tsx src/demo.ts"
+      "demo": "tsx src/demo.ts",
+      "seller-demo": "tsx src/seller-demo.ts"
     },
     "dependencies": {
       "ai": "workspace:*",
