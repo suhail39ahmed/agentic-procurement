@@ -7,7 +7,8 @@
       "seller-demo": "tsx src/seller-demo.ts",
       "negotiate-demo": "tsx src/negotiate-demo.ts",
       "policy-demo": "tsx src/policy-demo.ts",
-      "checkout-demo": "tsx src/checkout-demo.ts"
+      "checkout-demo": "tsx src/checkout-demo.ts",
+      "order-demo": "tsx src/order-demo.ts"
     },
     "dependencies": {
       "ai": "workspace:*",
