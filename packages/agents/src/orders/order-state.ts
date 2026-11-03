@@ -53,6 +53,7 @@ export interface Order {
   paypalOrderId?: string;
   authorizationId?: string;
   captureId?: string;
+  tracking?: { carrier: string; number: string };
   history: OrderTransition[];
 }
 
@@ -79,7 +80,7 @@ export function transition(
   order: Order,
   event: OrderEvent,
   actor: string,
-  patch: Partial<Pick<Order, "paypalOrderId" | "authorizationId" | "captureId">> = {},
+  patch: Partial<Pick<Order, "paypalOrderId" | "authorizationId" | "captureId" | "tracking">> = {},
   note?: string,
 ): Order {
   const to = TRANSITIONS[order.status][event];

@@ -3,9 +3,10 @@ import { scoreOffers, batna } from "../negotiation/scoring";
 import { evaluatePolicy } from "../governance/policy-engine";
 import { requestApproval, decide } from "../governance/approvals";
 import { issueMandate } from "../governance/mandate";
-import { createPaymentOrder, waitForApproval, authorizePayment, capturePayment, voidPayment } from "../payments/payment-tool";
+import { createPaymentOrder, waitForApproval, authorizePayment, voidPayment } from "../payments/payment-tool";
 import { createOrder, transition } from "../orders/order-state";
 import { refundPayment } from "../payments/payment-tool";
+import { markShipped, confirmDelivery } from "../payments/fulfillment";
 
 const voidMode = process.argv.includes("--void");
 const quantity = process.argv.includes("--small") ? 1 : 5;
@@ -88,10 +89,12 @@ async function main() {
     order = transition(order, "VOID", "owner");
     console.log("Voided   hold released");
   } else {
-    const capture = await capturePayment(authorizationId, intent);
-    order = transition(order, "CAPTURE", "payment-tool", { captureId: capture.id });
-    console.log(`Captured ${capture.id} ${capture.status}`);
-
+    try { markShipped(order, "seller-x", "UPS", "1Z999AA10123456784"); }
+    catch (err) { console.log(`Ship     blocked: ${(err as Error).message}`); }
+    order = markShipped(order, decision.supplierId, "UPS", "1Z999AA10123456784");
+    console.log(`Shipped  ${order.tracking?.carrier} ${order.tracking?.number}`);
+    order = await confirmDelivery(order, intent, "owner@company.com");
+    console.log(`Captured ${order.captureId} on delivery`);
     if (refundMode) {
       try {
         await refundPayment(order, "owner", "over-limit test", order.amount + 1);
@@ -105,7 +108,7 @@ async function main() {
   }
 
   console.log(`\nFinal    ${order.status}`);
-  for (const h of order.history) console.log(`  ${h.from} -> ${h.to} via ${h.event} by ${h.actor}`);
+  for (const h of order.history) console.log(`  ${h.from} -> ${h.to} via ${h.event} by ${h.actor}${h.note ? ` (${h.note})` : ""}`);
 }
 main().catch((err) => {
   console.error((err as Error).message);
