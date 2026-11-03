@@ -81,7 +81,11 @@ async function main() {
 
   await waitForApproval(intent.orderId);
   const authorizationId = await authorizePayment(intent);
-  order = transition(order, "AUTHORIZE", "payment-tool", { authorizationId });
+  order = transition(order, "AUTHORIZE", "payment-tool", {
+    authorizationId,
+    heldAt: new Date().toISOString(),
+    deliverBy: new Date(Date.now() + rfq.neededByDays * 86_400_000).toISOString(),
+  });
   console.log(`Held     ${authorizationId} $${intent.mandate.amount}`);
 
   if (voidMode) {

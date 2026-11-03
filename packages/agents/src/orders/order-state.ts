@@ -19,14 +19,15 @@ export type OrderEvent =
   | "CAPTURE"
   | "VOID"
   | "REFUND"
+  | "REAUTHORIZE"
   | "EXPIRE";
 
 const TRANSITIONS: Record<OrderStatus, Partial<Record<OrderEvent, OrderStatus>>> = {
   DRAFT: { REQUIRE_APPROVAL: "PENDING_APPROVAL", APPROVE: "APPROVED", REJECT: "REJECTED" },
   PENDING_APPROVAL: { APPROVE: "APPROVED", REJECT: "REJECTED", EXPIRE: "EXPIRED" },
   APPROVED: { AUTHORIZE: "HELD", EXPIRE: "EXPIRED" },
-  HELD: { SHIP: "SHIPPED", CAPTURE: "CAPTURED", VOID: "VOIDED", EXPIRE: "VOIDED" },
-  SHIPPED: { CAPTURE: "CAPTURED", VOID: "VOIDED" },
+  HELD: { REAUTHORIZE: "HELD", SHIP: "SHIPPED", CAPTURE: "CAPTURED", VOID: "VOIDED", EXPIRE: "VOIDED" },
+  SHIPPED: { REAUTHORIZE: "SHIPPED", CAPTURE: "CAPTURED", VOID: "VOIDED" },
   CAPTURED: { REFUND: "REFUNDED" },
   VOIDED: {},
   REFUNDED: {},
@@ -54,6 +55,9 @@ export interface Order {
   authorizationId?: string;
   captureId?: string;
   tracking?: { carrier: string; number: string };
+  heldAt?: string;
+  deliverBy?: string;
+  reauthorizedAt?: string;
   history: OrderTransition[];
 }
 
@@ -80,7 +84,7 @@ export function transition(
   order: Order,
   event: OrderEvent,
   actor: string,
-  patch: Partial<Pick<Order, "paypalOrderId" | "authorizationId" | "captureId" | "tracking">> = {},
+  patch: Partial<Omit<Order, "id" | "status" | "history">> = {},
   note?: string,
 ): Order {
   const to = TRANSITIONS[order.status][event];

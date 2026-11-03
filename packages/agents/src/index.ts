@@ -12,3 +12,5 @@ export * from "./governance/approvals";
 export * from "./governance/mandate";
 export * from "./payments/payment-tool";
 export * from "./orders/order-state";
+export * from "./payments/fulfillment";
+export * from "./payments/expiry";

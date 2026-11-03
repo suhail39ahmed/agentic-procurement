@@ -9,7 +9,8 @@
       "negotiate-demo": "tsx src/demos/negotiate-demo.ts",
       "policy-demo": "tsx src/demos/policy-demo.ts",
       "checkout-demo": "tsx src/demos/checkout-demo.ts",
-      "order-demo": "tsx src/demos/order-demo.ts"
+      "order-demo": "tsx src/demos/order-demo.ts",
+      "expiry-demo": "tsx src/demos/expiry-demo.ts"
     },
     "dependencies": {
       "ai": "workspace:*",
