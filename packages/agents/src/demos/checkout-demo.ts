@@ -4,9 +4,12 @@ import { evaluatePolicy } from "../governance/policy-engine";
 import { requestApproval, decide } from "../governance/approvals";
 import { issueMandate } from "../governance/mandate";
 import { createPaymentOrder, waitForApproval, authorizePayment, capturePayment, voidPayment } from "../payments/payment-tool";
+import { createOrder, transition } from "../orders/order-state";
+import { refundPayment } from "../payments/payment-tool";
 
 const voidMode = process.argv.includes("--void");
 const quantity = process.argv.includes("--small") ? 1 : 5;
+const refundMode = process.argv.includes("--refund");
 
 const rfq: RfqMessage = {
   type: "RFQ",
@@ -64,19 +67,46 @@ async function main() {
   console.log(`Order    ${intent.orderId}`);
   console.log(`\nApprove as the sandbox buyer:\n${intent.approveUrl}\n`);
 
+  let order = createOrder({
+    id: intent.mandate.jti,
+    rfqId: rfq.rfqId,
+    supplierId: decision.supplierId,
+    amount: decision.orderTotal,
+    currency: "USD",
+    paypalOrderId: intent.orderId,
+  });
+  order = transition(order, approval ? "REQUIRE_APPROVAL" : "APPROVE", "policy-engine");
+  if (approval) order = transition(order, "APPROVE", approval.decidedBy ?? "owner");
+
   await waitForApproval(intent.orderId);
   const authorizationId = await authorizePayment(intent);
+  order = transition(order, "AUTHORIZE", "payment-tool", { authorizationId });
   console.log(`Held     ${authorizationId} $${intent.mandate.amount}`);
 
   if (voidMode) {
     await voidPayment(authorizationId, intent.mandate.jti);
+    order = transition(order, "VOID", "owner");
     console.log("Voided   hold released");
   } else {
     const capture = await capturePayment(authorizationId, intent);
+    order = transition(order, "CAPTURE", "payment-tool", { captureId: capture.id });
     console.log(`Captured ${capture.id} ${capture.status}`);
-  }
-}
 
+    if (refundMode) {
+      try {
+        await refundPayment(order, "owner", "over-limit test", order.amount + 1);
+      } catch (err) {
+        console.log(`Overrefund blocked: ${(err as Error).message}`);
+      }
+      const result = await refundPayment(order, "owner", "Demo refund");
+      order = result.order;
+      console.log(`Refunded ${result.refund.id} ${result.refund.status}`);
+    }
+  }
+
+  console.log(`\nFinal    ${order.status}`);
+  for (const h of order.history) console.log(`  ${h.from} -> ${h.to} via ${h.event} by ${h.actor}`);
+}
 main().catch((err) => {
   console.error((err as Error).message);
   process.exit(1);

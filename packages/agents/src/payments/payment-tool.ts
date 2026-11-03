@@ -1,5 +1,6 @@
 import { paypalRequest } from "paypal";
 import { verifyMandate, type MandateClaims } from "../governance/mandate";
+import { canTransition, transition, type Order as OrderRecord } from "../orders/order-state";
 
 type Link = { href: string; rel: string };
 type Order = { id: string; status: string; links?: Link[] };
@@ -7,6 +8,7 @@ type AuthorizeResponse = {
   purchase_units?: { payments?: { authorizations?: { id: string; status: string; amount: { value: string } }[] } }[];
 };
 type Capture = { id: string; status: string; amount?: { value: string } };
+type Refund = { id: string; status: string; amount?: { value: string } };
 
 export type PaymentIntent = {
   orderId: string;
@@ -90,4 +92,30 @@ export async function voidPayment(authorizationId: string, jti: string): Promise
     requestId: `void-${jti}`,
     body: {},
   });
+}
+
+export async function refundPayment(
+  order: OrderRecord,
+  actor: string,
+  reason: string,
+  amount: number = order.amount
+): Promise<{ order: OrderRecord; refund: Refund }> {
+  SANDBOX_ONLY();
+  if (!canTransition(order.status, "REFUND")) throw new Error(`Cannot refund order in status ${order.status}`);
+  if (!order.captureId) throw new Error("Order has no capture to refund");
+  if (!(amount > 0) || Math.round(amount * 100) > Math.round(order.amount * 100)) {
+    throw new Error(`Refund ${amount} must be greater than 0 and at most ${order.amount}`);
+  }
+
+  const refund = await paypalRequest<Refund>(`/v2/payments/captures/${order.captureId}/refund`, {
+    method: "POST",
+    requestId: `refund-${order.id}`,
+    body: {
+      amount: { currency_code: order.currency, value: amount.toFixed(2) },
+      note_to_payer: reason.slice(0, 255),
+    },
+  });
+  if (!["COMPLETED", "PENDING"].includes(refund.status)) throw new Error(`Refund ended with status ${refund.status}`);
+
+  return { order: transition(order, "REFUND", actor, {}, `${refund.id} ${reason}`), refund };
 }
