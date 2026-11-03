@@ -1,5 +1,5 @@
 import { chat } from "ai";
-import { parseMessage } from "./parse";
+import { parseMessage } from "../negotiation/parse";
 
 const now = () => new Date().toISOString();
 

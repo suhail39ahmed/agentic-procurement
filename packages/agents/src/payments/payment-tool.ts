@@ -1,5 +1,5 @@
 import { paypalRequest } from "paypal";
-import { verifyMandate, type MandateClaims } from "./mandate";
+import { verifyMandate, type MandateClaims } from "../governance/mandate";
 
 type Link = { href: string; rel: string };
 type Order = { id: string; status: string; links?: Link[] };

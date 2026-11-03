@@ -2,7 +2,7 @@ import { chat } from "ai";
 import { z } from "zod";
 import type { RfqMessage } from "./protocol";
 import { normalizeWeights, type Weights } from "./scoring";
-import { PROCUREMENT_POLICY } from "./policy";
+import { PROCUREMENT_POLICY } from "../governance/policy";
 
 const IntentSchema = z.object({
   priority: z.enum(["price", "speed", "balanced"]),

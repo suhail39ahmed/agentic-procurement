@@ -1,9 +1,9 @@
-import type { OfferMessage, RfqMessage } from "./protocol";
-import { scoreOffers, batna } from "./scoring";
-import { evaluatePolicy } from "./policy-engine";
-import { requestApproval, decide } from "./approvals";
-import { issueMandate } from "./mandate";
-import { createPaymentOrder, waitForApproval, authorizePayment, capturePayment, voidPayment } from "./payment-tool";
+import type { OfferMessage, RfqMessage } from "../negotiation/protocol";
+import { scoreOffers, batna } from "../negotiation/scoring";
+import { evaluatePolicy } from "../governance/policy-engine";
+import { requestApproval, decide } from "../governance/approvals";
+import { issueMandate } from "../governance/mandate";
+import { createPaymentOrder, waitForApproval, authorizePayment, capturePayment, voidPayment } from "../payments/payment-tool";
 
 const voidMode = process.argv.includes("--void");
 const quantity = process.argv.includes("--small") ? 1 : 5;

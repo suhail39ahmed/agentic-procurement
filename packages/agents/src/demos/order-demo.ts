@@ -6,7 +6,7 @@ import {
     InvalidTransitionError,
     type Order,
     type OrderEvent,
-  } from "./order-state";
+  } from "../orders/order-state";
   
   function show(order: Order): void {
     console.log(`  ${order.status}${isTerminal(order.status) ? " (terminal)" : ""}`);

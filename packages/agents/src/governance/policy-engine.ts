@@ -1,5 +1,5 @@
-import type { RfqMessage } from "./protocol";
-import type { ScoredOffer } from "./scoring";
+import type { RfqMessage } from "../negotiation/protocol";
+import type { ScoredOffer } from "../negotiation/scoring";
 
 export type PolicyConfig = {
   maxOrderTotal: number;

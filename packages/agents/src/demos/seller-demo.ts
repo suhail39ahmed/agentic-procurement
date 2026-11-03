@@ -1,6 +1,6 @@
-import { sellerRespond } from "./seller-agent";
-import { sellers } from "./seller";
-import type { RfqMessage } from "./protocol";
+import { sellerRespond } from "../negotiation/seller-agent";
+import { sellers } from "../negotiation/seller";
+import type { RfqMessage } from "../negotiation/protocol";
 
 const rfq: RfqMessage = {
   type: "RFQ",

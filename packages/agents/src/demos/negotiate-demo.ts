@@ -1,7 +1,7 @@
-import { negotiate } from "./buyer-agent";
-import { sellers } from "./seller";
-import type { RfqMessage } from "./protocol";
-import { getLearnedWeights, recordChoice } from "./preferences";
+import { negotiate } from "../negotiation/buyer-agent";
+import { sellers } from "../negotiation/seller";
+import type { RfqMessage } from "../negotiation/protocol";
+import { getLearnedWeights, recordChoice } from "../negotiation/preferences";
 
 const OWNER_ID = "owner-demo";
 const brief =

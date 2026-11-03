@@ -1,7 +1,7 @@
-import type { OfferMessage, RfqMessage } from "./protocol";
-import { scoreOffers, batna } from "./scoring";
-import { evaluatePolicy, DEFAULT_POLICY, type PolicyConfig } from "./policy-engine";
-import { requestApproval, decide, listApprovals } from "./approvals";
+import type { OfferMessage, RfqMessage } from "../negotiation/protocol";
+import { scoreOffers, batna } from "../negotiation/scoring";
+import { evaluatePolicy, DEFAULT_POLICY, type PolicyConfig } from "../governance/policy-engine";
+import { requestApproval, decide, listApprovals } from "../governance/approvals";
 
 const baseRfq: RfqMessage = {
   type: "RFQ",

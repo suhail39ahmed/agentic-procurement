@@ -2,13 +2,14 @@
     "name": "agents",
     "private": true,
     "type": "module",
+    "exports": { ".": "./src/index.ts" },
     "scripts": {
-      "demo": "tsx src/demo.ts",
-      "seller-demo": "tsx src/seller-demo.ts",
-      "negotiate-demo": "tsx src/negotiate-demo.ts",
-      "policy-demo": "tsx src/policy-demo.ts",
-      "checkout-demo": "tsx src/checkout-demo.ts",
-      "order-demo": "tsx src/order-demo.ts"
+      "demo": "tsx src/demos/demo.ts",
+      "seller-demo": "tsx src/demos/seller-demo.ts",
+      "negotiate-demo": "tsx src/demos/negotiate-demo.ts",
+      "policy-demo": "tsx src/demos/policy-demo.ts",
+      "checkout-demo": "tsx src/demos/checkout-demo.ts",
+      "order-demo": "tsx src/demos/order-demo.ts"
     },
     "dependencies": {
       "ai": "workspace:*",

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { RfqMessage } from "./protocol";
-import type { ScoredOffer } from "./scoring";
+import type { RfqMessage } from "../negotiation/protocol";
+import type { ScoredOffer } from "../negotiation/scoring";
 import type { PolicyDecision } from "./policy-engine";
 
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
