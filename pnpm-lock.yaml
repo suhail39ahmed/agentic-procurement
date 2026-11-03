@@ -17,6 +17,9 @@ importers:
 
   apps/api:
     dependencies:
+      agents:
+        specifier: workspace:*
+        version: link:../../packages/agents
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1

@@ -1,13 +1,9 @@
 import { Router, type Request, type Response } from "express";
 import { verifyWebhook } from "./verify";
 import { saveEvent, listEvents } from "./store";
+import { applyWebhookEvent, listLedger, listDisputes, type PayPalWebhookEvent } from "agents";
 
-type PayPalEvent = {
-  id: string;
-  event_type: string;
-  create_time: string;
-  resource?: { id?: string; status?: string };
-};
+type PayPalEvent = PayPalWebhookEvent & { create_time: string };
 
 export const paypalWebhookRouter = Router();
 
@@ -43,6 +39,11 @@ paypalWebhookRouter.post("/", async (req: Request, res: Response) => {
       `[webhook] ${isNew ? "accepted" : "duplicate"} ${event.event_type} ${event.resource?.id ?? ""} ${event.resource?.status ?? ""}`
     );
 
+    if (isNew) {
+      const entry = applyWebhookEvent(event);
+      console.log(`[ledger] ${entry.outcome} ${entry.orderId ?? "-"} ${entry.reason}`);
+    }
+
     return res.sendStatus(200);
   } catch (err) {
     console.error("[webhook] error", err);
@@ -55,5 +56,5 @@ paypalWebhookRouter.get("/", (req: Request, res: Response) => {
   if (!adminKey || req.header("x-admin-key") !== adminKey) {
     return res.sendStatus(404);
   }
-  return res.json(listEvents());
+  return res.json({ events: listEvents(), ledger: listLedger(), disputes: listDisputes() });
 });
