@@ -218,6 +218,17 @@ export default function Dashboard() {
   const [activeNegotiationId, setActiveNegotiationId] = useState<string | null>(null);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [offersNote, setOffersNote] = useState("Queue a negotiation to load real supplier offers.");
+  const [orderBusy, setOrderBusy] = useState(false);
+  const [activeOrder, setActiveOrder] = useState<{
+    orderId: string;
+    status: string;
+    approveUrl?: string | null;
+    amount?: string;
+    supplierId?: string;
+    authorizationId?: string;
+    captureId?: string;
+    tracking?: { carrier: string; number: string };
+  } | null>(null);
   const [search, setSearch] = useState("");
   const [offerSearch, setOfferSearch] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -447,6 +458,138 @@ export default function Dashboard() {
       setNotice("Queue failed. Check that the API is running and try again.");
     } finally {
       setQueueBusy(false);
+    }
+  }
+
+  async function startCheckout() {
+    if (!activeNegotiationId || orderBusy) return;
+    setOrderBusy(true);
+    setNotice("Creating PayPal authorize order from the winning offer…");
+    try {
+      const response = await fetch(`/api/negotiations/${encodeURIComponent(activeNegotiationId)}/checkout`, {
+        method: "POST",
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        error?: string;
+        orderId?: string;
+        status?: string;
+        approveUrl?: string;
+        amount?: string;
+        supplierId?: string;
+      };
+      if (!response.ok) {
+        setNotice(payload.error ?? `Checkout failed (${response.status}).`);
+        return;
+      }
+      setActiveOrder({
+        orderId: payload.orderId ?? "",
+        status: payload.status ?? "APPROVED",
+        approveUrl: payload.approveUrl,
+        amount: payload.amount,
+        supplierId: payload.supplierId,
+      });
+      setNotice("Checkout created. Open the PayPal approve link as the sandbox buyer, then Authorize hold.");
+      setView("Payments & orders");
+    } catch {
+      setNotice("Checkout failed. Check API/PayPal sandbox configuration.");
+    } finally {
+      setOrderBusy(false);
+    }
+  }
+
+  async function authorizeHold() {
+    if (!activeOrder?.orderId || orderBusy) return;
+    setOrderBusy(true);
+    setNotice("Authorizing PayPal hold…");
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(activeOrder.orderId)}/authorize`, {
+        method: "POST",
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        error?: string;
+        status?: string;
+        authorizationId?: string;
+        amount?: string;
+      };
+      if (!response.ok) {
+        setNotice(payload.error ?? `Authorize failed (${response.status}). Approve the PayPal link first.`);
+        return;
+      }
+      setActiveOrder(current => current ? {
+        ...current,
+        status: payload.status ?? "HELD",
+        authorizationId: payload.authorizationId,
+        amount: payload.amount ?? current.amount,
+      } : current);
+      setNotice("Funds held (authorized, not captured).");
+    } catch {
+      setNotice("Authorize failed.");
+    } finally {
+      setOrderBusy(false);
+    }
+  }
+
+  async function markOrderShipped() {
+    if (!activeOrder?.orderId || orderBusy) return;
+    setOrderBusy(true);
+    setNotice("Recording shipment…");
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(activeOrder.orderId)}/ship`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ carrier: "UPS", number: "1Z999AA10123456784" }),
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        error?: string;
+        status?: string;
+        tracking?: { carrier: string; number: string };
+      };
+      if (!response.ok) {
+        setNotice(payload.error ?? `Ship failed (${response.status}).`);
+        return;
+      }
+      setActiveOrder(current => current ? {
+        ...current,
+        status: payload.status ?? "SHIPPED",
+        tracking: payload.tracking,
+      } : current);
+      setNotice("Marked shipped. Confirm delivery to capture.");
+    } catch {
+      setNotice("Ship failed.");
+    } finally {
+      setOrderBusy(false);
+    }
+  }
+
+  async function confirmDeliveryCapture() {
+    if (!activeOrder?.orderId || orderBusy) return;
+    setOrderBusy(true);
+    setNotice("Confirming delivery and capturing funds…");
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(activeOrder.orderId)}/confirm-delivery`, {
+        method: "POST",
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        error?: string;
+        status?: string;
+        captureId?: string;
+        amount?: string;
+      };
+      if (!response.ok) {
+        setNotice(payload.error ?? `Capture failed (${response.status}).`);
+        return;
+      }
+      setActiveOrder(current => current ? {
+        ...current,
+        status: payload.status ?? "CAPTURED",
+        captureId: payload.captureId,
+        amount: payload.amount ?? current.amount,
+      } : current);
+      setNotice("Delivery confirmed. Payment captured in sandbox.");
+    } catch {
+      setNotice("Capture failed.");
+    } finally {
+      setOrderBusy(false);
     }
   }
 
@@ -845,30 +988,73 @@ export default function Dashboard() {
               AG Grid Community · Rows come from persisted negotiation rankings only.
               {activeNegotiationId ? ` Active id: ${activeNegotiationId}` : ""}
             </p>
+            {offers.length > 0 && activeNegotiationId && (
+              <div className={s.reviewActions}>
+                <button type="button" className={s.primary} disabled={orderBusy} onClick={() => void startCheckout()}>
+                  {orderBusy ? "Working…" : "Checkout winning offer"} <ArrowRight size={16} />
+                </button>
+              </div>
+            )}
           </section>}
 
           {(view === "Overview" || view === "Payments & orders") && <section className={`${s.card} ${s.paymentCard}`}>
             <div className={s.sectionHeader}>
-              <div className={s.inlineTitle}><span className={s.paymentIcon}><CreditCard size={22} /></span><div><h2>Payments, with clear checkpoints</h2><p className={s.description}>Designed around the PayPal authorization and capture flow.</p></div></div>
-              <span className={s.pending}>Integration pending</span>
+              <div className={s.inlineTitle}><span className={s.paymentIcon}><CreditCard size={22} /></span><div><h2>Payments, with clear checkpoints</h2><p className={s.description}>Sandbox PayPal authorize → ship → owner confirms → capture.</p></div></div>
+              <span className={s.pending}>{activeOrder?.status ?? "No order yet"}</span>
             </div>
-            <p className={s.flowCaption}>Planned order lifecycle · not live order status</p>
+            <p className={s.flowCaption}>Live sandbox lifecycle · AI never captures by itself</p>
             <ol className={s.paymentFlow}>
               {[
-                { title: "Owner approval", detail: "Review before authorization" },
-                { title: "Funds held", detail: "Authorized, not captured" },
-                { title: "Seller ships", detail: "Carrier and tracking recorded" },
-                { title: "Owner confirms", detail: "Capture after delivery" },
+                { title: "Owner approval", detail: "Checkout issues mandate + PayPal order", active: Boolean(activeOrder) },
+                { title: "Funds held", detail: "Authorized, not captured", active: activeOrder?.status === "HELD" || activeOrder?.status === "SHIPPED" || activeOrder?.status === "CAPTURED" },
+                { title: "Seller ships", detail: "Carrier and tracking recorded", active: activeOrder?.status === "SHIPPED" || activeOrder?.status === "CAPTURED" },
+                { title: "Owner confirms", detail: "Capture after delivery", active: activeOrder?.status === "CAPTURED" },
               ].map((step, index) => <li key={step.title}>
                 <span className={s.stepNumber}>{index + 1}</span>
-                <div><strong>{step.title}</strong><small>{step.detail}</small></div>
+                <div><strong>{step.title}</strong><small>{step.detail}{step.active ? " · done/current" : ""}</small></div>
               </li>)}
             </ol>
-            {view === "Payments & orders" && <div className={s.empty}>
-              <span className={s.emptyIcon}><Package size={26} /></span><h3>No connected order data</h3>
-              <p>Orders, authorization details, and audit links will appear after backend integration. Payment actions are unavailable in this preview.</p>
+            {view === "Payments & orders" && !activeOrder && <div className={s.empty}>
+              <span className={s.emptyIcon}><Package size={26} /></span><h3>No order yet</h3>
+              <p>Finish a negotiation, open Supplier offers, then Checkout winning offer.</p>
             </div>}
-            <div className={s.paymentFoot}><ShieldCheck size={16} /><span>AI recommendations do not authorize payments.</span></div>
+            {view === "Payments & orders" && activeOrder && (
+              <div className={s.reviewPanel}>
+                <dl className={s.summaryList}>
+                  <div><dt>Order</dt><dd>{activeOrder.orderId}</dd></div>
+                  <div><dt>Status</dt><dd>{activeOrder.status}</dd></div>
+                  {activeOrder.amount && <div><dt>Amount</dt><dd>${activeOrder.amount} USD</dd></div>}
+                  {activeOrder.supplierId && <div><dt>Supplier</dt><dd>{activeOrder.supplierId}</dd></div>}
+                  {activeOrder.authorizationId && <div><dt>Authorization</dt><dd>{activeOrder.authorizationId}</dd></div>}
+                  {activeOrder.tracking && <div><dt>Tracking</dt><dd>{activeOrder.tracking.carrier} {activeOrder.tracking.number}</dd></div>}
+                  {activeOrder.captureId && <div><dt>Capture</dt><dd>{activeOrder.captureId}</dd></div>}
+                </dl>
+                {activeOrder.approveUrl && activeOrder.status === "APPROVED" && (
+                  <p className={s.summaryNote}>
+                    Approve as sandbox buyer:{" "}
+                    <a href={activeOrder.approveUrl} target="_blank" rel="noreferrer">{activeOrder.approveUrl}</a>
+                  </p>
+                )}
+                <div className={s.reviewActions}>
+                  {activeOrder.status === "APPROVED" && (
+                    <button type="button" className={s.primary} disabled={orderBusy} onClick={() => void authorizeHold()}>
+                      Authorize hold
+                    </button>
+                  )}
+                  {activeOrder.status === "HELD" && (
+                    <button type="button" className={s.primary} disabled={orderBusy} onClick={() => void markOrderShipped()}>
+                      Mark shipped
+                    </button>
+                  )}
+                  {activeOrder.status === "SHIPPED" && (
+                    <button type="button" className={s.primary} disabled={orderBusy} onClick={() => void confirmDeliveryCapture()}>
+                      Confirm delivery & capture
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+            <div className={s.paymentFoot}><ShieldCheck size={16} /><span>AI recommendations do not authorize or capture payments.</span></div>
           </section>}
 
           <footer className={s.footer}>
