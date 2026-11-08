@@ -5,8 +5,10 @@ import {
   findNegotiationByIdempotency,
   getNegotiationForOwner,
   listNegotiationsForOwner,
+  updateNegotiationRun,
   type NegotiationPriority,
 } from "db";
+import { scheduleNegotiationRun } from "./run-negotiation";
 
 export const negotiationsRouter = Router();
 
@@ -124,11 +126,14 @@ negotiationsRouter.post("/", async (req, res) => {
       neededByDays: parsed.value.neededByDays,
     });
 
+    scheduleNegotiationRun(ownerId, created.id);
+
     return res.status(201).json({
       id: created.id,
       status: created.status,
       createdAt: created.createdAt,
       idempotent: false,
+      started: true,
     });
   } catch (err) {
     const existing = await findNegotiationByIdempotency(ownerId, parsed.value.idempotencyKey).catch(() => undefined);
@@ -205,6 +210,44 @@ negotiationsRouter.get("/:id", async (req, res) => {
     });
   } catch (err) {
     console.error("[negotiations] get failed", err);
+    return res.sendStatus(500);
+  }
+});
+
+negotiationsRouter.post("/:id/start", async (req, res) => {
+  const ownerId = requireOwner(req);
+  if (!ownerId) return res.sendStatus(404);
+
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: "Database unavailable" });
+  }
+
+  try {
+    const row = await getNegotiationForOwner(ownerId, req.params.id);
+    if (!row) return res.sendStatus(404);
+    if (row.status !== "QUEUED" && row.status !== "FAILED") {
+      return res.status(409).json({
+        error: `Cannot start from status ${row.status}`,
+        id: row.id,
+        status: row.status,
+      });
+    }
+
+    if (row.status === "FAILED") {
+      await updateNegotiationRun({
+        id: row.id,
+        ownerId,
+        status: "QUEUED",
+        error: null,
+        result: null,
+        workflowRunId: null,
+      });
+    }
+
+    scheduleNegotiationRun(ownerId, row.id);
+    return res.status(202).json({ id: row.id, status: "QUEUED", accepted: true });
+  } catch (err) {
+    console.error("[negotiations] start failed", err);
     return res.sendStatus(500);
   }
 });

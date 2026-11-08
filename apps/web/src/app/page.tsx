@@ -54,6 +54,8 @@ type NegotiationRecord = {
   workflowRunId: string | null;
   createdAt: string;
   updatedAt: string;
+  result?: unknown;
+  error?: unknown;
 };
 
 type FieldErrors = Partial<Record<keyof RequestFields, string>>;
@@ -64,6 +66,26 @@ type Offer = {
   leadTimeDays: number;
   score: number;
 };
+
+function offersFromResult(result: unknown): Offer[] {
+  if (!result || typeof result !== "object") return [];
+  const ranking = (result as { ranking?: unknown }).ranking;
+  if (!Array.isArray(ranking)) return [];
+  return ranking.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as {
+      score?: unknown;
+      offer?: { from?: unknown; unitPrice?: unknown; leadTimeDays?: unknown };
+    };
+    if (!row.offer || typeof row.offer !== "object") return [];
+    const supplier = typeof row.offer.from === "string" ? row.offer.from : null;
+    const unitPrice = typeof row.offer.unitPrice === "number" ? row.offer.unitPrice : null;
+    const leadTimeDays = typeof row.offer.leadTimeDays === "number" ? row.offer.leadTimeDays : null;
+    const score = typeof row.score === "number" ? row.score : 0;
+    if (!supplier || unitPrice === null || leadTimeDays === null) return [];
+    return [{ supplier, unitPrice, leadTimeDays, score: Math.round(score * 1000) / 1000 }];
+  });
+}
 
 const navigation = [
   { name: "Overview" as const, icon: LayoutDashboard },
@@ -106,7 +128,6 @@ const emptyFields = (): RequestFields => ({
   neededByDays: "",
 });
 
-const offers: Offer[] = [];
 const money = new Intl.NumberFormat("en-US", {
   style: "currency", currency: "USD",
 });
@@ -194,6 +215,9 @@ export default function Dashboard() {
   const [negotiations, setNegotiations] = useState<NegotiationRecord[]>([]);
   const [negotiationsError, setNegotiationsError] = useState("");
   const [queueBusy, setQueueBusy] = useState(false);
+  const [activeNegotiationId, setActiveNegotiationId] = useState<string | null>(null);
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [offersNote, setOffersNote] = useState("Queue a negotiation to load real supplier offers.");
   const [search, setSearch] = useState("");
   const [offerSearch, setOfferSearch] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -202,6 +226,8 @@ export default function Dashboard() {
   const menuRef = useRef<HTMLButtonElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeIdRef = useRef<string | null>(null);
   const formId = useId();
   const visibleDrafts = drafts.filter(draft => {
     const haystack = [
@@ -223,6 +249,38 @@ export default function Dashboard() {
     return haystack.includes(search.toLowerCase());
   });
 
+  async function loadNegotiationDetail(id: string) {
+    const response = await fetch(`/api/negotiations/${encodeURIComponent(id)}`, { cache: "no-store" });
+    if (!response.ok) return null;
+    return await response.json() as NegotiationRecord;
+  }
+
+  function applyNegotiationResult(detail: NegotiationRecord) {
+    activeIdRef.current = detail.id;
+    setActiveNegotiationId(detail.id);
+    if (detail.status === "SUCCEEDED") {
+      const nextOffers = offersFromResult(detail.result);
+      setOffers(nextOffers);
+      setOffersNote(
+        nextOffers.length > 0
+          ? `Live ranking for negotiation ${detail.id.slice(0, 8)}…`
+          : "Negotiation finished, but no eligible offers were returned.",
+      );
+      return;
+    }
+    if (detail.status === "FAILED") {
+      setOffers([]);
+      const message = detail.error && typeof detail.error === "object" && "message" in detail.error
+        ? String((detail.error as { message: unknown }).message)
+        : "Negotiation failed.";
+      setOffersNote(message);
+      return;
+    }
+    if (detail.status === "RUNNING" || detail.status === "QUEUED") {
+      setOffersNote(`Negotiation ${detail.status.toLowerCase()}. Offers will appear when it finishes.`);
+    }
+  }
+
   async function loadNegotiations() {
     try {
       const response = await fetch("/api/negotiations", { cache: "no-store" });
@@ -235,8 +293,30 @@ export default function Dashboard() {
         return;
       }
       const data = await response.json() as { items?: NegotiationRecord[] };
-      setNegotiations(Array.isArray(data.items) ? data.items : []);
+      const items = Array.isArray(data.items) ? data.items : [];
+      setNegotiations(items);
       setNegotiationsError("");
+
+      const focusId = activeIdRef.current
+        ?? items.find(item => item.status === "RUNNING" || item.status === "QUEUED")?.id
+        ?? items.find(item => item.status === "SUCCEEDED")?.id
+        ?? null;
+
+      if (focusId) {
+        const detail = await loadNegotiationDetail(focusId);
+        if (detail) applyNegotiationResult(detail);
+      }
+
+      const needsPoll = items.some(item => item.status === "QUEUED" || item.status === "RUNNING");
+      if (needsPoll && !pollRef.current) {
+        pollRef.current = setInterval(() => {
+          void loadNegotiations();
+        }, 5000);
+      }
+      if (!needsPoll && pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
     } catch {
       setNegotiationsError("Could not reach the negotiations API. Is the API running?");
     }
@@ -350,14 +430,19 @@ export default function Dashboard() {
         setNotice(payload.error ?? `Queue failed (${response.status}).`);
         return;
       }
+      if (payload.id) {
+        activeIdRef.current = payload.id;
+        setActiveNegotiationId(payload.id);
+      }
       await loadNegotiations();
       resetComposer();
       setNotice(
         payload.idempotent
-          ? `Existing negotiation reused (${payload.status ?? "QUEUED"}). Workflow not started yet.`
-          : `Negotiation queued (${payload.status ?? "QUEUED"}). No supplier contact or payment was started.`,
+          ? `Existing negotiation reused (${payload.status ?? "QUEUED"}).`
+          : `Negotiation queued and started (${payload.status ?? "QUEUED"}). AI is running in the background — no payment was started.`,
       );
-      setView("Requests");
+      setView("Supplier offers");
+      setOffersNote("Negotiation running. This page refreshes offers when results arrive.");
     } catch {
       setNotice("Queue failed. Check that the API is running and try again.");
     } finally {
@@ -426,8 +511,8 @@ export default function Dashboard() {
           <div className={s.previewNotice}>
             <ShieldCheck size={17} />
             <p>
-              Queue stores a durable request in Postgres. AI negotiation workflow, orders, and PayPal are not started from this button yet.
-              Local drafts remain session-only.
+              Queue negotiation saves to Postgres and starts the real buyer/seller negotiate run in the API.
+              PayPal authorize/capture stays manual and disconnected here. Local drafts remain session-only.
             </p>
           </div>
 
@@ -570,7 +655,7 @@ export default function Dashboard() {
                     <div><dt>Needed within</dt><dd>{pendingDraft.neededByDays} days</dd></div>
                   </dl>
                   <p className={s.summaryNote}>
-                    Save draft keeps it in this browser only. Queue negotiation writes to Postgres as QUEUED — it does not contact suppliers, approve, or pay.
+                    Save draft stays in this browser only. Queue negotiation persists the request and starts AI negotiation in the background — it still will not approve or pay.
                   </p>
                   <div className={s.reviewActions}>
                     <button
@@ -656,6 +741,42 @@ export default function Dashboard() {
                     <p>Priority: {priorityLabel(item.priority)} · Qty {item.quantity} · Max {money.format(item.maxUnitPrice)} {item.currency} · Within {item.neededByDays} days</p>
                     <p>Created {new Date(item.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST.</p>
                     <p>Id {item.id}. Workflow run: {item.workflowRunId ?? "not started"}.</p>
+                    <button
+                      type="button"
+                      className={s.textButton}
+                      onClick={() => {
+                        setActiveNegotiationId(item.id);
+                        void loadNegotiationDetail(item.id).then(detail => {
+                          if (detail) {
+                            applyNegotiationResult(detail);
+                            setView("Supplier offers");
+                          }
+                        });
+                      }}
+                    >
+                      View offers <ArrowRight size={15} />
+                    </button>
+                    {(item.status === "QUEUED" || item.status === "FAILED") && (
+                      <button
+                        type="button"
+                        className={s.textButton}
+                        onClick={() => {
+                          void fetch(`/api/negotiations/${encodeURIComponent(item.id)}/start`, { method: "POST" })
+                            .then(async response => {
+                              if (!response.ok) {
+                                const payload = await response.json().catch(() => ({})) as { error?: string };
+                                setNotice(payload.error ?? `Start failed (${response.status}).`);
+                                return;
+                              }
+                              setActiveNegotiationId(item.id);
+                              setNotice("Negotiation start accepted.");
+                              await loadNegotiations();
+                            });
+                        }}
+                      >
+                        Start / retry <ArrowRight size={15} />
+                      </button>
+                    )}
                   </details>
                   <span className={s.draftBadge}>{item.status}</span>
                 </li>)}
@@ -699,8 +820,12 @@ export default function Dashboard() {
 
           {view === "Supplier offers" && <section className={s.card}>
             <div className={s.sectionHeader}>
-              <div><h2>Compare with confidence</h2><p className={s.description}>Price, delivery, and fit. Real negotiation results will appear here.</p></div>
+              <div>
+                <h2>Compare with confidence</h2>
+                <p className={s.description}>{offersNote}</p>
+              </div>
               <div className={s.tableActions}>
+                <button type="button" className={s.secondary} onClick={() => void loadNegotiations()}>Refresh</button>
                 <label className={s.search}><Search size={16} /><input aria-label="Search supplier offers"
                   placeholder="Search offers" value={offerSearch} onChange={event => setOfferSearch(event.target.value)} /></label>
                 <button className={`${s.iconButton} ${s.tooltip}`} data-tip={expanded ? "Compact view" : "Expand comparison"}
@@ -716,7 +841,10 @@ export default function Dashboard() {
                 quickFilterText={offerSearch}
                 overlayNoRowsTemplate="<span>No connected supplier offers yet.</span>" />
             </div>
-            <p className={s.tableNote}>AG Grid Community · Sort and filter from column headers. No sample offers are presented as live data.</p>
+            <p className={s.tableNote}>
+              AG Grid Community · Rows come from persisted negotiation rankings only.
+              {activeNegotiationId ? ` Active id: ${activeNegotiationId}` : ""}
+            </p>
           </section>}
 
           {(view === "Overview" || view === "Payments & orders") && <section className={`${s.card} ${s.paymentCard}`}>

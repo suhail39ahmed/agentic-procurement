@@ -125,6 +125,26 @@ export async function listNegotiationsForOwner(
   return rows.map(mapRow);
 }
 
+export async function claimNegotiationRun(
+  ownerId: string,
+  id: string,
+): Promise<Negotiation | undefined> {
+  const db = getDatabase();
+  const [row] = await db
+    .update(negotiations)
+    .set({
+      status: "RUNNING",
+      updatedAt: new Date().toISOString(),
+    })
+    .where(and(
+      eq(negotiations.id, id),
+      eq(negotiations.ownerId, ownerId),
+      eq(negotiations.status, "QUEUED"),
+    ))
+    .returning();
+  return row ? mapRow(row) : undefined;
+}
+
 export async function updateNegotiationRun(input: {
   id: string;
   ownerId: string;
@@ -134,15 +154,17 @@ export async function updateNegotiationRun(input: {
   error?: unknown;
 }): Promise<Negotiation | undefined> {
   const db = getDatabase();
+  const patch: Record<string, unknown> = {
+    status: input.status,
+    updatedAt: new Date().toISOString(),
+  };
+  if (input.workflowRunId !== undefined) patch.workflowRunId = input.workflowRunId;
+  if (input.result !== undefined) patch.result = input.result;
+  if (input.error !== undefined) patch.error = input.error;
+
   const [row] = await db
     .update(negotiations)
-    .set({
-      status: input.status,
-      workflowRunId: input.workflowRunId === undefined ? undefined : input.workflowRunId,
-      result: input.result === undefined ? undefined : input.result,
-      error: input.error === undefined ? undefined : input.error,
-      updatedAt: new Date().toISOString(),
-    })
+    .set(patch)
     .where(and(eq(negotiations.id, input.id), eq(negotiations.ownerId, input.ownerId)))
     .returning();
   return row ? mapRow(row) : undefined;
