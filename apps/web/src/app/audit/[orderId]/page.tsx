@@ -1,6 +1,28 @@
+import { Suspense } from "react";
 import { fetchAudit } from "@/lib/audit";
 
-export default async function AuditPage({
+export const instant = false;
+
+export default function AuditPage({
+  params,
+}: {
+  params: Promise<{ orderId: string }>;
+}) {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto max-w-3xl px-6 py-12">
+          <h1 className="text-3xl font-semibold">Order audit timeline</h1>
+          <p className="mt-3 text-sm text-gray-500">Loading audit records…</p>
+        </main>
+      }
+    >
+      <AuditTimeline params={params} />
+    </Suspense>
+  );
+}
+
+async function AuditTimeline({
   params,
 }: {
   params: Promise<{ orderId: string }>;

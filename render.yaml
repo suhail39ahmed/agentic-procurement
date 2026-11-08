@@ -10,8 +10,8 @@ services:
     region: singapore
     plan: free
     rootDir: .
-    buildCommand: corepack enable && pnpm install --frozen-lockfile
-    startCommand: pnpm --filter api start
+    buildCommand: npx --yes pnpm@9.15.9 install --frozen-lockfile
+    startCommand: npx --yes pnpm@9.15.9 --filter api start
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
@@ -31,8 +31,8 @@ services:
     region: singapore
     plan: free
     rootDir: .
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter web build
-    startCommand: pnpm --filter web start
+    buildCommand: npx --yes pnpm@9.15.9 install --frozen-lockfile && npx --yes pnpm@9.15.9 --filter web build
+    startCommand: npx --yes pnpm@9.15.9 --filter web start
     envVars:
       - key: NODE_VERSION
         value: "24.22.2"
