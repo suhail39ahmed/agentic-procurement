@@ -37,6 +37,7 @@ type CheckoutState = {
   rfqId: string;
   mandate: PaymentIntent["mandate"];
   approvalId?: string;
+  lastStatus?: string;
 };
 
 function requireOwner(req: { header: (name: string) => string | undefined }): string | null {
@@ -183,6 +184,7 @@ checkoutRouter.post("/negotiations/:id/checkout", async (req, res) => {
       rfqId: rfq.rfqId,
       mandate: intent.mandate,
       approvalId: approval?.id,
+      lastStatus: order.status,
     };
     await mergeCheckout(row, ownerId, checkout);
 
@@ -229,7 +231,20 @@ checkoutRouter.post("/orders/:id/authorize", async (req, res) => {
     }
 
     const intent = intentFromCheckout(checkout);
-    const authorizationId = await authorizePayment(intent);
+    let authorizationId: string;
+    try {
+      authorizationId = await authorizePayment(intent);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (/ORDER_NOT_APPROVED|Payer has not yet approved/i.test(message)) {
+        return res.status(409).json({
+          error: "PayPal buyer has not approved yet. Open the approve link, Complete Purchase in sandbox, then Authorize hold.",
+          paypalOrderId: checkout.paypalOrderId,
+          approveUrl: checkout.approveUrl,
+        });
+      }
+      throw err;
+    }
 
     const held = transition(order, "AUTHORIZE", "payment-tool", {
       authorizationId,
@@ -237,6 +252,7 @@ checkoutRouter.post("/orders/:id/authorize", async (req, res) => {
       deliverBy: new Date(Date.now() + negotiation.neededByDays * 86_400_000).toISOString(),
     });
     await saveOrder(held);
+    await mergeCheckout(negotiation, ownerId, { ...checkout, lastStatus: held.status });
 
     return res.json({
       orderId: held.id,
@@ -268,6 +284,10 @@ checkoutRouter.post("/orders/:id/ship", async (req, res) => {
     // Owner-triggered demo ship on behalf of the winning supplier (sandbox convenience).
     const shipped = markShipped(order, order.supplierId, carrier, number);
     await saveOrder(shipped);
+    const checkout = checkoutFromResult(negotiation.result);
+    if (checkout && checkout.orderId === order.id) {
+      await mergeCheckout(negotiation, ownerId, { ...checkout, lastStatus: shipped.status });
+    }
     return res.json({
       orderId: shipped.id,
       status: shipped.status,
@@ -300,6 +320,7 @@ checkoutRouter.post("/orders/:id/confirm-delivery", async (req, res) => {
     const intent = intentFromCheckout(checkout);
     const captured = await confirmDelivery(order, intent, ownerActor(ownerId));
     await saveOrder(captured);
+    await mergeCheckout(negotiation, ownerId, { ...checkout, lastStatus: captured.status });
     return res.json({
       orderId: captured.id,
       status: captured.status,

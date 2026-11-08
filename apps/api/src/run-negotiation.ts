@@ -5,7 +5,7 @@ import {
   type Negotiation,
   type NegotiationPriority,
 } from "db";
-import { negotiate, sellers, type RfqMessage, type Weights } from "agents";
+import { negotiate, sellers, type NegotiationEvent, type RfqMessage, type Weights } from "agents";
 
 const priorityWeights: Record<NegotiationPriority, Weights> = {
   price: { price: 0.85, speed: 0.15 },
@@ -43,13 +43,33 @@ export async function runNegotiation(ownerId: string, id: string): Promise<void>
   }
 
   console.log(`[negotiations] running ${id}`);
+  const liveEvents: NegotiationEvent[] = [];
+  let persistChain: Promise<void> = Promise.resolve();
+
+  const persistLive = (events: NegotiationEvent[]) => {
+    persistChain = persistChain.then(async () => {
+      await updateNegotiationRun({
+        id,
+        ownerId,
+        status: "RUNNING",
+        result: { events, streaming: true },
+      });
+    }).catch((err) => {
+      console.warn(`[negotiations] live event persist failed ${id}:`, err);
+    });
+  };
+
   try {
     const result = await negotiate(
       toRfq(claimed),
       sellers,
-      undefined,
+      (event) => {
+        liveEvents.push(event);
+        persistLive([...liveEvents]);
+      },
       priorityWeights[claimed.priority],
     );
+    await persistChain;
     const serialized = JSON.parse(JSON.stringify(result));
     await updateNegotiationRun({
       id,
@@ -61,6 +81,7 @@ export async function runNegotiation(ownerId: string, id: string): Promise<void>
     });
     console.log(`[negotiations] succeeded ${id}`);
   } catch (err) {
+    await persistChain;
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[negotiations] failed ${id}:`, message);
     await updateNegotiationRun({
@@ -68,7 +89,7 @@ export async function runNegotiation(ownerId: string, id: string): Promise<void>
       ownerId,
       status: "FAILED",
       error: { message },
-      result: null,
+      result: liveEvents.length > 0 ? { events: liveEvents, streaming: false } : null,
     });
   }
 }

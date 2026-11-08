@@ -11,6 +11,7 @@ import { AgGridReact } from "ag-grid-react";
 import {
   AllCommunityModule, ModuleRegistry, themeQuartz,
   type ColDef,
+  type GridApi,
 } from "ag-grid-community";
 import s from "./dashboard.module.css";
 import Link from "next/link";
@@ -56,6 +57,13 @@ type NegotiationRecord = {
   updatedAt: string;
   result?: unknown;
   error?: unknown;
+  hasCheckout?: boolean;
+  paymentStatus?: string | null;
+};
+
+type StreamLine = {
+  id: string;
+  text: string;
 };
 
 type FieldErrors = Partial<Record<keyof RequestFields, string>>;
@@ -188,6 +196,30 @@ const columns: ColDef<Offer>[] = [
       data?.withinBudget && data?.meetsDeadline ? "Yes" : "No",
   },
 ];
+
+type FeedRow = {
+  id: string;
+  brief: string;
+  status: string;
+  priority: string;
+  quantity: number;
+  maxUnitPrice: number;
+  payment: string;
+};
+
+const feedColumns: ColDef<FeedRow>[] = [
+  { field: "brief", headerName: "Request", flex: 2, minWidth: 220 },
+  { field: "status", headerName: "Negotiation", minWidth: 130 },
+  { field: "payment", headerName: "Payment", minWidth: 120 },
+  { field: "priority", headerName: "Priority", minWidth: 110 },
+  { field: "quantity", headerName: "Qty", minWidth: 80 },
+  {
+    field: "maxUnitPrice", headerName: "Max unit", minWidth: 120,
+    valueFormatter: ({ value }) =>
+      typeof value === "number" ? money.format(value) : "—",
+  },
+];
+
 const gridTheme = themeQuartz.withParams({
   accentColor: "#0070e0",
   backgroundColor: "#ffffff",
@@ -199,6 +231,32 @@ const gridTheme = themeQuartz.withParams({
   rowHeight: 56,
   headerHeight: 48,
 });
+
+function syncGridRows<T extends { id?: string; supplier?: string }>(
+  api: GridApi<T> | undefined,
+  rows: T[],
+  keyOf: (row: T) => string,
+) {
+  if (!api) return;
+  const nextByKey = new Map(rows.map((row) => [keyOf(row), row]));
+  const remove: T[] = [];
+  const update: T[] = [];
+  const seen = new Set<string>();
+  api.forEachNode((node) => {
+    const data = node.data;
+    if (!data) return;
+    const key = keyOf(data);
+    const next = nextByKey.get(key);
+    if (!next) {
+      remove.push(data);
+      return;
+    }
+    seen.add(key);
+    update.push(next);
+  });
+  const add = rows.filter((row) => !seen.has(keyOf(row)));
+  api.applyTransaction({ add, update, remove });
+}
 
 function priorityLabel(priority: Priority) {
   return priorities.find(item => item.value === priority)?.label ?? priority;
@@ -284,21 +342,44 @@ export default function Dashboard() {
   const [chatBusy, setChatBusy] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatError, setChatError] = useState("");
+  const [streamLines, setStreamLines] = useState<StreamLine[]>([]);
+  const [streamStatus, setStreamStatus] = useState("");
   const briefRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLButtonElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeIdRef = useRef<string | null>(null);
+  const offersGridApi = useRef<GridApi<Offer> | undefined>(undefined);
+  const feedGridApi = useRef<GridApi<FeedRow> | undefined>(undefined);
+  const eventSourceRef = useRef<EventSource | null>(null);
   const formId = useId();
   const eligibleOffers = useMemo(
     () => offers.filter((offer) => offer.withinBudget && offer.meetsDeadline),
     [offers],
   );
   const heldCount = activeOrder?.status === "HELD" || activeOrder?.status === "SHIPPED" ? 1 : 0;
+  const capturedCount = activeOrder?.status === "CAPTURED" ? 1 : 0;
   const activeOrderCount = activeOrder ? 1 : 0;
   const activeNegotiation = negotiations.find((item) => item.id === activeNegotiationId) ?? null;
   const succeededNegotiations = negotiations.filter((item) => item.status === "SUCCEEDED");
+  const feedRows = useMemo<FeedRow[]>(() => {
+    return negotiations.map((item) => {
+      const payment = item.id === activeNegotiationId && activeOrder
+        ? activeOrder.status
+        : item.paymentStatus
+          ?? (item.hasCheckout ? "APPROVED" : "—");
+      return {
+        id: item.id,
+        brief: item.brief,
+        status: item.status,
+        priority: priorityLabel(item.priority),
+        quantity: item.quantity,
+        maxUnitPrice: item.maxUnitPrice,
+        payment,
+      };
+    });
+  }, [negotiations, activeNegotiationId, activeOrder]);
   const visibleDrafts = drafts.filter(draft => {
     const haystack = [
       draft.brief,
@@ -478,9 +559,91 @@ export default function Dashboard() {
     }
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      eventSourceRef.current?.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    syncGridRows(offersGridApi.current, offers, (row) => row.supplier);
+  }, [offers]);
+
+  useEffect(() => {
+    syncGridRows(feedGridApi.current, feedRows, (row) => row.id);
+  }, [feedRows]);
+
+  const activeStreamStatus = activeNegotiation?.status;
+
+  useEffect(() => {
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
+    if (!activeNegotiationId) {
+      setStreamLines([]);
+      setStreamStatus("");
+      return;
+    }
+    if (activeStreamStatus !== "QUEUED" && activeStreamStatus !== "RUNNING" && activeStreamStatus !== "SUCCEEDED") {
+      return;
+    }
+    setStreamLines([]);
+    setStreamStatus(activeStreamStatus ?? "connecting");
+    const source = new EventSource(`/api/negotiations/${encodeURIComponent(activeNegotiationId)}/events`);
+    eventSourceRef.current = source;
+    source.onmessage = (message) => {
+      try {
+        const payload = JSON.parse(message.data) as {
+          type?: string;
+          status?: string;
+          event?: {
+            round?: number;
+            message?: {
+              type?: string;
+              from?: string;
+              to?: string;
+              unitPrice?: number;
+              leadTimeDays?: number;
+              targetUnitPrice?: number;
+              reason?: string;
+              message?: string;
+            };
+          };
+        };
+        if (payload.type === "status" && payload.status) {
+          setStreamStatus(payload.status);
+          return;
+        }
+        if (payload.type === "done") {
+          setStreamStatus(payload.status ?? "done");
+          source.close();
+          void loadNegotiations();
+          return;
+        }
+        if (payload.type === "event" && payload.event?.message) {
+          const m = payload.event.message;
+          let text = `R${payload.event.round ?? "?"} `;
+          if (m.type === "OFFER") {
+            text += `${m.from ?? "seller"} OFFER $${Number(m.unitPrice ?? 0).toFixed(2)} / ${m.leadTimeDays ?? "?"}d`;
+          } else if (m.type === "COUNTER") {
+            text += `buyer → ${m.to ?? "seller"} COUNTER $${Number(m.targetUnitPrice ?? 0).toFixed(2)}`;
+          } else if (m.type === "REJECT") {
+            text += `${m.from ?? "seller"} REJECT ${m.reason ?? ""}`;
+          } else {
+            text += `${m.type ?? "message"}`;
+          }
+          setStreamLines((current) => [...current, { id: crypto.randomUUID(), text }]);
+        }
+      } catch {
+        // ignore malformed SSE chunks
+      }
+    };
+    source.onerror = () => {
+      setStreamStatus((current) => current === "SUCCEEDED" || current === "FAILED" ? current : "reconnecting…");
+    };
+    return () => {
+      source.close();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeNegotiationId, activeStreamStatus]);
 
   async function sendAssistantMessage(event?: FormEvent) {
     event?.preventDefault();
@@ -532,6 +695,73 @@ export default function Dashboard() {
     setFieldErrors({});
     setNotice("");
     requestAnimationFrame(() => briefRef.current?.focus());
+  }
+
+  function loadDemoRequest() {
+    const demo = examples[0];
+    setView("Overview");
+    setMobileOpen(false);
+    setFields(demo);
+    setFieldErrors({});
+    setComposerMode("compose");
+    setPendingDraft(null);
+    setNotice("Demo request loaded. Review draft, then Queue negotiation to run buyer/seller agents.");
+    requestAnimationFrame(() => briefRef.current?.focus());
+  }
+
+  async function seedDemoWorkspace() {
+    if (queueBusy) return;
+    const demo = examples[0];
+    const validated = validateFields(demo);
+    if (!validated.draft) {
+      setNotice("Demo seed failed validation.");
+      return;
+    }
+    setView("Overview");
+    setMobileOpen(false);
+    setFields(demo);
+    setPendingDraft(validated.draft);
+    setComposerMode("review");
+    setFieldErrors({});
+    setStreamLines([]);
+    setNotice("Seeding demo: queueing negotiation with the chairs example…");
+    setQueueBusy(true);
+    try {
+      const response = await fetch("/api/negotiations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          brief: validated.draft.brief,
+          priority: validated.draft.priority,
+          quantity: validated.draft.quantity,
+          maxUnitPrice: validated.draft.maxUnitPrice.toFixed(2),
+          currency: validated.draft.currency,
+          neededByDays: validated.draft.neededByDays,
+          idempotencyKey: `demo-seed-${crypto.randomUUID()}`,
+        }),
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        id?: string;
+        status?: string;
+        error?: string;
+      };
+      if (!response.ok) {
+        setNotice(payload.error ?? `Demo seed failed (${response.status}).`);
+        return;
+      }
+      if (payload.id) {
+        activeIdRef.current = payload.id;
+        setActiveNegotiationId(payload.id);
+      }
+      await loadNegotiations();
+      resetComposer();
+      setView("Supplier offers");
+      setNotice("Demo seeded. Watch the live negotiation feed while offers fill in.");
+    } catch {
+      setNotice("Demo seed failed. Is the API reachable?");
+    } finally {
+      setQueueBusy(false);
+    }
   }
 
   function closeMenu() {
@@ -817,7 +1047,13 @@ export default function Dashboard() {
               </h1>
               <p className={s.subtitle}>From your first request to the final payment. One clear workspace.</p>
             </div>
-            <button className={s.primary} onClick={newRequest}><Plus size={18} /> New request</button>
+            <div className={s.reviewActions}>
+              <button type="button" className={s.secondary} onClick={loadDemoRequest}>Load demo request</button>
+              <button type="button" className={s.secondary} onClick={() => void seedDemoWorkspace()} disabled={queueBusy}>
+                {queueBusy ? "Seeding…" : "Seed demo (1 click)"}
+              </button>
+              <button className={s.primary} onClick={newRequest}><Plus size={18} /> New request</button>
+            </div>
           </section>
 
           <div className={s.previewNotice}>
@@ -830,9 +1066,9 @@ export default function Dashboard() {
 
           <section className={s.metrics} aria-label="Workspace summary">
             {[
-              { label: "Request drafts", value: String(drafts.length), detail: "In this browser session", icon: FileText, target: "Requests" as View },
               { label: "Negotiations", value: String(negotiations.length), detail: negotiationsError ? "API unreachable" : "Loaded from database", icon: Sparkles, target: "Requests" as View },
               { label: "Funds on hold", value: String(heldCount), detail: heldCount ? "Authorized, not captured" : "Authorize after PayPal approve", icon: ShieldCheck, target: "Payments & orders" as View },
+              { label: "Captured", value: String(capturedCount), detail: capturedCount ? "Owner confirmed delivery" : "Confirm after ship", icon: CreditCard, target: "Payments & orders" as View },
               { label: "Active orders", value: String(activeOrderCount), detail: activeOrder ? `Status ${activeOrder.status}` : "Checkout a winning offer", icon: Package, target: "Payments & orders" as View },
             ].map(({ label, value, detail, icon: Icon, target }) => (
               <button className={s.metric} key={label} onClick={() => navigate(target)}>
@@ -1061,6 +1297,29 @@ export default function Dashboard() {
             <section className={s.card}>
               <div className={s.sectionHeader}>
                 <div>
+                  <h2>Negotiation feed</h2>
+                  <p className={s.description}>Live AG Grid rows via applyTransaction — status, payment, priority.</p>
+                </div>
+                <button type="button" className={s.secondary} onClick={() => void loadNegotiations()}>Refresh</button>
+              </div>
+              <div className={s.grid}>
+                <AgGridReact<FeedRow>
+                  theme={gridTheme}
+                  columnDefs={feedColumns}
+                  defaultColDef={{ flex: 1, sortable: true, filter: true, resizable: true }}
+                  onGridReady={(event) => {
+                    feedGridApi.current = event.api;
+                    syncGridRows(event.api, feedRows, (row) => row.id);
+                  }}
+                  getRowId={(params) => params.data.id}
+                  overlayNoRowsTemplate="<span>No negotiations yet. Seed demo or queue a request.</span>"
+                />
+              </div>
+            </section>
+
+            <section className={s.card}>
+              <div className={s.sectionHeader}>
+                <div>
                   <h2>Queued negotiations</h2>
                   <p className={s.description}>Durable rows from Postgres. Queue starts the negotiate run automatically.</p>
                 </div>
@@ -1203,13 +1462,44 @@ export default function Dashboard() {
               )}
             </div>
             <div className={`${s.grid} ${expanded ? s.gridExpanded : ""}`}>
-              <AgGridReact<Offer> theme={gridTheme} rowData={offers} columnDefs={columns}
+              <AgGridReact<Offer>
+                theme={gridTheme}
+                columnDefs={columns}
                 defaultColDef={{ flex: 1, sortable: true, filter: true, resizable: true }}
                 quickFilterText={offerSearch}
-                overlayNoRowsTemplate="<span>No connected supplier offers yet.</span>" />
+                onGridReady={(event) => {
+                  offersGridApi.current = event.api;
+                  syncGridRows(event.api, offers, (row) => row.supplier);
+                }}
+                getRowId={(params) => params.data.supplier}
+                overlayNoRowsTemplate="<span>No connected supplier offers yet.</span>"
+              />
+            </div>
+            <div className={s.reviewPanel} aria-live="polite">
+              <div className={s.sectionHeader}>
+                <div>
+                  <h3>Live negotiation stream (SSE)</h3>
+                  <p className={s.description}>
+                    {streamStatus
+                      ? `Status: ${streamStatus}`
+                      : "Select or queue a negotiation to stream seller messages."}
+                  </p>
+                </div>
+              </div>
+              {streamLines.length > 0 ? (
+                <div className={s.chatLog}>
+                  {streamLines.map((line) => (
+                    <div key={line.id} className={s.chatBot}>
+                      <p>{line.text}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className={s.tableNote}>Waiting for buyer/seller messages…</p>
+              )}
             </div>
             <p className={s.tableNote}>
-              AG Grid Community · Rows come from the selected negotiation ranking above.
+              AG Grid Community · applyTransaction updates · ranking from the selected negotiation.
               {eligibleOffers.length > 0
                 ? ` Winning eligible offer: ${eligibleOffers[0].supplier} at ${money.format(eligibleOffers[0].unitPrice)}.`
                 : " Checkout needs at least one eligible offer (budget + deadline)."}
@@ -1264,8 +1554,9 @@ export default function Dashboard() {
                 </dl>
                 {activeOrder.approveUrl && activeOrder.status === "APPROVED" && (
                   <p className={s.summaryNote}>
-                    Approve as sandbox buyer:{" "}
-                    <a href={activeOrder.approveUrl} target="_blank" rel="noreferrer">{activeOrder.approveUrl}</a>
+                    Step 1 — open this link as the sandbox buyer and click Complete Purchase:{" "}
+                    <a href={activeOrder.approveUrl} target="_blank" rel="noreferrer">Approve on PayPal</a>
+                    . Step 2 — return here and click Authorize hold (it fails until PayPal approval finishes).
                   </p>
                 )}
                 <div className={s.reviewActions}>
@@ -1285,6 +1576,13 @@ export default function Dashboard() {
                     </button>
                   )}
                 </div>
+              </div>
+            )}
+            {view === "Payments & orders" && (
+              <div className={s.empty} style={{ marginTop: 18 }}>
+                <span className={s.emptyIcon}><ShieldCheck size={26} /></span>
+                <h3>Disputes</h3>
+                <p>No open PayPal disputes in this workspace. Agent draft + accept-claim flow is not wired yet (#28).</p>
               </div>
             )}
             <div className={s.paymentFoot}><ShieldCheck size={16} /><span>AI recommendations do not authorize or capture payments.</span></div>

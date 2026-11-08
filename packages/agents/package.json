@@ -12,6 +12,7 @@
     "order-demo": "tsx src/demos/order-demo.ts",
     "expiry-demo": "tsx src/demos/expiry-demo.ts",
     "ledger-demo": "tsx src/demos/ledger-demo.ts",
+    "eval": "tsx src/evals/harness.ts",
     "test:persistence": "tsx src/tests/persistence.test.ts"
   },
   "dependencies": {
