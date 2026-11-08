@@ -1,28 +1,28 @@
 {
-    "name": "agents",
-    "private": true,
-    "type": "module",
-    "exports": { ".": "./src/index.ts" },
-    "scripts": {
-      "demo": "tsx src/demos/demo.ts",
-      "seller-demo": "tsx src/demos/seller-demo.ts",
-      "negotiate-demo": "tsx src/demos/negotiate-demo.ts",
-      "policy-demo": "tsx src/demos/policy-demo.ts",
-      "checkout-demo": "tsx src/demos/checkout-demo.ts",
-      "order-demo": "tsx src/demos/order-demo.ts",
-      "expiry-demo": "tsx src/demos/expiry-demo.ts",
-      "ledger-demo": "tsx src/demos/ledger-demo.ts",
-      "test:persistence": "tsx src/tests/persistence.test.ts"
-    },
+  "name": "agents",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "demo": "tsx src/demos/demo.ts",
+    "seller-demo": "tsx src/demos/seller-demo.ts",
+    "negotiate-demo": "tsx src/demos/negotiate-demo.ts",
+    "policy-demo": "tsx src/demos/policy-demo.ts",
+    "checkout-demo": "tsx src/demos/checkout-demo.ts",
+    "order-demo": "tsx src/demos/order-demo.ts",
+    "expiry-demo": "tsx src/demos/expiry-demo.ts",
+    "ledger-demo": "tsx src/demos/ledger-demo.ts",
+    "test:persistence": "tsx src/tests/persistence.test.ts"
+  },
   "dependencies": {
     "ai": "workspace:*",
     "paypal": "workspace:*",
     "db": "workspace:*",
     "zod": "^4.6.6"
   },
-    "devDependencies": {
-      "@types/node": "^22.9.0",
-      "tsx": "^4.19.2",
-      "typescript": "^5.6.3"
-    }
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
   }
+}
