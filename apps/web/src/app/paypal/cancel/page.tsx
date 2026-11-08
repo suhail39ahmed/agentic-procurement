@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export const dynamic = "force-dynamic";
+export const instant = false;
 
 export default function PayPalCancelPage() {
   return (
