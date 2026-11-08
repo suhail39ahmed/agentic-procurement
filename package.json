@@ -2,6 +2,7 @@
   "name": "agentic-procurement",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@9.15.9",
   "scripts": {
     "spike:paypal": "pnpm --filter paypal spike"
   },

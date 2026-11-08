@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, jsonb, index, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, jsonb, index, uniqueIndex, primaryKey } from "drizzle-orm/pg-core";
 
 export const auditRecords = pgTable("audit_records", {
   orderId: text("order_id").notNull().references(() => orders.id),
@@ -159,3 +159,26 @@ export const preferences = pgTable("preferences", {
   decisions: integer("decisions").notNull().default(0),
   updatedAt: ts("updated_at").notNull().defaultNow(),
 });
+
+export const negotiations = pgTable("negotiations", {
+  id: text("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  status: text("status").notNull(),
+  brief: text("brief").notNull(),
+  priority: text("priority").notNull(),
+  quantity: integer("quantity").notNull(),
+  maxUnitPrice: integer("max_unit_price").notNull(),
+  currency: text("currency").notNull(),
+  neededByDays: integer("needed_by_days").notNull(),
+  workflowRunId: text("workflow_run_id"),
+  result: jsonb("result"),
+  error: jsonb("error"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  ownerCreatedIdx: index("negotiations_owner_created_idx").on(table.ownerId, table.createdAt),
+  ownerIdempotencyIdx: uniqueIndex("negotiations_owner_idempotency_idx").on(table.ownerId, table.idempotencyKey),
+  statusIdx: index("negotiations_status_idx").on(table.status),
+  workflowRunIdIdx: index("negotiations_workflow_run_id_idx").on(table.workflowRunId),
+}));

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import {
   ArrowRight, ArrowUpRight, Bot, Check, ChevronRight,
   CreditCard, FileText, Layers3, LayoutDashboard,
@@ -18,7 +18,46 @@ import Link from "next/link";
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 type View = "Overview" | "Requests" | "Supplier offers" | "Payments & orders";
-type Draft = { id: string; brief: string; at: string };
+type Priority = "price" | "speed" | "balanced";
+type Currency = "USD";
+type ComposerMode = "compose" | "review";
+
+type RequestFields = {
+  brief: string;
+  priority: Priority;
+  quantity: string;
+  maxUnitPrice: string;
+  currency: Currency;
+  neededByDays: string;
+};
+
+type Draft = {
+  id: string;
+  brief: string;
+  priority: Priority;
+  quantity: number;
+  maxUnitPrice: number;
+  currency: Currency;
+  neededByDays: number;
+  at: string;
+};
+
+type NegotiationRecord = {
+  id: string;
+  status: string;
+  brief: string;
+  priority: Priority;
+  quantity: number;
+  maxUnitPrice: number;
+  currency: string;
+  neededByDays: number;
+  workflowRunId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type FieldErrors = Partial<Record<keyof RequestFields, string>>;
+
 type Offer = {
   supplier: string;
   unitPrice: number;
@@ -32,10 +71,41 @@ const navigation = [
   { name: "Supplier offers" as const, icon: Layers3 },
   { name: "Payments & orders" as const, icon: CreditCard },
 ];
-const examples = [
-  "50 ergonomic chairs, under $200 each, within 30 days",
-  "Compare suppliers with delivery speed as my priority",
+
+const priorities: { value: Priority; label: string; detail: string }[] = [
+  { value: "price", label: "Lowest cost", detail: "Prefer stronger unit price" },
+  { value: "speed", label: "Fastest delivery", detail: "Prefer shorter lead time" },
+  { value: "balanced", label: "Balanced", detail: "Trade off price and speed" },
 ];
+
+const examples: RequestFields[] = [
+  {
+    brief: "50 ergonomic chairs for the new floor. Prefer durable mesh backs.",
+    priority: "price",
+    quantity: "50",
+    maxUnitPrice: "200.00",
+    currency: "USD",
+    neededByDays: "30",
+  },
+  {
+    brief: "Compare suppliers with delivery speed as my priority for standing desks.",
+    priority: "speed",
+    quantity: "12",
+    maxUnitPrice: "450.00",
+    currency: "USD",
+    neededByDays: "14",
+  },
+];
+
+const emptyFields = (): RequestFields => ({
+  brief: "",
+  priority: "balanced",
+  quantity: "",
+  maxUnitPrice: "",
+  currency: "USD",
+  neededByDays: "",
+});
+
 const offers: Offer[] = [];
 const money = new Intl.NumberFormat("en-US", {
   style: "currency", currency: "USD",
@@ -62,11 +132,68 @@ const gridTheme = themeQuartz.withParams({
   headerHeight: 48,
 });
 
+function priorityLabel(priority: Priority) {
+  return priorities.find(item => item.value === priority)?.label ?? priority;
+}
+
+function validateFields(fields: RequestFields): { errors: FieldErrors; draft?: Omit<Draft, "id" | "at"> } {
+  const errors: FieldErrors = {};
+  const brief = fields.brief.trim();
+  if (!brief) errors.brief = "Add a short description of what you need.";
+  else if (brief.length > 500) errors.brief = "Keep the brief to 500 characters or fewer.";
+
+  const quantity = Number(fields.quantity);
+  if (!fields.quantity.trim()) errors.quantity = "Enter a quantity.";
+  else if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10_000) {
+    errors.quantity = "Quantity must be a whole number from 1 to 10,000.";
+  }
+
+  const maxUnitPrice = Number(fields.maxUnitPrice);
+  if (!fields.maxUnitPrice.trim()) errors.maxUnitPrice = "Enter a maximum unit price.";
+  else if (!Number.isFinite(maxUnitPrice) || maxUnitPrice <= 0 || maxUnitPrice > 1_000_000) {
+    errors.maxUnitPrice = "Unit budget must be greater than 0 and at most 1,000,000.";
+  } else if (!/^\d+(\.\d{1,2})?$/.test(fields.maxUnitPrice.trim())) {
+    errors.maxUnitPrice = "Use up to two decimal places for the unit budget.";
+  }
+
+  if (fields.currency !== "USD") errors.currency = "Only USD is supported in this preview.";
+
+  const neededByDays = Number(fields.neededByDays);
+  if (!fields.neededByDays.trim()) errors.neededByDays = "Enter a delivery deadline in days.";
+  else if (!Number.isInteger(neededByDays) || neededByDays < 1 || neededByDays > 365) {
+    errors.neededByDays = "Deadline must be a whole number of days from 1 to 365.";
+  }
+
+  if (!priorities.some(item => item.value === fields.priority)) {
+    errors.priority = "Choose a sourcing priority.";
+  }
+
+  if (Object.keys(errors).length > 0) return { errors };
+
+  return {
+    errors,
+    draft: {
+      brief,
+      priority: fields.priority,
+      quantity,
+      maxUnitPrice: Math.round(maxUnitPrice * 100) / 100,
+      currency: "USD",
+      neededByDays,
+    },
+  };
+}
+
 export default function Dashboard() {
   const [view, setView] = useState<View>("Overview");
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [brief, setBrief] = useState("");
+  const [fields, setFields] = useState<RequestFields>(emptyFields);
+  const [composerMode, setComposerMode] = useState<ComposerMode>("compose");
+  const [pendingDraft, setPendingDraft] = useState<Omit<Draft, "id" | "at"> | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [negotiations, setNegotiations] = useState<NegotiationRecord[]>([]);
+  const [negotiationsError, setNegotiationsError] = useState("");
+  const [queueBusy, setQueueBusy] = useState(false);
   const [search, setSearch] = useState("");
   const [offerSearch, setOfferSearch] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -74,19 +201,80 @@ export default function Dashboard() {
   const briefRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLButtonElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const visibleDrafts = drafts.filter(draft =>
-    draft.brief.toLowerCase().includes(search.toLowerCase())
-  );
+  const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
+  const formId = useId();
+  const visibleDrafts = drafts.filter(draft => {
+    const haystack = [
+      draft.brief,
+      priorityLabel(draft.priority),
+      String(draft.quantity),
+      draft.currency,
+      String(draft.neededByDays),
+    ].join(" ").toLowerCase();
+    return haystack.includes(search.toLowerCase());
+  });
+  const visibleNegotiations = negotiations.filter(item => {
+    const haystack = [
+      item.brief,
+      item.status,
+      priorityLabel(item.priority),
+      String(item.quantity),
+    ].join(" ").toLowerCase();
+    return haystack.includes(search.toLowerCase());
+  });
+
+  async function loadNegotiations() {
+    try {
+      const response = await fetch("/api/negotiations", { cache: "no-store" });
+      if (!response.ok) {
+        setNegotiationsError(
+          response.status === 503
+            ? "API configuration missing on the web server."
+            : `Could not load negotiations (${response.status}).`,
+        );
+        return;
+      }
+      const data = await response.json() as { items?: NegotiationRecord[] };
+      setNegotiations(Array.isArray(data.items) ? data.items : []);
+      setNegotiationsError("");
+    } catch {
+      setNegotiationsError("Could not reach the negotiations API. Is the API running?");
+    }
+  }
+
+  function updateField<K extends keyof RequestFields>(key: K, value: RequestFields[K]) {
+    setFields(current => ({ ...current, [key]: value }));
+    setFieldErrors(current => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
 
   function navigate(next: View) {
     setView(next);
     setMobileOpen(false);
+    if (next === "Overview" || next === "Requests") {
+      void loadNegotiations();
+    }
     requestAnimationFrame(() => headingRef.current?.focus());
+  }
+
+  function resetComposer() {
+    setFields(emptyFields());
+    setPendingDraft(null);
+    setFieldErrors({});
+    setComposerMode("compose");
   }
 
   function newRequest() {
     setView("Overview");
     setMobileOpen(false);
+    setComposerMode("compose");
+    setPendingDraft(null);
+    setFieldErrors({});
+    setNotice("");
     requestAnimationFrame(() => briefRef.current?.focus());
   }
 
@@ -95,16 +283,86 @@ export default function Dashboard() {
     menuRef.current?.focus();
   }
 
-  function saveDraft(event: FormEvent<HTMLFormElement>) {
+  function reviewDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const text = brief.trim();
-    if (!text) return;
+    const result = validateFields(fields);
+    setFieldErrors(result.errors);
+    if (!result.draft) {
+      setNotice("Fix the highlighted fields before reviewing this draft.");
+      requestAnimationFrame(() => briefRef.current?.focus());
+      return;
+    }
+    setPendingDraft(result.draft);
+    setComposerMode("review");
+    setNotice("Review your request. Nothing has been submitted, negotiated, or paid.");
+    requestAnimationFrame(() => reviewHeadingRef.current?.focus());
+  }
+
+  function saveDraft() {
+    if (!pendingDraft) return;
+    const fingerprint = JSON.stringify(pendingDraft);
+    const duplicate = drafts.some(draft => JSON.stringify({
+      brief: draft.brief,
+      priority: draft.priority,
+      quantity: draft.quantity,
+      maxUnitPrice: draft.maxUnitPrice,
+      currency: draft.currency,
+      neededByDays: draft.neededByDays,
+    }) === fingerprint);
+    if (duplicate) {
+      setNotice("This exact request draft is already saved for this session.");
+      return;
+    }
     setDrafts(current => [{
-      id: crypto.randomUUID(), brief: text,
+      id: crypto.randomUUID(),
+      ...pendingDraft,
       at: new Date().toISOString(),
     }, ...current]);
-    setBrief("");
+    resetComposer();
     setNotice("Draft saved for this session. No AI call, supplier contact, or payment was started.");
+  }
+
+  async function queueNegotiation() {
+    if (!pendingDraft || queueBusy) return;
+    setQueueBusy(true);
+    setNotice("Queueing negotiation to the API…");
+    try {
+      const response = await fetch("/api/negotiations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          brief: pendingDraft.brief,
+          priority: pendingDraft.priority,
+          quantity: pendingDraft.quantity,
+          maxUnitPrice: pendingDraft.maxUnitPrice.toFixed(2),
+          currency: pendingDraft.currency,
+          neededByDays: pendingDraft.neededByDays,
+          idempotencyKey: crypto.randomUUID(),
+        }),
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        id?: string;
+        status?: string;
+        idempotent?: boolean;
+        error?: string;
+      };
+      if (!response.ok) {
+        setNotice(payload.error ?? `Queue failed (${response.status}).`);
+        return;
+      }
+      await loadNegotiations();
+      resetComposer();
+      setNotice(
+        payload.idempotent
+          ? `Existing negotiation reused (${payload.status ?? "QUEUED"}). Workflow not started yet.`
+          : `Negotiation queued (${payload.status ?? "QUEUED"}). No supplier contact or payment was started.`,
+      );
+      setView("Requests");
+    } catch {
+      setNotice("Queue failed. Check that the API is running and try again.");
+    } finally {
+      setQueueBusy(false);
+    }
   }
 
   return (
@@ -167,13 +425,16 @@ export default function Dashboard() {
 
           <div className={s.previewNotice}>
             <ShieldCheck size={17} />
-            <p>Interface preview. AI, orders, and PayPal are not connected here yet. Drafts are session-only.</p>
+            <p>
+              Queue stores a durable request in Postgres. AI negotiation workflow, orders, and PayPal are not started from this button yet.
+              Local drafts remain session-only.
+            </p>
           </div>
 
           <section className={s.metrics} aria-label="Workspace summary">
             {[
               { label: "Request drafts", value: String(drafts.length), detail: "In this browser session", icon: FileText, target: "Requests" as View },
-              { label: "Negotiations", value: "—", detail: "Workflow connection pending", icon: Sparkles, target: "Supplier offers" as View },
+              { label: "Negotiations", value: String(negotiations.length), detail: negotiationsError ? "API unreachable" : "Queued in database", icon: Sparkles, target: "Requests" as View },
               { label: "Funds on hold", value: "—", detail: "PayPal connection pending", icon: ShieldCheck, target: "Payments & orders" as View },
               { label: "Active orders", value: "—", detail: "Order connection pending", icon: Package, target: "Payments & orders" as View },
             ].map(({ label, value, detail, icon: Icon, target }) => (
@@ -188,29 +449,170 @@ export default function Dashboard() {
             <section className={`${s.card} ${s.composer}`} aria-labelledby="brief-title">
               <div className={s.sectionHeader}>
                 <span className={s.iconTile}><Sparkles size={21} /></span>
-                <span className={s.label}>START WITH A NEED</span>
+                <span className={s.label}>
+                  {composerMode === "compose" ? "START WITH A NEED" : "REVIEW BEFORE SAVING"}
+                </span>
               </div>
-              <h2 id="brief-title">What are we sourcing?</h2>
-              <p className={s.description}>Tell us what you need, your budget, and when it should arrive.</p>
-              <form onSubmit={saveDraft} className={s.briefForm}>
-                <label htmlFor="procurement-brief">Your procurement brief</label>
-                <textarea ref={briefRef} id="procurement-brief" maxLength={500}
-                  value={brief} onChange={event => setBrief(event.target.value)}
-                  placeholder="50 ergonomic chairs. Under $200 each. Delivered within 30 days."
-                  required />
-                <div className={s.formFooter}>
-                  <small>{brief.length}/500</small>
-                  <button className={s.primary} type="submit" disabled={!brief.trim()}>
-                    Save draft <ArrowRight size={16} />
-                  </button>
+              <h2 id="brief-title" ref={composerMode === "review" ? reviewHeadingRef : undefined} tabIndex={composerMode === "review" ? -1 : undefined}>
+                {composerMode === "compose" ? "What are we sourcing?" : "Confirm this request draft"}
+              </h2>
+              <p className={s.description}>
+                {composerMode === "compose"
+                  ? "Set priority, quantity, budget, and deadline. Review before saving a local draft."
+                  : "Edit anything that looks off. Saving keeps this draft in the browser only."}
+              </p>
+
+              {composerMode === "compose" ? (
+                <form onSubmit={reviewDraft} className={s.briefForm} noValidate>
+                  <label htmlFor={`${formId}-brief`}>Your procurement brief</label>
+                  <textarea
+                    ref={briefRef}
+                    id={`${formId}-brief`}
+                    maxLength={500}
+                    value={fields.brief}
+                    onChange={event => updateField("brief", event.target.value)}
+                    placeholder="50 ergonomic chairs. Prefer durable mesh backs."
+                    aria-invalid={Boolean(fieldErrors.brief)}
+                    aria-describedby={fieldErrors.brief ? `${formId}-brief-error` : undefined}
+                  />
+                  {fieldErrors.brief && <p className={s.fieldError} id={`${formId}-brief-error`} role="alert">{fieldErrors.brief}</p>}
+
+                  <fieldset className={s.priorityGroup} aria-describedby={fieldErrors.priority ? `${formId}-priority-error` : undefined}>
+                    <legend>Sourcing priority</legend>
+                    <div className={s.priorityOptions} role="radiogroup" aria-label="Sourcing priority">
+                      {priorities.map(option => (
+                        <label key={option.value} className={fields.priority === option.value ? s.prioritySelected : undefined}>
+                          <input
+                            type="radio"
+                            name={`${formId}-priority`}
+                            value={option.value}
+                            checked={fields.priority === option.value}
+                            onChange={() => updateField("priority", option.value)}
+                          />
+                          <strong>{option.label}</strong>
+                          <span>{option.detail}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {fieldErrors.priority && <p className={s.fieldError} id={`${formId}-priority-error`} role="alert">{fieldErrors.priority}</p>}
+                  </fieldset>
+
+                  <div className={s.fieldGrid}>
+                    <div className={s.field}>
+                      <label htmlFor={`${formId}-quantity`}>Quantity</label>
+                      <input
+                        id={`${formId}-quantity`}
+                        inputMode="numeric"
+                        value={fields.quantity}
+                        onChange={event => updateField("quantity", event.target.value)}
+                        placeholder="50"
+                        aria-invalid={Boolean(fieldErrors.quantity)}
+                        aria-describedby={fieldErrors.quantity ? `${formId}-quantity-error` : undefined}
+                      />
+                      {fieldErrors.quantity && <p className={s.fieldError} id={`${formId}-quantity-error`} role="alert">{fieldErrors.quantity}</p>}
+                    </div>
+                    <div className={s.field}>
+                      <label htmlFor={`${formId}-budget`}>Max unit price</label>
+                      <div className={s.budgetRow}>
+                        <input
+                          id={`${formId}-budget`}
+                          inputMode="decimal"
+                          value={fields.maxUnitPrice}
+                          onChange={event => updateField("maxUnitPrice", event.target.value)}
+                          placeholder="200.00"
+                          aria-invalid={Boolean(fieldErrors.maxUnitPrice)}
+                          aria-describedby={fieldErrors.maxUnitPrice ? `${formId}-budget-error` : undefined}
+                        />
+                        <label className={s.currencyField} htmlFor={`${formId}-currency`}>
+                          <span className={s.srOnly}>Currency</span>
+                          <select
+                            id={`${formId}-currency`}
+                            value={fields.currency}
+                            onChange={event => updateField("currency", event.target.value as Currency)}
+                            aria-invalid={Boolean(fieldErrors.currency)}
+                          >
+                            <option value="USD">USD</option>
+                          </select>
+                        </label>
+                      </div>
+                      {fieldErrors.maxUnitPrice && <p className={s.fieldError} id={`${formId}-budget-error`} role="alert">{fieldErrors.maxUnitPrice}</p>}
+                      {fieldErrors.currency && <p className={s.fieldError} role="alert">{fieldErrors.currency}</p>}
+                    </div>
+                    <div className={s.field}>
+                      <label htmlFor={`${formId}-deadline`}>Needed within (days)</label>
+                      <input
+                        id={`${formId}-deadline`}
+                        inputMode="numeric"
+                        value={fields.neededByDays}
+                        onChange={event => updateField("neededByDays", event.target.value)}
+                        placeholder="30"
+                        aria-invalid={Boolean(fieldErrors.neededByDays)}
+                        aria-describedby={fieldErrors.neededByDays ? `${formId}-deadline-error` : undefined}
+                      />
+                      {fieldErrors.neededByDays && <p className={s.fieldError} id={`${formId}-deadline-error`} role="alert">{fieldErrors.neededByDays}</p>}
+                    </div>
+                  </div>
+
+                  <div className={s.formFooter}>
+                    <small>{fields.brief.length}/500</small>
+                    <button className={s.primary} type="submit">
+                      Review draft <ArrowRight size={16} />
+                    </button>
+                  </div>
+                </form>
+              ) : pendingDraft && (
+                <div className={s.reviewPanel}>
+                  <dl className={s.summaryList}>
+                    <div><dt>Brief</dt><dd>{pendingDraft.brief}</dd></div>
+                    <div><dt>Priority</dt><dd>{priorityLabel(pendingDraft.priority)}</dd></div>
+                    <div><dt>Quantity</dt><dd>{pendingDraft.quantity}</dd></div>
+                    <div><dt>Max unit price</dt><dd>{money.format(pendingDraft.maxUnitPrice)} {pendingDraft.currency}</dd></div>
+                    <div><dt>Needed within</dt><dd>{pendingDraft.neededByDays} days</dd></div>
+                  </dl>
+                  <p className={s.summaryNote}>
+                    Save draft keeps it in this browser only. Queue negotiation writes to Postgres as QUEUED — it does not contact suppliers, approve, or pay.
+                  </p>
+                  <div className={s.reviewActions}>
+                    <button
+                      type="button"
+                      className={s.secondary}
+                      onClick={() => {
+                        setComposerMode("compose");
+                        setNotice("Edit the fields, then review again.");
+                        requestAnimationFrame(() => briefRef.current?.focus());
+                      }}
+                    >
+                      Edit request
+                    </button>
+                    <button type="button" className={s.secondary} onClick={saveDraft} disabled={queueBusy}>
+                      Save draft
+                    </button>
+                    <button type="button" className={s.primary} onClick={() => void queueNegotiation()} disabled={queueBusy}>
+                      {queueBusy ? "Queueing…" : "Queue negotiation"} <ArrowRight size={16} />
+                    </button>
+                  </div>
                 </div>
-              </form>
-              <div className={s.suggestions}>
+              )}
+
+              {composerMode === "compose" && <div className={s.suggestions}>
                 <span>Try a starting point</span>
-                {examples.map(text => <button key={text} onClick={() => {
-                  setBrief(text); briefRef.current?.focus();
-                }}><Plus size={13} />{text}</button>)}
-              </div>
+                {examples.map(example => (
+                  <button
+                    key={example.brief}
+                    type="button"
+                    onClick={() => {
+                      setFields(example);
+                      setFieldErrors({});
+                      setComposerMode("compose");
+                      setPendingDraft(null);
+                      setNotice("");
+                      briefRef.current?.focus();
+                    }}
+                  >
+                    <Plus size={13} />{example.brief}
+                  </button>
+                ))}
+              </div>}
               <p className={s.status} role="status">{notice}</p>
             </section>
 
@@ -236,34 +638,64 @@ export default function Dashboard() {
             </section>
           </div>}
 
-          {(view === "Overview" || view === "Requests") && <section className={s.card}>
-            <div className={s.sectionHeader}>
-              <div><h2>Request drafts</h2><p className={s.description}>A clear brief is the start of a better deal.</p></div>
-              <label className={s.search}><Search size={16} /><input aria-label="Search request drafts"
-                placeholder="Find a draft" value={search} onChange={event => setSearch(event.target.value)} /></label>
-            </div>
-            {visibleDrafts.length > 0 ? <ul className={s.draftList}>
-              {visibleDrafts.map(draft => <li key={draft.id}>
-                <div className={s.iconTile}><FileText size={19} /></div>
-                <details className={s.draftDetail}>
-                  <summary>{draft.brief}</summary>
-                  <p>Created {new Date(draft.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST.</p>
-                  <p>Local draft only. Not submitted, negotiated, or persisted.</p>
-                </details>
-                <span className={s.draftBadge}>Draft</span>
-                <button className={s.iconButton} aria-label={`Remove draft: ${draft.brief}`}
-                  onClick={() => {
-                    setDrafts(current => current.filter(item => item.id !== draft.id));
-                    setNotice("Draft removed.");
-                  }}><X size={16} /></button>
-              </li>)}
-            </ul> : <div className={s.empty}>
-              <span className={s.emptyIcon}><FileText size={25} /></span>
-              <h3>{search ? "No matching drafts" : "Your next request starts here"}</h3>
-              <p>{search ? "Try a different search." : "Create a draft to organize your next purchase. No supplier will be contacted."}</p>
-              {!search && <button className={s.textButton} onClick={newRequest}>Create a request <ArrowRight size={15} /></button>}
-            </div>}
-          </section>}
+          {(view === "Overview" || view === "Requests") && <>
+            <section className={s.card}>
+              <div className={s.sectionHeader}>
+                <div>
+                  <h2>Queued negotiations</h2>
+                  <p className={s.description}>Durable rows from Postgres. Workflow start is not connected yet.</p>
+                </div>
+                <button type="button" className={s.secondary} onClick={() => void loadNegotiations()}>Refresh</button>
+              </div>
+              {negotiationsError && <p className={s.fieldError} role="alert">{negotiationsError}</p>}
+              {visibleNegotiations.length > 0 ? <ul className={s.draftList}>
+                {visibleNegotiations.map(item => <li key={item.id}>
+                  <div className={s.iconTile}><Sparkles size={19} /></div>
+                  <details className={s.draftDetail}>
+                    <summary>{item.brief}</summary>
+                    <p>Priority: {priorityLabel(item.priority)} · Qty {item.quantity} · Max {money.format(item.maxUnitPrice)} {item.currency} · Within {item.neededByDays} days</p>
+                    <p>Created {new Date(item.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST.</p>
+                    <p>Id {item.id}. Workflow run: {item.workflowRunId ?? "not started"}.</p>
+                  </details>
+                  <span className={s.draftBadge}>{item.status}</span>
+                </li>)}
+              </ul> : !negotiationsError && <div className={s.empty}>
+                <span className={s.emptyIcon}><Sparkles size={25} /></span>
+                <h3>{search ? "No matching negotiations" : "No queued negotiations yet"}</h3>
+                <p>{search ? "Try a different search." : "Review a request and choose Queue negotiation to persist it."}</p>
+              </div>}
+            </section>
+
+            <section className={s.card}>
+              <div className={s.sectionHeader}>
+                <div><h2>Request drafts</h2><p className={s.description}>A clear brief is the start of a better deal.</p></div>
+                <label className={s.search}><Search size={16} /><input aria-label="Search request drafts"
+                  placeholder="Find a draft" value={search} onChange={event => setSearch(event.target.value)} /></label>
+              </div>
+              {visibleDrafts.length > 0 ? <ul className={s.draftList}>
+                {visibleDrafts.map(draft => <li key={draft.id}>
+                  <div className={s.iconTile}><FileText size={19} /></div>
+                  <details className={s.draftDetail}>
+                    <summary>{draft.brief}</summary>
+                    <p>Priority: {priorityLabel(draft.priority)} · Qty {draft.quantity} · Max {money.format(draft.maxUnitPrice)} {draft.currency} · Within {draft.neededByDays} days</p>
+                    <p>Created {new Date(draft.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST.</p>
+                    <p>Local draft only. Not submitted, negotiated, or persisted.</p>
+                  </details>
+                  <span className={s.draftBadge}>Draft</span>
+                  <button className={s.iconButton} aria-label={`Remove draft: ${draft.brief}`}
+                    onClick={() => {
+                      setDrafts(current => current.filter(item => item.id !== draft.id));
+                      setNotice("Draft removed.");
+                    }}><X size={16} /></button>
+                </li>)}
+              </ul> : <div className={s.empty}>
+                <span className={s.emptyIcon}><FileText size={25} /></span>
+                <h3>{search ? "No matching drafts" : "Your next request starts here"}</h3>
+                <p>{search ? "Try a different search." : "Create a draft to organize your next purchase. No supplier will be contacted."}</p>
+                {!search && <button className={s.textButton} onClick={newRequest}>Create a request <ArrowRight size={15} /></button>}
+              </div>}
+            </section>
+          </>}
 
           {view === "Supplier offers" && <section className={s.card}>
             <div className={s.sectionHeader}>

@@ -1,0 +1,44 @@
+# Render Blueprint — agentic procurement (web + api)
+# Uses existing Singapore Postgres (set DATABASE_URL in Dashboard; do not recreate DB here).
+# After first API deploy, set web API_BASE_URL to the API public URL, e.g.
+# https://agentic-procurement-api.onrender.com
+
+services:
+  - type: web
+    name: agentic-procurement-api
+    runtime: node
+    region: singapore
+    plan: free
+    rootDir: .
+    buildCommand: corepack enable && pnpm install --frozen-lockfile
+    startCommand: pnpm --filter api start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "24.22.2"
+      - key: DATABASE_URL
+        sync: false
+      - key: OWNER_ID
+        sync: false
+      - key: OWNER_API_KEY
+        sync: false
+      - key: ADMIN_API_KEY
+        sync: false
+
+  - type: web
+    name: agentic-procurement-web
+    runtime: node
+    region: singapore
+    plan: free
+    rootDir: .
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter web build
+    startCommand: pnpm --filter web start
+    envVars:
+      - key: NODE_VERSION
+        value: "24.22.2"
+      - key: API_BASE_URL
+        sync: false
+      - key: OWNER_API_KEY
+        sync: false
+      - key: ADMIN_API_KEY
+        sync: false

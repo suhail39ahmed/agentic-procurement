@@ -4,9 +4,10 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { paypalWebhookRouter } from "./webhooks/paypal";
 import { auditRouter } from "./audit";
+import { negotiationsRouter } from "./negotiations";
 
 const app = express();
-const port = Number(process.env.API_PORT ?? 4000);
+const port = Number(process.env.PORT ?? process.env.API_PORT ?? 4000);
 
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
@@ -26,6 +27,7 @@ app.get("/health", (_req, res) => {
 
 app.use("/api/webhooks/paypal", webhookLimiter, paypalWebhookRouter);
 app.use("/api/audit", auditRouter);
-app.listen(port, () => {
-  console.log(`[api] listening on http://localhost:${port}`);
+app.use("/api/negotiations", negotiationsRouter);
+app.listen(port, "0.0.0.0", () => {
+  console.log(`[api] listening on http://0.0.0.0:${port}`);
 });

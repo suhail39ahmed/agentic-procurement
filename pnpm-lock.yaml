@@ -20,6 +20,9 @@ importers:
       agents:
         specifier: workspace:*
         version: link:../../packages/agents
+      db:
+        specifier: workspace:*
+        version: link:../../packages/db
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1

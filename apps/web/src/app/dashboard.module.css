@@ -12,11 +12,11 @@
     font-size: 14px;
   }
   .app *, .app *::before, .app *::after { box-sizing: border-box; }
-  .app :is(button, input, textarea) { font: inherit; }
+  .app :is(button, input, textarea, select) { font: inherit; }
   .app button { cursor: pointer; }
   .app button:disabled { cursor: not-allowed; opacity: .5; }
   .app :is(h1, h2, h3, p) { margin: 0; }
-  .app :is(button, a, input, textarea, summary):focus-visible { outline: 3px solid #54a9ff; outline-offset: 4px; }
+  .app :is(button, a, input, textarea, select, summary):focus-visible { outline: 3px solid #54a9ff; outline-offset: 4px; }
   .app button { transition: background .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease; }
   .app button:active:not(:disabled) { transform: translateY(1px); }
   .skip { position: fixed; top: 12px; left: 12px; transform: translateY(-180%); background: white; color: #082855; padding: 12px 18px; border-radius: 10px; z-index: 100; }
@@ -68,6 +68,7 @@
   .metricBottom > svg { flex-shrink: 0; color: #9bacc1; }
   .overviewGrid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 22px; margin-bottom: 24px; }
   .card { min-width: 0; background: #fff; border: 1px solid var(--line); border-radius: 17px; padding: 25px; box-shadow: 0 3px 12px #15376103; animation: appear .28s ease-out both; }
+  .card + .card { margin-top: 24px; }
   .sectionHeader { display: flex; align-items: center; justify-content: space-between; gap: 17px; margin-bottom: 23px; }
   .card h2 { font-size: 15px; font-weight: 600; letter-spacing: -.3px; color: #16375f; }
   .description { font-size: 11px; line-height: 1.8; color: var(--muted); margin-top: 6px !important; }
@@ -80,6 +81,36 @@
   .briefForm label { display: block; padding: 14px 16px 0; font-size: 10px; color: #6c83a0; font-weight: 550; }
   .briefForm textarea { display: block; width: 100%; min-height: 110px; padding: 13px 16px; background: transparent; border: 0; border-radius: 10px; resize: vertical; color: #24476f; font-size: 13px; line-height: 1.9; }
   .briefForm textarea::placeholder { color: #97a7bc; }
+  .briefForm :is(input, select) { width: 100%; min-height: 42px; border: 1px solid #dce6f3; border-radius: 9px; padding: 10px 12px; background: #fff; color: #24476f; font-size: 13px; }
+  .briefForm :is(input, select):focus { outline: none; border-color: #8dbdf2; box-shadow: 0 0 0 4px #0070e009; }
+  .briefForm :is(input, textarea, select)[aria-invalid="true"] { border-color: #c96b6b; }
+  .priorityGroup { margin: 0; padding: 14px 16px 4px; border: 0; }
+  .priorityGroup legend { padding: 0; font-size: 10px; color: #6c83a0; font-weight: 550; }
+  .priorityOptions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+  .priorityOptions label { display: grid; gap: 4px; min-height: 74px; border: 1px solid #e3ebf6; border-radius: 10px; padding: 10px 11px; background: #f9fbff; color: #6982a0; cursor: pointer; transition: border-color .18s, background .18s, color .18s; }
+  .priorityOptions label:hover { border-color: #b8d5f7; background: #edf5ff; color: #005bb8; }
+  .priorityOptions input { position: absolute; opacity: 0; pointer-events: none; }
+  .priorityOptions strong { font-size: 12px; font-weight: 600; color: #24476f; }
+  .priorityOptions span { font-size: 10px; line-height: 1.5; }
+  .prioritySelected { border-color: #8dbdf2 !important; background: #edf5ff !important; box-shadow: inset 0 0 0 1px #8dbdf2; }
+  .prioritySelected strong { color: #005bb8; }
+  .fieldGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; padding: 4px 16px 8px; }
+  .field { min-width: 0; }
+  .field label { display: block; margin-bottom: 7px; padding: 0; font-size: 10px; color: #6c83a0; font-weight: 550; }
+  .budgetRow { display: grid; grid-template-columns: minmax(0, 1fr) 88px; gap: 8px; }
+  .currencyField { margin: 0; padding: 0; }
+  .fieldError { color: #9b3d3d; font-size: 10px; line-height: 1.6; margin: 7px 0 0; }
+  .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  .reviewPanel { margin-top: 23px; border: 1px solid #dce6f3; border-radius: 13px; background: #fff; padding: 18px 16px; }
+  .summaryList { display: grid; gap: 14px; margin: 0; }
+  .summaryList > div { display: grid; gap: 4px; padding-bottom: 12px; border-bottom: 1px solid #f0f4f9; }
+  .summaryList > div:last-child { border-bottom: 0; padding-bottom: 0; }
+  .summaryList dt { font-size: 10px; color: #6c83a0; font-weight: 550; }
+  .summaryList dd { margin: 0; color: #24476f; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+  .summaryNote { color: #6f819a; font-size: 10px; line-height: 1.8; margin: 16px 0 0 !important; }
+  .reviewActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .secondary { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 43px; background: #fff; color: #005bb8; border: 1px solid #c9dbf2; border-radius: 9px; padding: 11px 17px; font-size: 12px !important; font-weight: 550 !important; white-space: nowrap; }
+  .secondary:hover:not(:disabled) { background: #edf5ff; border-color: #9fc2ea; }
   .formFooter { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 11px; border-top: 1px solid #f0f4f9; }
   .formFooter small { color: #97a6b9; font-size: 10px; padding-left: 5px; }
   .suggestions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 7px; margin-top: 16px; }
@@ -145,7 +176,7 @@
   .mobileDialogHeader h2 { font-size: 18px; }
   @keyframes appear { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
   @media (min-width: 1700px) { .content { padding-top: 48px; } .card { padding: 30px; } }
-  @media (max-width: 1200px) { .sidebar { width: 216px; padding-inline: 16px; } .main { margin-left: 216px; } .content { padding: 30px 25px 22px; } .topbar { padding-inline: 25px; } .metrics { gap: 10px; } .metric { padding: 16px; } .overviewGrid { grid-template-columns: minmax(0, 1fr); } .assistantBody { max-width: 420px; } .paymentFlow { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 23px; } }
-  @media (max-width: 800px) { .sidebar { display: none; } .main { margin-left: 0; } .mobileMenu { display: grid; place-items: center; } .topbar { height: 64px; } .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .heading h1 { font-size: 38px; } }
-  @media (max-width: 520px) { .content { padding: 27px 16px 20px; } .topbar { padding-inline: 12px; } .breadcrumb { gap: 7px; font-size: 10px; } .previewPill { font-size: 9px; } .heading { flex-direction: column; align-items: stretch; gap: 20px; } .heading h1 { font-size: 36px; letter-spacing: -1.4px; } .eyebrow { font-size: 8px; letter-spacing: 1.4px; } .heading .primary { width: 100%; } .card { padding: 19px; } .sectionHeader { flex-wrap: wrap; gap: 13px; } .composer h2 { font-size: 23px; } .metric { padding: 15px; } .metricTop { font-size: 10px; } .metricBottom { font-size: 9px; } .search { width: 100%; } .search input { width: 100%; } .tableActions { width: 100%; } .tableActions .search { flex: 1; min-width: 0; } .draftList .iconTile { display: none; } .draftList li { gap: 8px; } .paymentFlow { grid-template-columns: minmax(0, 1fr); gap: 18px; } .chatBar input { font-size: 11px; } .app button { min-height: 44px; } }
+  @media (max-width: 1200px) { .sidebar { width: 216px; padding-inline: 16px; } .main { margin-left: 216px; } .content { padding: 30px 25px 22px; } .topbar { padding-inline: 25px; } .metrics { gap: 10px; } .metric { padding: 16px; } .overviewGrid { grid-template-columns: minmax(0, 1fr); } .assistantBody { max-width: 420px; } .paymentFlow { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 23px; } .priorityOptions { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 800px) { .sidebar { display: none; } .main { margin-left: 0; } .mobileMenu { display: grid; place-items: center; } .topbar { height: 64px; } .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .heading h1 { font-size: 38px; } .fieldGrid { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 520px) { .content { padding: 27px 16px 20px; } .topbar { padding-inline: 12px; } .breadcrumb { gap: 7px; font-size: 10px; } .previewPill { font-size: 9px; } .heading { flex-direction: column; align-items: stretch; gap: 20px; } .heading h1 { font-size: 36px; letter-spacing: -1.4px; } .eyebrow { font-size: 8px; letter-spacing: 1.4px; } .heading .primary { width: 100%; } .card { padding: 19px; } .sectionHeader { flex-wrap: wrap; gap: 13px; } .composer h2 { font-size: 23px; } .metric { padding: 15px; } .metricTop { font-size: 10px; } .metricBottom { font-size: 9px; } .search { width: 100%; } .search input { width: 100%; } .tableActions { width: 100%; } .tableActions .search { flex: 1; min-width: 0; } .draftList .iconTile { display: none; } .draftList li { gap: 8px; } .paymentFlow { grid-template-columns: minmax(0, 1fr); gap: 18px; } .chatBar input { font-size: 11px; } .app button { min-height: 44px; } .budgetRow { grid-template-columns: minmax(0, 1fr) 78px; } .reviewActions { flex-direction: column-reverse; } .reviewActions :is(.primary, .secondary) { width: 100%; } }
   @media (prefers-reduced-motion: reduce) { .app *, .app *::before, .app *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
