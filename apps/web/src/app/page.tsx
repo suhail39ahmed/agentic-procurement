@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   ArrowRight, ArrowUpRight, Bot, Check, ChevronRight,
   CreditCard, FileText, Layers3, LayoutDashboard,
@@ -65,7 +65,11 @@ type Offer = {
   unitPrice: number;
   leadTimeDays: number;
   score: number;
+  withinBudget: boolean;
+  meetsDeadline: boolean;
 };
+
+type ChatMessage = { role: "user" | "assistant"; content: string };
 
 function offersFromResult(result: unknown): Offer[] {
   if (!result || typeof result !== "object") return [];
@@ -75,6 +79,8 @@ function offersFromResult(result: unknown): Offer[] {
     if (!item || typeof item !== "object") return [];
     const row = item as {
       score?: unknown;
+      withinBudget?: unknown;
+      meetsDeadline?: unknown;
       offer?: { from?: unknown; unitPrice?: unknown; leadTimeDays?: unknown };
     };
     if (!row.offer || typeof row.offer !== "object") return [];
@@ -83,8 +89,39 @@ function offersFromResult(result: unknown): Offer[] {
     const leadTimeDays = typeof row.offer.leadTimeDays === "number" ? row.offer.leadTimeDays : null;
     const score = typeof row.score === "number" ? row.score : 0;
     if (!supplier || unitPrice === null || leadTimeDays === null) return [];
-    return [{ supplier, unitPrice, leadTimeDays, score: Math.round(score * 1000) / 1000 }];
+    return [{
+      supplier,
+      unitPrice,
+      leadTimeDays,
+      score: Math.round(score * 1000) / 1000,
+      withinBudget: row.withinBudget === true,
+      meetsDeadline: row.meetsDeadline === true,
+    }];
   });
+}
+
+function checkoutFromResult(result: unknown): {
+  orderId: string;
+  approveUrl?: string;
+  amount?: string;
+  supplierId?: string;
+} | null {
+  if (!result || typeof result !== "object") return null;
+  const checkout = (result as { checkout?: unknown }).checkout;
+  if (!checkout || typeof checkout !== "object") return null;
+  const c = checkout as Partial<{
+    orderId: string;
+    approveUrl: string;
+    amount: string;
+    supplierId: string;
+  }>;
+  if (!c.orderId) return null;
+  return {
+    orderId: c.orderId,
+    approveUrl: c.approveUrl,
+    amount: c.amount,
+    supplierId: c.supplierId,
+  };
 }
 
 const navigation = [
@@ -132,14 +169,24 @@ const money = new Intl.NumberFormat("en-US", {
   style: "currency", currency: "USD",
 });
 const columns: ColDef<Offer>[] = [
-  { field: "supplier", headerName: "Supplier", minWidth: 180 },
+  { field: "supplier", headerName: "Supplier", minWidth: 160 },
   {
-    field: "unitPrice", headerName: "Unit price", minWidth: 140,
+    field: "unitPrice", headerName: "Unit price", minWidth: 130,
     valueFormatter: ({ value }) =>
       typeof value === "number" ? money.format(value) : "—",
   },
-  { field: "leadTimeDays", headerName: "Delivery · days", minWidth: 160 },
-  { field: "score", headerName: "Match score", minWidth: 140 },
+  { field: "leadTimeDays", headerName: "Delivery · days", minWidth: 140 },
+  {
+    field: "score", headerName: "Match score", minWidth: 120,
+    valueFormatter: ({ value }) =>
+      typeof value === "number" ? value.toFixed(3) : "—",
+  },
+  {
+    headerName: "Eligible",
+    minWidth: 120,
+    valueGetter: ({ data }) =>
+      data?.withinBudget && data?.meetsDeadline ? "Yes" : "No",
+  },
 ];
 const gridTheme = themeQuartz.withParams({
   accentColor: "#0070e0",
@@ -233,6 +280,10 @@ export default function Dashboard() {
   const [offerSearch, setOfferSearch] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [notice, setNotice] = useState("");
+  const [chatInput, setChatInput] = useState("");
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatError, setChatError] = useState("");
   const briefRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLButtonElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -240,6 +291,14 @@ export default function Dashboard() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeIdRef = useRef<string | null>(null);
   const formId = useId();
+  const eligibleOffers = useMemo(
+    () => offers.filter((offer) => offer.withinBudget && offer.meetsDeadline),
+    [offers],
+  );
+  const heldCount = activeOrder?.status === "HELD" || activeOrder?.status === "SHIPPED" ? 1 : 0;
+  const activeOrderCount = activeOrder ? 1 : 0;
+  const activeNegotiation = negotiations.find((item) => item.id === activeNegotiationId) ?? null;
+  const succeededNegotiations = negotiations.filter((item) => item.status === "SUCCEEDED");
   const visibleDrafts = drafts.filter(draft => {
     const haystack = [
       draft.brief,
@@ -266,17 +325,71 @@ export default function Dashboard() {
     return await response.json() as NegotiationRecord;
   }
 
+  async function hydrateOrder(
+    orderId: string,
+    fallback?: { approveUrl?: string; amount?: string; supplierId?: string },
+  ) {
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, { cache: "no-store" });
+      if (!response.ok) {
+        setActiveOrder({
+          orderId,
+          status: "APPROVED",
+          approveUrl: fallback?.approveUrl,
+          amount: fallback?.amount,
+          supplierId: fallback?.supplierId,
+        });
+        return;
+      }
+      const payload = await response.json() as {
+        id?: string;
+        status?: string;
+        approveUrl?: string | null;
+        amount?: number | string;
+        supplierId?: string;
+        authorizationId?: string;
+        captureId?: string;
+        tracking?: { carrier: string; number: string };
+      };
+      setActiveOrder({
+        orderId: payload.id ?? orderId,
+        status: payload.status ?? "APPROVED",
+        approveUrl: payload.approveUrl ?? fallback?.approveUrl,
+        amount: payload.amount != null ? String(payload.amount) : fallback?.amount,
+        supplierId: payload.supplierId ?? fallback?.supplierId,
+        authorizationId: payload.authorizationId,
+        captureId: payload.captureId,
+        tracking: payload.tracking,
+      });
+    } catch {
+      setActiveOrder({
+        orderId,
+        status: "APPROVED",
+        approveUrl: fallback?.approveUrl,
+        amount: fallback?.amount,
+        supplierId: fallback?.supplierId,
+      });
+    }
+  }
+
   function applyNegotiationResult(detail: NegotiationRecord) {
     activeIdRef.current = detail.id;
     setActiveNegotiationId(detail.id);
     if (detail.status === "SUCCEEDED") {
       const nextOffers = offersFromResult(detail.result);
+      const eligible = nextOffers.filter((offer) => offer.withinBudget && offer.meetsDeadline);
       setOffers(nextOffers);
       setOffersNote(
-        nextOffers.length > 0
-          ? `Live ranking for negotiation ${detail.id.slice(0, 8)}…`
-          : "Negotiation finished, but no eligible offers were returned.",
+        nextOffers.length === 0
+          ? "Negotiation finished, but no ranking was returned."
+          : eligible.length > 0
+            ? `Live ranking for ${detail.id.slice(0, 8)}… · ${eligible.length} eligible winner(s).`
+            : `Live ranking for ${detail.id.slice(0, 8)}… · no offer meets budget and deadline, so checkout is blocked.`,
       );
+      const saved = checkoutFromResult(detail.result);
+      if (saved) {
+        void hydrateOrder(saved.orderId, saved);
+      }
       return;
     }
     if (detail.status === "FAILED") {
@@ -309,8 +422,9 @@ export default function Dashboard() {
       setNegotiationsError("");
 
       const focusId = activeIdRef.current
-        ?? items.find(item => item.status === "RUNNING" || item.status === "QUEUED")?.id
+        ?? items.find(item => item.status === "RUNNING")?.id
         ?? items.find(item => item.status === "SUCCEEDED")?.id
+        ?? items.find(item => item.status === "QUEUED")?.id
         ?? null;
 
       if (focusId) {
@@ -346,10 +460,61 @@ export default function Dashboard() {
   function navigate(next: View) {
     setView(next);
     setMobileOpen(false);
-    if (next === "Overview" || next === "Requests") {
-      void loadNegotiations();
-    }
+    void loadNegotiations();
     requestAnimationFrame(() => headingRef.current?.focus());
+  }
+
+  useEffect(() => {
+    void loadNegotiations();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("paypal") === "approved") {
+      setView("Payments & orders");
+      setNotice("PayPal sandbox buyer approved. Click Authorize hold to place funds on hold.");
+      window.history.replaceState({}, "", "/");
+    } else if (params.get("paypal") === "cancelled") {
+      setView("Payments & orders");
+      setNotice("PayPal checkout was cancelled. Re-open the approve link to try again.");
+      window.history.replaceState({}, "", "/");
+    }
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function sendAssistantMessage(event?: FormEvent) {
+    event?.preventDefault();
+    const message = chatInput.trim();
+    if (!message || chatBusy) return;
+    setChatBusy(true);
+    setChatError("");
+    setChatInput("");
+    const nextHistory = [...chatMessages, { role: "user" as const, content: message }];
+    setChatMessages(nextHistory);
+    try {
+      const context = [
+        activeNegotiationId ? `Active negotiation: ${activeNegotiationId}` : "",
+        offers.length
+          ? `Offers: ${offers.map((o) => `${o.supplier} $${o.unitPrice}/${o.leadTimeDays}d score=${o.score} eligible=${o.withinBudget && o.meetsDeadline}`).join("; ")}`
+          : "",
+        activeOrder ? `Active order ${activeOrder.orderId} status ${activeOrder.status}` : "",
+      ].filter(Boolean).join("\n");
+      const response = await fetch("/api/assistant/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ message, history: nextHistory.slice(0, -1), context }),
+      });
+      const payload = await response.json().catch(() => ({})) as { reply?: string; error?: string };
+      if (!response.ok || !payload.reply) {
+        setChatError(payload.error ?? `Assistant failed (${response.status}).`);
+        return;
+      }
+      setChatMessages((current) => [...current, { role: "assistant", content: payload.reply! }]);
+    } catch {
+      setChatError("Assistant unreachable. Is the API running with Azure AI env vars?");
+    } finally {
+      setChatBusy(false);
+    }
   }
 
   function resetComposer() {
@@ -463,6 +628,10 @@ export default function Dashboard() {
 
   async function startCheckout() {
     if (!activeNegotiationId || orderBusy) return;
+    if (eligibleOffers.length === 0) {
+      setNotice("Checkout blocked: no supplier meets both budget and deadline. Raise max unit price or needed-by days, then re-queue.");
+      return;
+    }
     setOrderBusy(true);
     setNotice("Creating PayPal authorize order from the winning offer…");
     try {
@@ -488,7 +657,7 @@ export default function Dashboard() {
         amount: payload.amount,
         supplierId: payload.supplierId,
       });
-      setNotice("Checkout created. Open the PayPal approve link as the sandbox buyer, then Authorize hold.");
+      setNotice("Checkout created. Open the PayPal approve link as the sandbox buyer, finish Pay Now, then Authorize hold.");
       setView("Payments & orders");
     } catch {
       setNotice("Checkout failed. Check API/PayPal sandbox configuration.");
@@ -654,17 +823,17 @@ export default function Dashboard() {
           <div className={s.previewNotice}>
             <ShieldCheck size={17} />
             <p>
-              Queue negotiation saves to Postgres and starts the real buyer/seller negotiate run in the API.
-              PayPal authorize/capture stays manual and disconnected here. Local drafts remain session-only.
+              Queue negotiation persists to Postgres and runs live buyer/seller AI. PayPal authorize → ship →
+              owner confirm → capture is available in Payments &amp; orders. Local drafts stay session-only.
             </p>
           </div>
 
           <section className={s.metrics} aria-label="Workspace summary">
             {[
               { label: "Request drafts", value: String(drafts.length), detail: "In this browser session", icon: FileText, target: "Requests" as View },
-              { label: "Negotiations", value: String(negotiations.length), detail: negotiationsError ? "API unreachable" : "Queued in database", icon: Sparkles, target: "Requests" as View },
-              { label: "Funds on hold", value: "—", detail: "PayPal connection pending", icon: ShieldCheck, target: "Payments & orders" as View },
-              { label: "Active orders", value: "—", detail: "Order connection pending", icon: Package, target: "Payments & orders" as View },
+              { label: "Negotiations", value: String(negotiations.length), detail: negotiationsError ? "API unreachable" : "Loaded from database", icon: Sparkles, target: "Requests" as View },
+              { label: "Funds on hold", value: String(heldCount), detail: heldCount ? "Authorized, not captured" : "Authorize after PayPal approve", icon: ShieldCheck, target: "Payments & orders" as View },
+              { label: "Active orders", value: String(activeOrderCount), detail: activeOrder ? `Status ${activeOrder.status}` : "Checkout a winning offer", icon: Package, target: "Payments & orders" as View },
             ].map(({ label, value, detail, icon: Icon, target }) => (
               <button className={s.metric} key={label} onClick={() => navigate(target)}>
                 <span className={s.metricTop}><span>{label}</span><Icon size={18} /></span>
@@ -847,22 +1016,44 @@ export default function Dashboard() {
             <section className={`${s.card} ${s.assistant}`} aria-labelledby="assistant-title">
               <div className={s.sectionHeader}>
                 <div className={s.inlineTitle}><Bot size={20} /><h2 id="assistant-title">Buying assistant</h2></div>
-                <span className={s.pending}>Not connected</span>
+                <span className={s.pending}>{chatBusy ? "Thinking…" : "Connected"}</span>
               </div>
               <div className={s.assistantBody}>
-                <div className={s.orb}><Bot size={31} /></div>
-                <h3>Less back-and-forth.<br />More informed decisions.</h3>
-                <p>Once connected, your assistant will clarify requirements and explain the trade-offs between suppliers.</p>
-                <div className={s.assistantSteps}>
-                  {["Review your requirements", "Compare negotiated offers", "Approve on your terms"].map(text =>
-                    <div key={text}><Check size={13} /><span>{text}</span></div>
-                  )}
-                </div>
+                {chatMessages.length === 0 ? (
+                  <>
+                    <div className={s.orb}><Bot size={31} /></div>
+                    <h3>Less back-and-forth.<br />More informed decisions.</h3>
+                    <p>Ask about briefs, supplier trade-offs, or the authorize → capture payment path.</p>
+                    <div className={s.assistantSteps}>
+                      {["Review your requirements", "Compare negotiated offers", "Approve on your terms"].map(text =>
+                        <div key={text}><Check size={13} /><span>{text}</span></div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className={s.chatLog} aria-live="polite">
+                    {chatMessages.map((turn, index) => (
+                      <div key={`${turn.role}-${index}`} className={turn.role === "user" ? s.chatUser : s.chatBot}>
+                        <strong>{turn.role === "user" ? "You" : "Assistant"}</strong>
+                        <p>{turn.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {chatError && <p className={s.fieldError} role="alert">{chatError}</p>}
               </div>
-              <div className={s.chatBar}>
-                <input disabled aria-label="AI chat is not connected" placeholder="Connect AI to start a conversation" />
-                <button disabled aria-label="Sending is unavailable until AI is connected"><Send size={17} /></button>
-              </div>
+              <form className={s.chatBar} onSubmit={(event) => void sendAssistantMessage(event)}>
+                <input
+                  value={chatInput}
+                  onChange={(event) => setChatInput(event.target.value)}
+                  disabled={chatBusy}
+                  aria-label="Message the buying assistant"
+                  placeholder={chatBusy ? "Assistant is replying…" : "Ask about budget, suppliers, or payments"}
+                />
+                <button type="submit" disabled={chatBusy || !chatInput.trim()} aria-label="Send assistant message">
+                  <Send size={17} />
+                </button>
+              </form>
             </section>
           </div>}
 
@@ -871,7 +1062,7 @@ export default function Dashboard() {
               <div className={s.sectionHeader}>
                 <div>
                   <h2>Queued negotiations</h2>
-                  <p className={s.description}>Durable rows from Postgres. Workflow start is not connected yet.</p>
+                  <p className={s.description}>Durable rows from Postgres. Queue starts the negotiate run automatically.</p>
                 </div>
                 <button type="button" className={s.secondary} onClick={() => void loadNegotiations()}>Refresh</button>
               </div>
@@ -978,6 +1169,39 @@ export default function Dashboard() {
                 </button>
               </div>
             </div>
+            <div className={s.reviewPanel}>
+              <label className={s.field}>
+                <span>Negotiation shown in this table</span>
+                <select
+                  aria-label="Select negotiation for supplier offers"
+                  value={activeNegotiationId ?? ""}
+                  onChange={(event) => {
+                    const id = event.target.value;
+                    if (!id) return;
+                    setActiveNegotiationId(id);
+                    activeIdRef.current = id;
+                    void loadNegotiationDetail(id).then((detail) => {
+                      if (detail) applyNegotiationResult(detail);
+                    });
+                  }}
+                >
+                  <option value="" disabled>Select a succeeded negotiation</option>
+                  {succeededNegotiations.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.brief.slice(0, 72)}{item.brief.length > 72 ? "…" : ""} · {item.status}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {activeNegotiation && (
+                <dl className={s.summaryList}>
+                  <div><dt>Brief</dt><dd>{activeNegotiation.brief}</dd></div>
+                  <div><dt>Status</dt><dd>{activeNegotiation.status}</dd></div>
+                  <div><dt>Budget</dt><dd>Qty {activeNegotiation.quantity} · max {money.format(activeNegotiation.maxUnitPrice)} · within {activeNegotiation.neededByDays}d</dd></div>
+                  <div><dt>Id</dt><dd>{activeNegotiation.id}</dd></div>
+                </dl>
+              )}
+            </div>
             <div className={`${s.grid} ${expanded ? s.gridExpanded : ""}`}>
               <AgGridReact<Offer> theme={gridTheme} rowData={offers} columnDefs={columns}
                 defaultColDef={{ flex: 1, sortable: true, filter: true, resizable: true }}
@@ -985,13 +1209,22 @@ export default function Dashboard() {
                 overlayNoRowsTemplate="<span>No connected supplier offers yet.</span>" />
             </div>
             <p className={s.tableNote}>
-              AG Grid Community · Rows come from persisted negotiation rankings only.
-              {activeNegotiationId ? ` Active id: ${activeNegotiationId}` : ""}
+              AG Grid Community · Rows come from the selected negotiation ranking above.
+              {eligibleOffers.length > 0
+                ? ` Winning eligible offer: ${eligibleOffers[0].supplier} at ${money.format(eligibleOffers[0].unitPrice)}.`
+                : " Checkout needs at least one eligible offer (budget + deadline)."}
             </p>
+            <p className={s.status} role="status">{notice}</p>
             {offers.length > 0 && activeNegotiationId && (
               <div className={s.reviewActions}>
-                <button type="button" className={s.primary} disabled={orderBusy} onClick={() => void startCheckout()}>
-                  {orderBusy ? "Working…" : "Checkout winning offer"} <ArrowRight size={16} />
+                <button
+                  type="button"
+                  className={s.primary}
+                  disabled={orderBusy || eligibleOffers.length === 0}
+                  onClick={() => void startCheckout()}
+                  title={eligibleOffers.length === 0 ? "No offer meets budget and deadline" : "Checkout the winning eligible offer"}
+                >
+                  {orderBusy ? "Working…" : eligibleOffers.length === 0 ? "No eligible winner" : "Checkout winning offer"} <ArrowRight size={16} />
                 </button>
               </div>
             )}

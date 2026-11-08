@@ -20,6 +20,9 @@ importers:
       agents:
         specifier: workspace:*
         version: link:../../packages/agents
+      ai:
+        specifier: workspace:*
+        version: link:../../packages/ai
       db:
         specifier: workspace:*
         version: link:../../packages/db

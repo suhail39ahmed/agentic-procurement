@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "agents": "workspace:*",
+    "ai": "workspace:*",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "express-rate-limit": "^8.7.2",

@@ -27,6 +27,9 @@ export async function createPaymentOrder(
   SANDBOX_ONLY();
   const mandate = await verifyMandate(mandateToken, expected);
 
+  const appBase = (process.env.PUBLIC_APP_URL ?? process.env.WEB_PUBLIC_URL ?? "http://localhost:3000")
+    .replace(/\/+$/, "");
+
   const order = await paypalRequest<Order>("/v2/checkout/orders", {
     method: "POST",
     requestId: `order-${mandate.jti}`,
@@ -40,6 +43,14 @@ export async function createPaymentOrder(
           amount: { currency_code: mandate.currency, value: mandate.amount },
         },
       ],
+      application_context: {
+        brand_name: "ProcureAI",
+        landing_page: "LOGIN",
+        shipping_preference: "NO_SHIPPING",
+        user_action: "PAY_NOW",
+        return_url: `${appBase}/paypal/return`,
+        cancel_url: `${appBase}/paypal/cancel`,
+      },
     },
   });
 

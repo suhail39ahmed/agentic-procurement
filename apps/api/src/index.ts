@@ -6,6 +6,7 @@ import { paypalWebhookRouter } from "./webhooks/paypal";
 import { auditRouter } from "./audit";
 import { negotiationsRouter } from "./negotiations";
 import { checkoutRouter } from "./checkout";
+import { assistantRouter } from "./assistant";
 
 const app = express();
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 4000);
@@ -29,6 +30,7 @@ app.get("/health", (_req, res) => {
 app.use("/api/webhooks/paypal", webhookLimiter, paypalWebhookRouter);
 app.use("/api/audit", auditRouter);
 app.use("/api/negotiations", negotiationsRouter);
+app.use("/api/assistant", assistantRouter);
 app.use("/api", checkoutRouter);
 app.listen(port, "0.0.0.0", () => {
   console.log(`[api] listening on http://0.0.0.0:${port}`);
