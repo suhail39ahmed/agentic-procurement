@@ -22,6 +22,7 @@ auditRouter.get("/:orderId/verify", async (req, res) => {
       orderId: order.id,
       recordCount: records.length,
       valid: records.length ? verifyAuditChain(records) : null,
+      records,
     });
   } catch (err) {
     console.error("[audit] verification failed", err);
