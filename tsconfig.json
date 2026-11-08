@@ -1,14 +1,26 @@
 {
-    "compilerOptions": {
-      "target": "ES2022",
-      "module": "ESNext",
-      "moduleResolution": "Bundler",
-      "strict": true,
-      "esModuleInterop": true,
-      "skipLibCheck": true,
-      "resolveJsonModule": true,
-      "types": ["node"],
-      "noEmit": true
-    },
-    "include": ["apps/*/src", "packages/*/src"]
-  }
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": [
+    "apps/api/src/**/*.ts",
+    "packages/agents/src/**/*.ts",
+    "packages/ai/src/**/*.ts",
+    "packages/db/src/**/*.ts",
+    "packages/paypal/src/**/*.ts"
+  ],
+  "exclude": [
+    "apps/web",
+    "packages/workflows",
+    "**/node_modules",
+    "**/.next"
+  ]
+}
