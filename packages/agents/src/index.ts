@@ -15,3 +15,4 @@ export * from "./orders/order-state";
 export * from "./payments/fulfillment";
 export * from "./payments/expiry";
 export * from "./orders/ledger";
+export { readAuditChain, verifyAuditChain } from "./orders/audit";

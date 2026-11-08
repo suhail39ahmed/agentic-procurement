@@ -3,6 +3,7 @@ import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { paypalWebhookRouter } from "./webhooks/paypal";
+import { auditRouter } from "./audit";
 
 const app = express();
 const port = Number(process.env.API_PORT ?? 4000);
@@ -24,7 +25,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/api/webhooks/paypal", webhookLimiter, paypalWebhookRouter);
-
+app.use("/api/audit", auditRouter);
 app.listen(port, () => {
   console.log(`[api] listening on http://localhost:${port}`);
 });

@@ -101,3 +101,14 @@ export async function appendAuditRecord(
     return record;
   });
 }
+
+export async function readAuditChain(orderId: string): Promise<AuditRecord[]> {
+  const rows = await listAuditRecords(orderId);
+
+  return rows.map((row) => ({
+    ...row,
+    from: (row.from ?? undefined) as OrderStatus | undefined,
+    to: (row.to ?? undefined) as OrderStatus | undefined,
+    note: row.note ?? undefined,
+  }));
+}
