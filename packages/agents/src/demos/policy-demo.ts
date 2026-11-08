@@ -30,7 +30,7 @@ const offer = (from: string, unitPrice: number, leadTimeDays: number): OfferMess
   message: "",
 });
 
-function run(label: string, rfq: RfqMessage, offers: OfferMessage[], policy: PolicyConfig = DEFAULT_POLICY) {
+async function run(label: string, rfq: RfqMessage, offers: OfferMessage[], policy: PolicyConfig = DEFAULT_POLICY) {
   const winner = batna(scoreOffers(rfq, offers));
   console.log(`\n== ${label}`);
   if (!winner) {
@@ -42,20 +42,20 @@ function run(label: string, rfq: RfqMessage, offers: OfferMessage[], policy: Pol
   for (const reason of decision.reasons) console.log(`  - ${reason}`);
 
   if (decision.outcome === "REQUIRE_APPROVAL") {
-    const request = requestApproval(rfq, winner, decision);
+    const request = await requestApproval(rfq, winner, decision);
     console.log(`Pending approval ${request.id}`);
 
     try {
-      decide(request.id, "buyer-agent", true);
+      await decide(request.id, "buyer-agent", true);
     } catch (err) {
       console.log(`Self-approval blocked: ${(err as Error).message}`);
     }
 
-    const approved = decide(request.id, "owner@company.com", true, "Needed for Monday onboarding");
+    const approved = await decide(request.id, "owner@company.com", true, "Needed for Monday onboarding");
     console.log(`${approved.status} by ${approved.decidedBy}`);
 
     try {
-      decide(request.id, "owner@company.com", true);
+      await decide(request.id, "owner@company.com", true);
     } catch (err) {
       console.log(`Replay blocked: ${(err as Error).message}`);
     }
@@ -64,13 +64,13 @@ function run(label: string, rfq: RfqMessage, offers: OfferMessage[], policy: Pol
   if (decision.outcome !== "DENY") console.log("Ready to authorize on PayPal");
 }
 
-run("Small order auto-allowed", { ...baseRfq, items: [{ ...baseRfq.items[0], quantity: 1 }] }, [offer("seller-b", 0.5, 18)]);
-run("Large order needs approval", baseRfq, [offer("seller-b", 0.5, 18), offer("seller-a", 0.6, 14)]);
-run("Blocked supplier denied", baseRfq, [offer("seller-b", 0.5, 18)], { ...DEFAULT_POLICY, blockedSuppliers: ["seller-b"] });
-run("Supplier cap denied", baseRfq, [offer("seller-b", 0.5, 18)], { ...DEFAULT_POLICY, maxPerSupplierTotal: { "seller-b": 2 } });
+await run("Small order auto-allowed", { ...baseRfq, items: [{ ...baseRfq.items[0], quantity: 1 }] }, [offer("seller-b", 0.5, 18)]);
+await run("Large order needs approval", baseRfq, [offer("seller-b", 0.5, 18), offer("seller-a", 0.6, 14)]);
+await run("Blocked supplier denied", baseRfq, [offer("seller-b", 0.5, 18)], { ...DEFAULT_POLICY, blockedSuppliers: ["seller-b"] });
+await run("Supplier cap denied", baseRfq, [offer("seller-b", 0.5, 18)], { ...DEFAULT_POLICY, maxPerSupplierTotal: { "seller-b": 2 } });
 
 console.log("\nAudit trail");
-for (const request of listApprovals()) {
+for (const request of await listApprovals()) {
   for (const entry of request.audit) {
     console.log(`  ${entry.at} ${entry.actor.padEnd(18)} ${entry.action}${entry.note ? `  ${entry.note}` : ""}`);
   }

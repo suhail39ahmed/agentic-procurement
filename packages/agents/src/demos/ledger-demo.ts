@@ -4,7 +4,7 @@ import { applyWebhookEvent, saveOrder, getOrder, listDisputes, type PayPalWebhoo
 const JTI = "mandate-ledger-demo";
 let order = createOrder({ id: JTI, rfqId: "rfq-ledger", supplierId: "seller-b", amount: 2.5, currency: "USD", paypalOrderId: "PP-ORDER-1" });
 order = transition(order, "APPROVE", "policy-engine");
-saveOrder(order);
+await saveOrder(order);
 
 const auth: PayPalWebhookEvent = {
   id: "WH-1",
@@ -46,23 +46,26 @@ const stranger: PayPalWebhookEvent = {
 
 const stream = [auth, auth, badCapture, capture, resentCapture, lateVoid, dispute, refund, unknown, stranger];
 
-function run(label: string, expected: string[]): boolean {
+async function run(label: string, expected: string[]): Promise<boolean> {
   console.log(label);
-  const outcomes = stream.map((e) => {
-    const r = applyWebhookEvent(e);
+  const outcomes: string[] = [];
+  for (const e of stream) {
+    const r = await applyWebhookEvent(e);
     console.log(`  ${e.id.padEnd(12)} ${e.event_type.padEnd(30)} ${r.outcome.padEnd(9)} ${r.reason}`);
-    return r.outcome;
-  });
+    outcomes.push(r.outcome);
+  }
   const ok = JSON.stringify(outcomes) === JSON.stringify(expected);
-  console.log(`  final ${getOrder(JTI)?.status}, history ${getOrder(JTI)?.history.length}\n`);
+  const current = await getOrder(JTI);
+  console.log(`  final ${current?.status}, history ${current?.history.length}\n`);
   return ok;
 }
 
-const first = run("First delivery", ["APPLIED", "SKIPPED", "REJECTED", "APPLIED", "SKIPPED", "REJECTED", "APPLIED", "APPLIED", "IGNORED", "UNMATCHED"]);
-const replay = run("Full replay", Array(stream.length).fill("SKIPPED"));
+const first = await run("First delivery", ["APPLIED", "SKIPPED", "REJECTED", "APPLIED", "SKIPPED", "REJECTED", "APPLIED", "APPLIED", "IGNORED", "UNMATCHED"]);
+const replay = await run("Full replay", Array(stream.length).fill("SKIPPED"));
 
-const final = getOrder(JTI)!;
-const pass = first && replay && final.status === "REFUNDED" && final.history.length === 4 && listDisputes().length === 1;
-console.log(`Disputes: ${listDisputes().map((d) => `${d.disputeId} ${d.reason} order=${d.orderId}`).join(", ")}`);
+const final = (await getOrder(JTI))!;
+const disputes = await listDisputes();
+const pass = first && replay && final.status === "REFUNDED" && final.history.length === 4 && disputes.length === 1;
+console.log(`Disputes: ${disputes.map((d) => `${d.disputeId} ${d.reason} order=${d.orderId}`).join(", ")}`);
 console.log(pass ? "All ledger checks passed" : "FAIL ledger checks");
 if (!pass) process.exitCode = 1;

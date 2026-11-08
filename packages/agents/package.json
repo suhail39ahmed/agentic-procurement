@@ -11,13 +11,15 @@
       "checkout-demo": "tsx src/demos/checkout-demo.ts",
       "order-demo": "tsx src/demos/order-demo.ts",
       "expiry-demo": "tsx src/demos/expiry-demo.ts",
-      "ledger-demo": "tsx src/demos/ledger-demo.ts"
+      "ledger-demo": "tsx src/demos/ledger-demo.ts",
+      "test:persistence": "tsx src/tests/persistence.test.ts"
     },
-    "dependencies": {
-      "ai": "workspace:*",
-      "paypal": "workspace:*",
-      "zod": "^3.23.8"
-    },
+  "dependencies": {
+    "ai": "workspace:*",
+    "paypal": "workspace:*",
+    "db": "workspace:*",
+    "zod": "^4.6.6"
+  },
     "devDependencies": {
       "@types/node": "^22.9.0",
       "tsx": "^4.19.2",

@@ -1,7 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { verifyWebhook } from "./verify";
-import { saveEvent, listEvents } from "./store";
-import { applyWebhookEvent, listLedger, listDisputes, type PayPalWebhookEvent } from "agents";
+import { applyWebhookEvent, listLedger, listDisputes, listEvents, type PayPalWebhookEvent } from "agents";
 
 type PayPalEvent = PayPalWebhookEvent & { create_time: string };
 
@@ -19,7 +18,7 @@ paypalWebhookRouter.post("/", async (req: Request, res: Response) => {
         authAlgo: req.header("paypal-auth-algo") ?? "",
         transmissionSig: req.header("paypal-transmission-sig") ?? "",
       },
-      event
+      event,
     );
 
     if (!valid) {
@@ -27,22 +26,12 @@ paypalWebhookRouter.post("/", async (req: Request, res: Response) => {
       return res.sendStatus(400);
     }
 
-    const isNew = saveEvent({
-      id: event.id,
-      eventType: event.event_type,
-      createTime: event.create_time,
-      raw: event,
-      receivedAt: new Date().toISOString(),
-    });
-
+    const entry = await applyWebhookEvent(event);
+    const isNew = entry.outcome !== "SKIPPED" || entry.reason !== "event already processed";
     console.log(
-      `[webhook] ${isNew ? "accepted" : "duplicate"} ${event.event_type} ${event.resource?.id ?? ""} ${event.resource?.status ?? ""}`
+      `[webhook] ${isNew ? "accepted" : "duplicate"} ${event.event_type} ${event.resource?.id ?? ""} ${event.resource?.status ?? ""}`,
     );
-
-    if (isNew) {
-      const entry = applyWebhookEvent(event);
-      console.log(`[ledger] ${entry.outcome} ${entry.orderId ?? "-"} ${entry.reason}`);
-    }
+    console.log(`[ledger] ${entry.outcome} ${entry.orderId ?? "-"} ${entry.reason}`);
 
     return res.sendStatus(200);
   } catch (err) {
@@ -51,10 +40,14 @@ paypalWebhookRouter.post("/", async (req: Request, res: Response) => {
   }
 });
 
-paypalWebhookRouter.get("/", (req: Request, res: Response) => {
+paypalWebhookRouter.get("/", async (req: Request, res: Response) => {
   const adminKey = process.env.ADMIN_API_KEY;
   if (!adminKey || req.header("x-admin-key") !== adminKey) {
     return res.sendStatus(404);
   }
-  return res.json({ events: listEvents(), ledger: listLedger(), disputes: listDisputes() });
+  return res.json({
+    events: await listEvents(),
+    ledger: await listLedger(),
+    disputes: await listDisputes(),
+  });
 });

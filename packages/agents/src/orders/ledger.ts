@@ -1,4 +1,21 @@
+import {
+  saveOrder as persistOrder,
+  getOrder as loadOrder,
+  listOrders as loadOrders,
+  findOrderByPayPalIds,
+  saveWebhookEvent,
+  saveLedgerEntry,
+  listLedgerEntries as loadLedgerEntries,
+  saveDispute,
+  listDisputes as loadDisputes,
+  getLedgerByEventId,
+  listWebhookEvents,
+  withTransaction,
+  type LedgerEntry as DbLedgerEntry,
+  type Dispute as DbDispute,
+} from "db";
 import { canTransition, transition, type Order, type OrderEvent, type OrderStatus } from "./order-state";
+import { dollarsToFixed } from "db";
 
 type Money = { value?: string; currency_code?: string };
 type Link = { href: string; rel: string };
@@ -51,29 +68,14 @@ const RULES: Record<string, { event: OrderEvent; target: OrderStatus }> = {
   "PAYMENT.CAPTURE.REFUNDED": { event: "REFUND", target: "REFUNDED" },
 };
 
-const orders = new Map<string, Order>();
-const processed = new Map<string, LedgerEntry>();
-const entries: LedgerEntry[] = [];
-const disputes = new Map<string, Dispute>();
+const memoryOrders = new Map<string, Order>();
+const memoryProcessed = new Map<string, LedgerEntry>();
+const memoryEntries: LedgerEntry[] = [];
+const memoryDisputes = new Map<string, Dispute>();
+const memoryEvents = new Map<string, { id: string; eventType: string; createTime: string; raw: unknown; receivedAt: string }>();
 
-export function saveOrder(order: Order): void {
-  orders.set(order.id, order);
-}
-
-export function getOrder(id: string): Order | undefined {
-  return orders.get(id);
-}
-
-export function listOrders(): Order[] {
-  return [...orders.values()];
-}
-
-export function listLedger(): LedgerEntry[] {
-  return [...entries];
-}
-
-export function listDisputes(): Dispute[] {
-  return [...disputes.values()];
+function persistEnabled(): boolean {
+  return Boolean(process.env.DATABASE_URL);
 }
 
 function idFromLink(links: Link[] | undefined, segment: string): string | undefined {
@@ -81,11 +83,46 @@ function idFromLink(links: Link[] | undefined, segment: string): string | undefi
   return href?.split(`/${segment}/`)[1]?.split(/[/?]/)[0];
 }
 
-function findOrder(event: PayPalWebhookEvent): Order | undefined {
+export async function saveOrder(order: Order): Promise<void> {
+  if (persistEnabled()) {
+    await persistOrder(order);
+    return;
+  }
+  memoryOrders.set(order.id, order);
+}
+
+export async function getOrder(id: string): Promise<Order | undefined> {
+  if (persistEnabled()) return loadOrder(id);
+  return memoryOrders.get(id);
+}
+
+export async function listOrders(): Promise<Order[]> {
+  if (persistEnabled()) return loadOrders();
+  return [...memoryOrders.values()];
+}
+
+export async function listLedger(): Promise<LedgerEntry[]> {
+  if (persistEnabled()) return loadLedgerEntries() as Promise<LedgerEntry[]>;
+  return [...memoryEntries];
+}
+
+export async function listDisputes(): Promise<Dispute[]> {
+  if (persistEnabled()) return loadDisputes();
+  return [...memoryDisputes.values()];
+}
+
+export async function listEvents(): Promise<{ id: string; eventType: string; createTime: string; raw: unknown; receivedAt: string }[]> {
+  if (persistEnabled()) return listWebhookEvents();
+  return [...memoryEvents.values()].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+}
+
+async function findOrder(event: PayPalWebhookEvent): Promise<Order | undefined> {
   const r = event.resource ?? {};
   const byJti = r.custom_id ?? r.disputed_transactions?.[0]?.custom;
-  if (byJti && orders.has(byJti)) return orders.get(byJti);
-
+  if (byJti) {
+    const order = await getOrder(byJti);
+    if (order) return order;
+  }
   const related = r.supplementary_data?.related_ids ?? {};
   const paypalOrderId = related.order_id;
   const authorizationId =
@@ -96,7 +133,10 @@ function findOrder(event: PayPalWebhookEvent): Order | undefined {
     (event.event_type === "PAYMENT.CAPTURE.COMPLETED" ? r.id : undefined) ??
     r.disputed_transactions?.[0]?.seller_transaction_id;
 
-  for (const o of orders.values()) {
+  if (persistEnabled()) {
+    return findOrderByPayPalIds({ paypalOrderId, authorizationId, captureId });
+  }
+  for (const o of memoryOrders.values()) {
     if (paypalOrderId && o.paypalOrderId === paypalOrderId) return o;
     if (authorizationId && o.authorizationId === authorizationId) return o;
     if (captureId && o.captureId === captureId) return o;
@@ -104,19 +144,23 @@ function findOrder(event: PayPalWebhookEvent): Order | undefined {
   return undefined;
 }
 
-function record(event: PayPalWebhookEvent, entry: Omit<LedgerEntry, "eventId" | "eventType" | "at">): LedgerEntry {
+async function record(event: PayPalWebhookEvent, entry: Omit<LedgerEntry, "eventId" | "eventType" | "at">): Promise<LedgerEntry> {
   const full: LedgerEntry = { eventId: event.id, eventType: event.event_type, at: new Date().toISOString(), ...entry };
-  processed.set(event.id, full);
-  entries.push(full);
+  if (persistEnabled()) {
+    await saveLedgerEntry(full as DbLedgerEntry);
+    return full;
+  }
+  memoryProcessed.set(event.id, full);
+  memoryEntries.push(full);
   return full;
 }
 
-function applyDispute(event: PayPalWebhookEvent): LedgerEntry {
+async function applyDispute(event: PayPalWebhookEvent): Promise<LedgerEntry> {
   const r = event.resource ?? {};
-  const order = findOrder(event);
+  const order = await findOrder(event);
   const disputeId = r.dispute_id ?? r.id ?? event.id;
-  const existing = disputes.get(disputeId);
-  disputes.set(disputeId, {
+  const existing = persistEnabled() ? undefined : memoryDisputes.get(disputeId);
+  const dispute: Dispute = {
     disputeId,
     orderId: order?.id ?? existing?.orderId,
     captureId: r.disputed_transactions?.[0]?.seller_transaction_id ?? existing?.captureId,
@@ -124,7 +168,9 @@ function applyDispute(event: PayPalWebhookEvent): LedgerEntry {
     amount: r.dispute_amount?.value ?? existing?.amount,
     status: r.status ?? existing?.status ?? "OPEN",
     openedAt: existing?.openedAt ?? event.create_time ?? new Date().toISOString(),
-  });
+  };
+  if (persistEnabled()) await saveDispute(dispute as DbDispute);
+  else memoryDisputes.set(disputeId, dispute);
   return record(event, {
     outcome: order ? "APPLIED" : "UNMATCHED",
     orderId: order?.id,
@@ -132,37 +178,92 @@ function applyDispute(event: PayPalWebhookEvent): LedgerEntry {
   });
 }
 
-export function applyWebhookEvent(event: PayPalWebhookEvent): LedgerEntry {
-  const seen = processed.get(event.id);
-  if (seen) return { ...seen, outcome: "SKIPPED", reason: "event already processed" };
-
+async function project(event: PayPalWebhookEvent): Promise<LedgerEntry> {
   if (event.event_type.startsWith("CUSTOMER.DISPUTE.")) return applyDispute(event);
 
   const rule = RULES[event.event_type];
   if (!rule) return record(event, { outcome: "IGNORED", reason: "event type not projected" });
 
-  const order = findOrder(event);
+  const order = await findOrder(event);
   if (!order) return record(event, { outcome: "UNMATCHED", reason: "no order for resource" });
 
   if (order.status === rule.target) {
-    return record(event, { outcome: "SKIPPED", orderId: order.id, from: order.status, to: order.status, reason: "order already in target state" });
+    return record(event, {
+      outcome: "SKIPPED",
+      orderId: order.id,
+      from: order.status,
+      to: order.status,
+      reason: "order already in target state",
+    });
   }
 
   if (!canTransition(order.status, rule.event)) {
-    return record(event, { outcome: "REJECTED", orderId: order.id, from: order.status, reason: `${rule.event} not allowed from ${order.status}` });
+    return record(event, {
+      outcome: "REJECTED",
+      orderId: order.id,
+      from: order.status,
+      reason: `${rule.event} not allowed from ${order.status}`,
+    });
   }
 
   const r = event.resource ?? {};
   if (rule.event === "AUTHORIZE" || rule.event === "CAPTURE") {
     const value = r.amount?.value;
-    if (value !== undefined && value !== order.amount.toFixed(2)) {
-      return record(event, { outcome: "REJECTED", orderId: order.id, from: order.status, reason: `amount ${value} differs from order ${order.amount.toFixed(2)}` });
+    if (value !== undefined && value !== dollarsToFixed(order.amount)) {
+      return record(event, {
+        outcome: "REJECTED",
+        orderId: order.id,
+        from: order.status,
+        reason: `amount ${value} differs from order ${dollarsToFixed(order.amount)}`,
+      });
     }
   }
 
   const patch: Partial<Omit<Order, "id" | "status" | "history">> =
     rule.event === "AUTHORIZE" ? { authorizationId: r.id } : rule.event === "CAPTURE" ? { captureId: r.id } : {};
   const next = transition(order, rule.event, "paypal-webhook", patch, `${event.event_type} ${r.id ?? ""}`.trim());
-  orders.set(next.id, next);
+  await saveOrder(next);
   return record(event, { outcome: "APPLIED", orderId: order.id, from: order.status, to: next.status, reason: event.event_type });
+}
+
+export async function applyWebhookEvent(event: PayPalWebhookEvent): Promise<LedgerEntry> {
+  if (!persistEnabled()) {
+    const seen = memoryProcessed.get(event.id);
+    if (seen) return { ...seen, outcome: "SKIPPED", reason: "event already processed" };
+    memoryEvents.set(event.id, {
+      id: event.id,
+      eventType: event.event_type,
+      createTime: event.create_time ?? new Date().toISOString(),
+      raw: event,
+      receivedAt: new Date().toISOString(),
+    });
+    return project(event);
+  }
+
+  return withTransaction(async () => {
+    const isNew = await saveWebhookEvent({
+      id: event.id,
+      eventType: event.event_type,
+      createTime: event.create_time ?? new Date().toISOString(),
+      raw: event,
+      receivedAt: new Date().toISOString(),
+    });
+    if (!isNew) {
+      const previous = await getLedgerByEventId(event.id);
+      if (!previous) {
+        return { eventId: event.id, eventType: event.event_type, outcome: "SKIPPED", reason: "event already processed", at: new Date().toISOString() };
+      }
+      return {
+        eventId: previous.eventId,
+        eventType: previous.eventType,
+        outcome: "SKIPPED",
+        orderId: previous.orderId,
+        from: previous.from as OrderStatus | undefined,
+        to: previous.to as OrderStatus | undefined,
+        reason: "event already processed",
+        at: previous.at,
+      };
+    }
+    return project(event);
+  });
 }

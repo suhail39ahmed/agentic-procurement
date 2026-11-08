@@ -5,6 +5,7 @@ import { requestApproval, decide } from "../governance/approvals";
 import { issueMandate } from "../governance/mandate";
 import { createPaymentOrder, waitForApproval, authorizePayment, voidPayment } from "../payments/payment-tool";
 import { createOrder, transition } from "../orders/order-state";
+import { saveOrder } from "../orders/ledger";
 import { refundPayment } from "../payments/payment-tool";
 import { markShipped, confirmDelivery } from "../payments/fulfillment";
 
@@ -49,12 +50,12 @@ async function main() {
 
   let approval;
   if (decision.outcome === "REQUIRE_APPROVAL") {
-    approval = requestApproval(rfq, winner, decision);
-    approval = decide(approval.id, "owner@company.com", true, "Approved in checkout demo");
+    approval = await requestApproval(rfq, winner, decision);
+    approval = await decide(approval.id, "owner@company.com", true, "Approved in checkout demo");
     console.log(`Approval ${approval.status} by ${approval.decidedBy}`);
   }
 
-  const token = issueMandate(rfq.rfqId, decision, approval);
+  const token = await issueMandate(rfq.rfqId, decision, approval);
   const expected = { rfqId: rfq.rfqId, supplierId: decision.supplierId, amount: decision.orderTotal.toFixed(2) };
 
   try {
@@ -63,7 +64,7 @@ async function main() {
     console.log(`Tamper   blocked: ${(err as Error).message}`);
   }
 
-  const intent = await createPaymentOrder(issueMandate(rfq.rfqId, decision, approval), expected);
+  const intent = await createPaymentOrder(await issueMandate(rfq.rfqId, decision, approval), expected);
   console.log(`Mandate  ${intent.mandate.jti} approvedBy ${intent.mandate.approvedBy}`);
   console.log(`Order    ${intent.orderId}`);
   console.log(`\nApprove as the sandbox buyer:\n${intent.approveUrl}\n`);
@@ -78,6 +79,7 @@ async function main() {
   });
   order = transition(order, approval ? "REQUIRE_APPROVAL" : "APPROVE", "policy-engine");
   if (approval) order = transition(order, "APPROVE", approval.decidedBy ?? "owner");
+  await saveOrder(order);
 
   await waitForApproval(intent.orderId);
   const authorizationId = await authorizePayment(intent);
@@ -86,18 +88,22 @@ async function main() {
     heldAt: new Date().toISOString(),
     deliverBy: new Date(Date.now() + rfq.neededByDays * 86_400_000).toISOString(),
   });
+  await saveOrder(order);
   console.log(`Held     ${authorizationId} $${intent.mandate.amount}`);
 
   if (voidMode) {
     await voidPayment(authorizationId, intent.mandate.jti);
     order = transition(order, "VOID", "owner");
+    await saveOrder(order);
     console.log("Voided   hold released");
   } else {
     try { markShipped(order, "seller-x", "UPS", "1Z999AA10123456784"); }
     catch (err) { console.log(`Ship     blocked: ${(err as Error).message}`); }
     order = markShipped(order, decision.supplierId, "UPS", "1Z999AA10123456784");
+    await saveOrder(order);
     console.log(`Shipped  ${order.tracking?.carrier} ${order.tracking?.number}`);
     order = await confirmDelivery(order, intent, "owner@company.com");
+    await saveOrder(order);
     console.log(`Captured ${order.captureId} on delivery`);
     if (refundMode) {
       try {
@@ -107,6 +113,7 @@ async function main() {
       }
       const result = await refundPayment(order, "owner", "Demo refund");
       order = result.order;
+      await saveOrder(order);
       console.log(`Refunded ${result.refund.id} ${result.refund.status}`);
     }
   }

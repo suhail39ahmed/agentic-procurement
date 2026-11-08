@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { getApproval as loadApproval, listApprovals as loadApprovals, saveApproval } from "db";
 import type { RfqMessage } from "../negotiation/protocol";
 import type { ScoredOffer } from "../negotiation/scoring";
 import type { PolicyDecision } from "./policy-engine";
@@ -29,6 +30,10 @@ export type ApprovalRequest = {
 const APPROVAL_TTL_MS = 24 * 60 * 60 * 1000;
 const requests = new Map<string, ApprovalRequest>();
 
+function persistEnabled(): boolean {
+  return Boolean(process.env.DATABASE_URL);
+}
+
 function expireIfStale(request: ApprovalRequest, now = Date.now()): ApprovalRequest {
   if (request.status === "PENDING" && now > Date.parse(request.expiresAt)) {
     request.status = "EXPIRED";
@@ -37,7 +42,7 @@ function expireIfStale(request: ApprovalRequest, now = Date.now()): ApprovalRequ
   return request;
 }
 
-export function requestApproval(rfq: RfqMessage, winner: ScoredOffer, decision: PolicyDecision): ApprovalRequest {
+export async function requestApproval(rfq: RfqMessage, winner: ScoredOffer, decision: PolicyDecision): Promise<ApprovalRequest> {
   if (decision.outcome !== "REQUIRE_APPROVAL") {
     throw new Error(`Approval not applicable for outcome ${decision.outcome}`);
   }
@@ -54,12 +59,13 @@ export function requestApproval(rfq: RfqMessage, winner: ScoredOffer, decision: 
     expiresAt: new Date(now.getTime() + APPROVAL_TTL_MS).toISOString(),
     audit: [{ at: now.toISOString(), actor: "buyer-agent", action: "REQUESTED", note: decision.reasons.join("; ") }],
   };
-  requests.set(request.id, request);
+  if (persistEnabled()) await saveApproval(request);
+  else requests.set(request.id, request);
   return request;
 }
 
-export function decide(id: string, approver: string, approve: boolean, note?: string): ApprovalRequest {
-  const request = requests.get(id);
+export async function decide(id: string, approver: string, approve: boolean, note?: string): Promise<ApprovalRequest> {
+  const request = persistEnabled() ? await loadApproval(id) : requests.get(id);
   if (!request) throw new Error("Approval request not found");
   expireIfStale(request);
   if (request.status !== "PENDING") throw new Error(`Approval already ${request.status}`);
@@ -75,16 +81,28 @@ export function decide(id: string, approver: string, approve: boolean, note?: st
     action: approve ? "APPROVED" : "REJECTED",
     note: note?.slice(0, 300),
   });
+  if (persistEnabled()) await saveApproval(request);
   return request;
 }
 
-export function getApproval(id: string): ApprovalRequest | undefined {
-  const request = requests.get(id);
-  return request && expireIfStale(request);
+export async function getApproval(id: string): Promise<ApprovalRequest | undefined> {
+  const request = persistEnabled() ? await loadApproval(id) : requests.get(id);
+  if (!request) return undefined;
+  const updated = expireIfStale(request);
+  if (persistEnabled() && updated.status === "EXPIRED") await saveApproval(updated);
+  return updated;
 }
 
-export function listApprovals(status?: ApprovalStatus): ApprovalRequest[] {
-  return [...requests.values()]
-    .map((r) => expireIfStale(r))
-    .filter((r) => !status || r.status === status);
+export async function listApprovals(status?: ApprovalStatus): Promise<ApprovalRequest[]> {
+  const all = persistEnabled() ? await loadApprovals(status) : [...requests.values()];
+  const now = Date.now();
+  const result: ApprovalRequest[] = [];
+  for (const request of all) {
+    const updated = expireIfStale(request, now);
+    if (persistEnabled() && updated.status === "EXPIRED" && request.status !== "EXPIRED") {
+      await saveApproval(updated);
+    }
+    if (!status || updated.status === status) result.push(updated);
+  }
+  return result;
 }

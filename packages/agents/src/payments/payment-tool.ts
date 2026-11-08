@@ -25,7 +25,7 @@ export async function createPaymentOrder(
   expected: { rfqId: string; supplierId: string; amount: string }
 ): Promise<PaymentIntent> {
   SANDBOX_ONLY();
-  const mandate = verifyMandate(mandateToken, expected);
+  const mandate = await verifyMandate(mandateToken, expected);
 
   const order = await paypalRequest<Order>("/v2/checkout/orders", {
     method: "POST",
