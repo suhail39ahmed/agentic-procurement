@@ -1,0 +1,12 @@
+{
+    "name": "workflows",
+    "private": true,
+    "type": "module",
+    "dependencies": {
+        "@renderinc/sdk": "^1.8.0",
+        "agents": "workspace:^"
+    },
+    "devDependencies": {
+        "tsx": "^4.19.2"
+    }
+}
