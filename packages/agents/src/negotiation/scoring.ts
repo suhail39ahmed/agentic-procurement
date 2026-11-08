@@ -46,13 +46,16 @@ export function scoreOffers(
       const speedScore = normalize(offer.leadTimeDays, minLead, maxLead);
       const meetsDeadline = offer.leadTimeDays <= rfq.neededByDays;
       const withinBudget = offer.unitPrice <= rfq.maxUnitPrice;
-      const eligible = meetsDeadline && withinBudget;
-      const score = eligible ? weights.price * priceScore + weights.speed * speedScore : 0;
-      return { offer, score: Math.round(score * 1000) / 1000, priceScore, speedScore, meetsDeadline, withinBudget };
+      const score = Math.round((weights.price * priceScore + weights.speed * speedScore) * 1000) / 1000;
+      return { offer, score, priceScore, speedScore, meetsDeadline, withinBudget };
     })
-    .sort((a, b) => b.score - a.score || a.offer.unitPrice - b.offer.unitPrice);
+    .sort((a, b) => {
+      const aOk = a.withinBudget && a.meetsDeadline ? 1 : 0;
+      const bOk = b.withinBudget && b.meetsDeadline ? 1 : 0;
+      return bOk - aOk || b.score - a.score || a.offer.unitPrice - b.offer.unitPrice;
+    });
 }
 
 export function batna(scored: ScoredOffer[]): ScoredOffer | undefined {
-  return scored.find((s) => s.score > 0);
+  return scored.find((s) => s.withinBudget && s.meetsDeadline);
 }
