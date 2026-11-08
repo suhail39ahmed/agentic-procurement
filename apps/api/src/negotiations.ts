@@ -161,19 +161,27 @@ negotiationsRouter.get("/", async (req, res) => {
   try {
     const rows = await listNegotiationsForOwner(ownerId);
     return res.json({
-      items: rows.map((row) => ({
-        id: row.id,
-        status: row.status,
-        brief: row.brief,
-        priority: row.priority,
-        quantity: row.quantity,
-        maxUnitPrice: row.maxUnitPrice,
-        currency: row.currency,
-        neededByDays: row.neededByDays,
-        workflowRunId: row.workflowRunId ?? null,
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-      })),
+      items: rows.map((row) => {
+        const result = row.result && typeof row.result === "object" ? row.result as Record<string, unknown> : null;
+        const checkout = result?.checkout && typeof result.checkout === "object"
+          ? result.checkout as { orderId?: string; lastStatus?: string }
+          : null;
+        return {
+          id: row.id,
+          status: row.status,
+          brief: row.brief,
+          priority: row.priority,
+          quantity: row.quantity,
+          maxUnitPrice: row.maxUnitPrice,
+          currency: row.currency,
+          neededByDays: row.neededByDays,
+          workflowRunId: row.workflowRunId ?? null,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+          hasCheckout: Boolean(checkout?.orderId),
+          paymentStatus: checkout?.lastStatus ?? (checkout?.orderId ? "APPROVED" : null),
+        };
+      }),
     });
   } catch (err) {
     console.error("[negotiations] list failed", err);
@@ -212,6 +220,81 @@ negotiationsRouter.get("/:id", async (req, res) => {
     console.error("[negotiations] get failed", err);
     return res.sendStatus(500);
   }
+});
+
+negotiationsRouter.get("/:id/events", async (req, res) => {
+  const ownerId = requireOwner(req);
+  if (!ownerId) return res.sendStatus(404);
+
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).json({ error: "Database unavailable" });
+  }
+
+  const id = req.params.id;
+  const row = await getNegotiationForOwner(ownerId, id);
+  if (!row) return res.sendStatus(404);
+
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders?.();
+
+  let lastCount = 0;
+  let closed = false;
+
+  const write = (payload: Record<string, unknown>) => {
+    if (closed) return;
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  };
+
+  const tick = async () => {
+    try {
+      const current = await getNegotiationForOwner(ownerId, id);
+      if (!current) {
+        write({ type: "error", error: "not_found" });
+        clearInterval(timer);
+        closed = true;
+        res.end();
+        return;
+      }
+
+      const result = current.result && typeof current.result === "object"
+        ? current.result as { events?: unknown }
+        : null;
+      const events = Array.isArray(result?.events) ? result.events : [];
+      if (events.length > lastCount) {
+        for (const event of events.slice(lastCount)) {
+          write({ type: "event", event });
+        }
+        lastCount = events.length;
+      }
+
+      write({ type: "status", status: current.status, eventCount: events.length });
+
+      if (current.status === "SUCCEEDED" || current.status === "FAILED") {
+        write({ type: "done", status: current.status, eventCount: events.length });
+        clearInterval(timer);
+        closed = true;
+        res.end();
+      }
+    } catch (err) {
+      console.error("[negotiations] events stream failed", err);
+      write({ type: "error", error: "stream_failed" });
+      clearInterval(timer);
+      closed = true;
+      res.end();
+    }
+  };
+
+  const timer = setInterval(() => {
+    void tick();
+  }, 1000);
+  void tick();
+
+  req.on("close", () => {
+    closed = true;
+    clearInterval(timer);
+  });
 });
 
 negotiationsRouter.post("/:id/start", async (req, res) => {

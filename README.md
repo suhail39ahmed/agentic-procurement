@@ -6,7 +6,7 @@
 
 A buyer agent sends a request for quote (RFQ) to several seller agents, negotiates over a few rounds, picks the best offer for the owner's priorities, and pays through PayPal, but only inside a policy the owner sets, with a human approval for anything above the threshold.
 
-> **Status:** work in progress for the PayPal AI Hackathon 2026 (submissions close 12 Nov 2026). Runs against the PayPal **sandbox** only. Stores are in memory for now.
+> **Status:** PayPal AI Hackathon 2026 (sandbox only). Core agent-to-agent marketplace loop is live: negotiate → policy/mandate → authorize → ship → owner confirm → capture. Hosted on Render.
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=nodedotjs&logoColor=white)
@@ -76,13 +76,15 @@ flowchart LR
   - `packages/paypal`: OAuth token and REST client for PayPal.
   - `packages/ai`: chat client with per-role routes (buyer and judge on a strong model, seller and extractor on a fast one) against an Azure AI endpoint.
   - `apps/api`: Express API with `/health` and a verified, rate-limited PayPal webhook route.
-- **Demos instead of tests (for now):** each step has a runnable script in `packages/agents/src/demos/`.
+- **Demos + eval:** runnable scripts in `packages/agents/src/demos/`; headless eval via `pnpm --filter agents eval` writes `docs/EVAL_REPORT.md`.
 
-**What I'd do next**
+**Ops notes**
 
-- Persist orders, mandates and the ledger in a database instead of memory.
-- Unit tests for the policy engine, mandates and the state machine, run in CI.
-- An owner dashboard for approvals and the order ledger.
+- Postgres migrations live in `packages/db/migrations/` (including `0000_rollback.sql` for disposable DBs only — never run against Render prod).
+- CI: `.github/workflows/ci.yml` (typecheck/lint/build + secret scan).
+- API refuses to start unless `PAYPAL_ENV=sandbox` and `MANDATE_SECRET` is set.
+- Dashboard: negotiation SSE feed, AG Grid `applyTransaction`, one-click demo seed, authorize→capture checkpoints.
+- E2E checklist: `docs/TEST_PLAN.md`.
 
 ---
 
