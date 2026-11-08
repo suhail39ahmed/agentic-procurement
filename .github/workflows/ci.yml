@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/scan-secrets.mjs
+      - run: pnpm --dir apps/web exec tsc --noEmit
+      - run: pnpm --dir apps/web lint
+      - run: pnpm --dir apps/web build
+        env:
+          API_BASE_URL: http://localhost:4000
+          OWNER_API_KEY: ci-placeholder-owner-key
+          ADMIN_API_KEY: ci-placeholder-admin-key
+
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/scan-secrets.mjs
+      - run: pnpm --dir apps/api exec tsc --noEmit
