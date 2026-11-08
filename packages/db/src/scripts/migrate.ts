@@ -26,16 +26,25 @@ async function main() {
     id text PRIMARY KEY,
     applied_at timestamptz NOT NULL DEFAULT now()
   )`;
-  const applied = await sql<{ id: string }[]>`SELECT id FROM schema_migrations WHERE id = ${"0000_initial"}`;
-  if (applied.length > 0) {
-    console.log("Migrations already applied");
-    await sql.end();
-    return;
+
+  for (const id of ["0000_initial", "0001_audit_records"]) {
+    const changed = await sql.begin(async (tx) => {
+      await tx`LOCK TABLE schema_migrations IN EXCLUSIVE MODE`;
+      const applied = await tx<{ id: string }[]>`
+        SELECT id FROM schema_migrations WHERE id = ${id}
+      `;
+      if (applied.length > 0) return false;
+
+      const file = resolve(here, `../../migrations/${id}.sql`);
+      await tx.unsafe(readFileSync(file, "utf8"));
+      await tx`INSERT INTO schema_migrations (id) VALUES (${id})`;
+      return true;
+    });
+    console.log(`${id}: ${changed ? "applied" : "already applied"}`);
   }
-  await sql.unsafe(readFileSync(sqlFile, "utf8"));
-  await sql`INSERT INTO schema_migrations (id) VALUES (${"0000_initial"})`;
-  console.log("Migrations complete");
+
   await sql.end();
+  console.log("Migrations complete");
 }
 
 main().catch(async (err) => {

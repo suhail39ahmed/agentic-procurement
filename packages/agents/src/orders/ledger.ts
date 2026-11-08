@@ -11,11 +11,13 @@ import {
   getLedgerByEventId,
   listWebhookEvents,
   withTransaction,
+  withAuditOrderLock,
   type LedgerEntry as DbLedgerEntry,
   type Dispute as DbDispute,
 } from "db";
 import { canTransition, transition, type Order, type OrderEvent, type OrderStatus } from "./order-state";
 import { dollarsToFixed } from "db";
+import { appendAuditRecord } from "./audit";
 
 type Money = { value?: string; currency_code?: string };
 type Link = { href: string; rel: string };
@@ -85,7 +87,56 @@ function idFromLink(links: Link[] | undefined, segment: string): string | undefi
 
 export async function saveOrder(order: Order): Promise<void> {
   if (persistEnabled()) {
-    await persistOrder(order);
+    await withTransaction(async () => {
+      const exists = await loadOrder(order.id);
+
+      const save = async () => {
+        const previous = await loadOrder(order.id);
+        const previousHistoryLength = previous?.history.length ?? 0;
+        const sameTransition = (
+          a: Order["history"][number],
+          b: Order["history"][number],
+        ) =>
+          a.from === b.from &&
+          a.to === b.to &&
+          a.event === b.event &&
+          a.actor === b.actor &&
+          new Date(a.at).getTime() === new Date(b.at).getTime() &&
+          a.note === b.note;
+
+        if (
+          previous &&
+          (order.history.length < previousHistoryLength ||
+            previous.history.some(
+              (entry, index) =>
+                !sameTransition(entry, order.history[index]),
+            ))
+        ) {
+          throw new Error("Stale order history; reload before saving");
+        }
+
+        await persistOrder(order);
+        const newTransitions = order.history.slice(previousHistoryLength);
+
+        for (const entry of newTransitions) {
+          await appendAuditRecord({
+            orderId: order.id,
+            event: entry.event,
+            actor: entry.actor,
+            at: entry.at,
+            from: entry.from,
+            to: entry.to,
+            note: entry.note,
+          });
+        }
+      };
+
+      if (exists) {
+        await withAuditOrderLock(order.id, save);
+      } else {
+        await save();
+      }
+    });
     return;
   }
   memoryOrders.set(order.id, order);

@@ -1,4 +1,19 @@
-import { pgTable, text, integer, timestamp, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, jsonb, index, primaryKey } from "drizzle-orm/pg-core";
+
+export const auditRecords = pgTable("audit_records", {
+  orderId: text("order_id").notNull().references(() => orders.id),
+  sequence: integer("sequence").notNull(),
+  event: text("event").notNull(),
+  actor: text("actor").notNull(),
+  at: text("at").notNull(),
+  from: text("from_status"),
+  to: text("to_status"),
+  note: text("note"),
+  previousHash: text("previous_hash").notNull(),
+  hash: text("hash").notNull(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.orderId, table.sequence] }),
+}));
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "string" });
 
