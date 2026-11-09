@@ -121,7 +121,7 @@ export function SponsorsPanel({
     }
   }
 
-  function useProduct(product: {
+  function applyCatalogProduct(product: {
     title: string;
     price?: number;
     retailer?: string;
@@ -260,7 +260,7 @@ export function SponsorsPanel({
                 disabled={selected === "" || !onChannel3Suggestion}
                 onClick={() => {
                   const product = products[Number(selected)];
-                  if (product) useProduct(product);
+                  if (product) applyCatalogProduct(product);
                 }}
               >
                 Use for RFQ <ArrowRight size={15} />
