@@ -96,7 +96,7 @@ export function DisputePanel({
 
   async function accept(id: string) {
     if (!isOwner) {
-      setNotice("Switch to Owner login (owner / owner) to accept a dispute claim.");
+      setNotice("Switch to Supervisor login (supervisor / supervisor) to accept a dispute claim.");
       return;
     }
     setBusy(true);
@@ -107,14 +107,14 @@ export function DisputePanel({
           "content-type": "application/json",
           ...(demoRole ? { "x-demo-role": demoRole } : {}),
         },
-        body: JSON.stringify({ approved: true, note: "Owner approved from dashboard" }),
+        body: JSON.stringify({ approved: true, note: "Supervisor approved from dashboard" }),
       });
       const payload = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) {
         setNotice(payload.error ?? "Accept failed (sandbox Toolkit).");
         return;
       }
-      setNotice("accept_dispute_claim invoked behind owner approval.");
+      setNotice("accept_dispute_claim invoked behind Supervisor approval.");
       await refresh();
     } finally {
       setBusy(false);
@@ -159,7 +159,7 @@ export function DisputePanel({
                     disabled={busy || !isOwner || !item.agentDraft || Boolean(item.acceptApprovedBy)}
                     onClick={() => void accept(item.disputeId)}
                   >
-                    {isOwner ? "Approve accept_dispute_claim" : "Owner login required"} <ArrowRight size={15} />
+                    {isOwner ? "Approve accept_dispute_claim" : "Supervisor login required"} <ArrowRight size={15} />
                   </button>
                 </div>
               </details>

@@ -69,10 +69,11 @@ Negative case:
 
 ---
 
-## 5. Ship → confirm delivery → capture
+## 5. Ship notice (email) → confirm delivery → capture
 
-- [ ] From `HELD` → **Mark shipped** → status `SHIPPED` + tracking
-- [ ] **Confirm delivery & capture** → status `CAPTURED` + capture id
+- [ ] From `HELD` — order stays held (no auto-ship)
+- [ ] Paste seller shipment email from Gmail **or** **Load sample email** → **Extract tracking** → **Apply ship notice → SHIPPED** + tracking
+- [ ] Owner: **Confirm delivery & capture** → status `CAPTURED` + capture id
 - [ ] Metrics: Funds on hold / Active orders update for this session
 
 ---

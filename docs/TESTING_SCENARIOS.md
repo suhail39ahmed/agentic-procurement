@@ -9,9 +9,9 @@ If the first load is slow, wait about a minute and refresh once (hosted demo can
 | Role | Username / password | Can do |
 |---|---|---|
 | **Buyer** | `buyer` / `buyer` | RFQ, negotiate, checkout, PayPal approve; paste shipment email → Apply ship |
-| **Owner** | `owner` / `owner` | Approve spends **over $20**, **Confirm delivery & capture**, accept disputes |
+| **Supervisor** | `supervisor` / `supervisor` | **Supervisor approval** for spends **over $20**, **Confirm delivery & capture**, accept disputes |
 
-Use the login screen (or sidebar Buyer/Owner switch). Over-$20 checkout stops until an **Owner** approves.
+Use the login screen (or sidebar Buyer/Supervisor switch). Over-$20 checkout stops until a **Supervisor** approves.
 
 ---
 
@@ -60,9 +60,9 @@ You run a small business buying supplies.
 9. Click **Checkout winning offer**.  
 10. On **Payments**, approve as the PayPal sandbox buyer in the popup.  
 11. Status should become **HELD** / **Funds on hold** (hold is placed for you after approve).  
-12. **Stop here** — do not click Mark shipped yet.
+12. **Stop here** — leave it **HELD**. Do not paste a shipment email or click **Apply ship notice** yet.
 
-**You should see:** Funds on hold count go up; Needs attention shows this order with **Mark shipped**.
+**You should see:** Funds on hold count go up; Needs attention shows this order still **HELD** (stays held until you apply a ship notice in Story B).
 
 ---
 
@@ -73,34 +73,34 @@ You run a small business buying supplies.
 1. Repeat a small buy like Story A (another sticky-note or low-budget request).  
 2. Checkout → PayPal approve → status **HELD** (funds stay here until you apply a ship notice).  
 3. On Payments, paste the seller shipment email from **Gmail** (or **Load sample email**) → **Extract tracking** → **Apply ship notice → SHIPPED**.  
-4. Switch to **Owner** → **Confirm delivery & capture** (money is not taken until this click).  
+4. Switch to **Supervisor** → **Confirm delivery & capture** (money is not taken until this click).  
 5. Under **Recently captured**, click **View**.
 
-**You should see:** Order remains **HELD** until email apply; then **SHIPPED**; **CAPTURED** only after Owner confirm.  
+**You should see:** Order remains **HELD** until email apply; then **SHIPPED**; **CAPTURED** only after Supervisor confirm.  
 **Gmail:** copy/paste from Gmail is the sandbox path (no OAuth inbox yet). Full Gmail API can be added later.
 
 ---
 
-## Story C — “Buying chairs — needs my approval”
+## Story C — “Buying chairs — needs Supervisor approval”
 
 **Goal:** Show the over-$20 control.
 
-1. On Overview, start a new request (or **Load demo request**).  
+1. On Overview, start a new request (or **Load demo request** — opens Review ready to Queue).  
 2. Use a chair-style brief, for example:  
    - *12 ergonomic desk chairs. Prefer durable mesh backs and 5-year warranty.*  
    - Quantity `1` (or more), max unit about `$180`, needed within `30` days.  
-3. **Review** → **Queue negotiation**.  
+3. **Review** → **Queue negotiation** (wait until status **SUCCEEDED** — AI can take ~20–40s).  
 4. When offers are ready, open **Supplier offers** → **Checkout**.  
-5. On **Payments**, you should see **Owner approval required** (not PayPal yet) because the total is over **$20**.  
-6. Click **Approve as owner**, then PayPal approve → hold.
+5. On **Payments**, you should see **Supervisor approval required** (not PayPal yet) because the total is over **$20**.  
+6. Switch to **Supervisor** → **Approve as Supervisor**, then PayPal approve → hold.
 
-**You should see:** No PayPal buttons until you approve. A ~$90–$100 order must stop at owner approval first.
+**You should see:** No PayPal buttons until Supervisor approves. A ~$90–$100 order must stop at Supervisor approval first.
 
 ---
 
 ## Story D — “A dispute showed up”
 
-**Goal:** Owner stays in control of dispute acceptance.
+**Goal:** Supervisor stays in control of dispute acceptance.
 
 1. Go to **Payments & orders**.  
 2. In **Disputes**, click **Simulate CUSTOMER.DISPUTE.CREATED** (demo stand-in for a real PayPal dispute).  
@@ -145,5 +145,7 @@ Add **Story C** if you have ~20 more seconds.
 |---|---|
 | Offers look wrong / old prices | Open a **new** finished request — old offer lists don’t refresh |
 | Authorize hold does nothing after PayPal popup | Hold already ran — look for **HELD** / Funds on hold |
-| Want Funds on hold on screen | Finish Story A and **don’t** ship yet |
+| Want Funds on hold on screen | Finish Story A and **don’t** apply a ship notice yet |
+| Order stuck on HELD / nothing in SHIPPED | Expected until you paste email → **Extract tracking** → **Apply ship notice** |
+| No real Gmail handy | Use **Load sample email** on Payments, then Extract → Apply |
 | Page empty / slow | Wait, refresh once; confirm you’re on the hosted demo URL |

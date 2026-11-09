@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify(body),
       cache: "no-store",
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(60_000),
     });
 
     const text = await response.text();
@@ -65,6 +65,9 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     console.error("[web] negotiations create proxy failed", err);
-    return NextResponse.json({ error: "Upstream API unavailable" }, { status: 502 });
+    return NextResponse.json(
+      { error: "Upstream API unavailable — wait a few seconds for cold start, then Queue again." },
+      { status: 502 },
+    );
   }
 }

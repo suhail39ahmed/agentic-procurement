@@ -505,7 +505,7 @@ export default function Dashboard() {
   function nextPaymentStepLabel(payment: string): string {
     if (payment === "APPROVED") return "Needs PayPal approve → Authorize hold";
     if (payment === "HELD") return "Paste shipment email → Apply";
-    if (payment === "SHIPPED") return "Needs owner Confirm delivery & capture";
+    if (payment === "SHIPPED") return "Needs Supervisor Confirm delivery & capture";
     if (payment === "CAPTURED") return "Complete";
     return payment;
   }
@@ -610,7 +610,7 @@ export default function Dashboard() {
     } else if (payment === "HELD") {
       setNotice("Funds on hold — paste the seller shipment email (from Gmail) and Apply ship notice. Status stays HELD until then.");
     } else if (payment === "SHIPPED") {
-      setNotice("Seller already shipped — Owner must Confirm delivery & capture.");
+      setNotice("Seller already shipped — Supervisor must Confirm delivery & capture.");
     } else {
       setNotice("Opened Payments for this request.");
     }
@@ -800,10 +800,17 @@ export default function Dashboard() {
     }
   }
 
-  async function loadNegotiations() {
+  async function loadNegotiations(retry = true) {
     try {
       const response = await fetch("/api/negotiations", { cache: "no-store" });
       if (!response.ok) {
+        if (retry && (response.status === 502 || response.status === 503 || response.status >= 500)) {
+          setNegotiationsError("API waking up — retrying…");
+          window.setTimeout(() => {
+            void loadNegotiations(false);
+          }, 4_000);
+          return;
+        }
         setNegotiationsError(
           response.status === 503
             ? "API configuration missing on the web server."
@@ -893,7 +900,9 @@ export default function Dashboard() {
     const user = loginUser.trim().toLowerCase();
     const pass = loginPass.trim();
     const buyerOk = user === DEMO_ACCOUNTS.buyer.username && pass === DEMO_ACCOUNTS.buyer.password;
-    const ownerOk = user === DEMO_ACCOUNTS.owner.username && pass === DEMO_ACCOUNTS.owner.password;
+    const supervisorUser = user === DEMO_ACCOUNTS.owner.username || user === "owner";
+    const supervisorPass = pass === DEMO_ACCOUNTS.owner.password || pass === "owner";
+    const ownerOk = supervisorUser && supervisorPass;
     if (buyerOk) {
       signInAs("buyer");
       return;
@@ -902,7 +911,7 @@ export default function Dashboard() {
       signInAs("owner");
       return;
     }
-    setLoginError("Use buyer/buyer or owner/owner for this sandbox demo.");
+    setLoginError("Use buyer/buyer or supervisor/supervisor for this sandbox demo.");
   }
 
   function signOutDemo() {
@@ -910,7 +919,7 @@ export default function Dashboard() {
     setDemoSession(null);
     setPendingOwnerApproval(null);
     setActiveOrder(null);
-    setNotice("Signed out. Pick Buyer or Owner to continue the demo.");
+    setNotice("Signed out. Pick Buyer or Supervisor to continue the demo.");
   }
 
   useEffect(() => {
@@ -1061,14 +1070,22 @@ export default function Dashboard() {
 
   function loadDemoRequest() {
     const demo = examples[0];
+    const validated = validateFields(demo);
     setView("Overview");
     setMobileOpen(false);
     setFields(demo);
     setFieldErrors({});
-    setComposerMode("compose");
-    setPendingDraft(null);
-    setNotice("Demo request loaded. Review draft, then Queue negotiation to run buyer/seller agents.");
-    requestAnimationFrame(() => briefRef.current?.focus());
+    if (!validated.draft) {
+      setComposerMode("compose");
+      setPendingDraft(null);
+      setNotice("Demo request needs edits before review.");
+      requestAnimationFrame(() => briefRef.current?.focus());
+      return;
+    }
+    setPendingDraft(validated.draft);
+    setComposerMode("review");
+    setNotice("Demo request ready — click Queue negotiation to start buyer/seller agents.");
+    requestAnimationFrame(() => reviewHeadingRef.current?.focus());
   }
 
   /** Search Channel3 catalog and show product + price rows to pick from. */
@@ -1350,7 +1367,7 @@ export default function Dashboard() {
           threshold: payload.approval.threshold,
         });
         setActiveOrder(null);
-        setNotice(payload.note ?? `Owner approval required — total above $${payload.approval.threshold}.`);
+        setNotice(payload.note ?? `Supervisor approval required — total above $${payload.approval.threshold}.`);
         setView("Payments & orders");
         return;
       }
@@ -1379,10 +1396,10 @@ export default function Dashboard() {
   async function decideOwnerCheckout(approve: boolean) {
     if (!pendingOwnerApproval || orderBusy) return;
     setOrderBusy(true);
-    setNotice(approve ? "Recording owner approval…" : "Recording owner denial…");
+    setNotice(approve ? "Recording Supervisor approval…" : "Recording Supervisor denial…");
     try {
       if (!isOwner) {
-        setNotice("Switch to Owner login (owner / owner) to approve or deny this spend.");
+        setNotice("Switch to Supervisor login (supervisor / supervisor) to approve or deny this spend.");
         return;
       }
       const response = await fetch(
@@ -1405,12 +1422,12 @@ export default function Dashboard() {
         supplierId?: string;
       };
       if (!response.ok) {
-        setNotice(payload.error ?? `Owner decision failed (${response.status}).`);
+        setNotice(payload.error ?? `Supervisor decision failed (${response.status}).`);
         return;
       }
       if (payload.denied) {
         setPendingOwnerApproval(null);
-        setNotice(payload.note ?? "Owner denied — no PayPal checkout.");
+        setNotice(payload.note ?? "Supervisor denied — no PayPal checkout.");
         return;
       }
       setPendingOwnerApproval(null);
@@ -1422,10 +1439,10 @@ export default function Dashboard() {
         amount: payload.amount,
         supplierId: payload.supplierId,
       });
-      setNotice("Owner approved. Use Pay with PayPal as the sandbox buyer — hold follows approve.");
+      setNotice("Supervisor approved. Use Pay with PayPal as the sandbox buyer — hold follows approve.");
       setView("Payments & orders");
     } catch {
-      setNotice("Owner decision failed.");
+      setNotice("Supervisor decision failed.");
     } finally {
       setOrderBusy(false);
     }
@@ -1574,7 +1591,7 @@ export default function Dashboard() {
       setShipmentParsed(null);
       setNotice(
         payload.note
-        ?? "Shipment email applied — SHIPPED. Switch to Owner and Confirm delivery & capture.",
+        ?? "Shipment email applied — SHIPPED. Switch to Supervisor and Confirm delivery & capture.",
       );
     } catch {
       setNotice("Ship notice failed.");
@@ -1586,7 +1603,7 @@ export default function Dashboard() {
   async function confirmDeliveryCapture() {
     if (!activeOrder?.orderId || orderBusy) return;
     if (!isOwner) {
-      setNotice("Switch to Owner login (owner / owner) to confirm delivery & capture.");
+      setNotice("Switch to Supervisor login (supervisor / supervisor) to confirm delivery & capture.");
       return;
     }
     setOrderBusy(true);
@@ -1644,7 +1661,7 @@ export default function Dashboard() {
               <div>
                 <h1>ProcureAI demo login</h1>
                 <p className={s.description}>
-                  Sandbox roles only — Buyer creates buys; Owner approves spends over $20 and captures.
+                  Sandbox roles only — Buyer creates buys; Supervisor approves spends over $20 and captures.
                 </p>
               </div>
             </div>
@@ -1661,12 +1678,12 @@ export default function Dashboard() {
               </button>
               <button type="button" className={s.trackCard} onClick={() => signInAs("owner")}>
                 <span className={s.iconTile}><ShieldCheck size={20} /></span>
-                <h3>Owner</h3>
+                <h3>Supervisor</h3>
                 <p>{DEMO_ACCOUNTS.owner.blurb}</p>
                 <span className={s.trackCta}>
                   <span className={s.trackRadio} aria-hidden />
                   <ArrowRight size={14} aria-hidden />
-                  Continue as Owner
+                  Continue as Supervisor
                 </span>
               </button>
             </div>
@@ -1686,7 +1703,7 @@ export default function Dashboard() {
               <div className={s.reviewActions}>
                 <button type="submit" className={s.primary}>Sign in</button>
               </div>
-              <p className={s.tableNote}>buyer / buyer · owner / owner</p>
+              <p className={s.tableNote}>buyer / buyer · supervisor / supervisor</p>
             </form>
           </section>
         </main>
@@ -1704,10 +1721,10 @@ export default function Dashboard() {
           <span>Procure<span className={s.brandAI}>AI</span><small>AGENTIC PROCUREMENT</small></span>
           </Link>
         <div className={s.workspace}>
-          <span className={s.avatar}>{isOwner ? "O" : "B"}</span>
+          <span className={s.avatar}>{isOwner ? "S" : "B"}</span>
           <div>
             {demoSession.name}
-            <small>{isOwner ? "Owner session" : "Buyer session"}</small>
+            <small>{isOwner ? "Supervisor session" : "Buyer session"}</small>
           </div>
           <ShieldCheck size={17} />
         </div>
@@ -1729,9 +1746,9 @@ export default function Dashboard() {
             <p>Payment authorization and capture remain separate, guarded actions.</p>
           </div>
           <div className={s.profile}>
-            <span className={s.avatar}>{isOwner ? "O" : "B"}</span>
+            <span className={s.avatar}>{isOwner ? "S" : "B"}</span>
             <div>
-              {isOwner ? "Owner" : "Buyer"}
+              {isOwner ? "Supervisor" : "Buyer"}
               <small>{isOwner ? "Can approve & capture" : "Can buy & hold"}</small>
             </div>
             <button type="button" className={s.textButton} title="Sign out of demo role" onClick={signOutDemo}>
@@ -1753,7 +1770,7 @@ export default function Dashboard() {
               disabled={isOwner}
               onClick={() => signInAs("owner")}
             >
-              Owner
+              Supervisor
             </button>
           </div>
         </div>
@@ -1817,8 +1834,8 @@ export default function Dashboard() {
                       <li>Channel3 = live catalog prices (not Postgres). Postgres stores the RFQ only after Queue.</li>
                       <li>Sellers scale offers to your max unit price — sticky-note ceilings and chair budgets both work.</li>
                       <li><em>Eligible = Yes</em> means within budget and needed-by days. Checkout uses the best eligible winner.</li>
-                      <li>Order total ≤ <em>$20</em> → auto ALLOW (no owner click). Above <em>$20</em> → Payments shows <em>Approve as owner</em> before PayPal.</li>
-                      <li>Authorize holds funds; capture only after ship + owner confirm. AI never captures alone.</li>
+                      <li>Order total ≤ <em>$20</em> → auto ALLOW (no Supervisor click). Above <em>$20</em> → Payments shows <em>Approve as Supervisor</em> before PayPal.</li>
+                      <li>Authorize holds funds; capture only after ship + Supervisor confirm. AI never captures alone.</li>
                       <li>Old Supplier offers rows are frozen snapshots — always open a <em>new</em> SUCCEEDED negotiation after deploys.</li>
                     </ul>
 
@@ -1828,7 +1845,7 @@ export default function Dashboard() {
                       <li>Wait until status <em>SUCCEEDED</em> (Requests / Negotiations grid). Click <em>Offers</em> on that row.</li>
                       <li>Check AG Grid: unit price, delivery days, match score, Eligible. Live SSE shows buyer/seller counters.</li>
                       <li><em>Checkout</em> → PayPal → <em>HELD</em> (stays held). Paste Gmail shipment email → Extract → Apply → <em>SHIPPED</em>.</li>
-                      <li>Switch to <em>Owner</em> → <em>Confirm delivery &amp; capture</em>. Capture is never automatic.</li>
+                      <li>Switch to <em>Supervisor</em> → <em>Confirm delivery &amp; capture</em>. Capture is never automatic.</li>
                       <li>Overview Bryntum Gantt: one bar per live checkout; hover status dots (green done / orange action / blue hold).</li>
                     </ol>
 
@@ -1963,13 +1980,13 @@ export default function Dashboard() {
                   ? [
                       { label: "Negotiations", value: String(negotiations.length), detail: negotiationsError ? "API unreachable" : "Marketplace track", icon: Sparkles, target: "Requests" as View },
                       { label: "Funds on hold", value: String(heldCount), detail: heldCount ? "Authorized, not captured" : "After PayPal approve", icon: ShieldCheck, target: "Payments & orders" as View },
-                      { label: "Captured", value: String(capturedCount), detail: capturedCount ? "Owner confirmed delivery" : "Confirm after ship", icon: CreditCard, target: "Payments & orders" as View },
+                      { label: "Captured", value: String(capturedCount), detail: capturedCount ? "Supervisor confirmed delivery" : "Confirm after ship", icon: CreditCard, target: "Payments & orders" as View },
                       { label: "Payables", value: "AP", detail: "Open AP tab · extract · match · payout", icon: Wallet, target: "Payables" as View },
                     ]
                   : [
                       { label: "Negotiations", value: String(negotiations.length), detail: negotiationsError ? "API unreachable" : "Marketplace track", icon: Sparkles, target: "Requests" as View },
                       { label: "Funds on hold", value: String(heldCount), detail: heldCount ? "Authorized, not captured" : "After PayPal approve", icon: ShieldCheck, target: "Payments & orders" as View },
-                      { label: "Captured", value: String(capturedCount), detail: capturedCount ? "Owner confirmed delivery" : "Confirm after ship", icon: CreditCard, target: "Payments & orders" as View },
+                      { label: "Captured", value: String(capturedCount), detail: capturedCount ? "Supervisor confirmed delivery" : "Confirm after ship", icon: CreditCard, target: "Payments & orders" as View },
                     ]
               ).map(({ label, value, detail, icon: Icon, target }) => (
                 <button className={s.metric} key={label} onClick={() => navigate(target)}>
@@ -2474,16 +2491,16 @@ export default function Dashboard() {
 
           {(view === "Overview" || view === "Payments & orders") && <section className={`${s.card} ${s.paymentCard}`}>
             <div className={s.sectionHeader}>
-              <div className={s.inlineTitle}><span className={s.paymentIcon}><CreditCard size={22} /></span><div><h2>Payments, with clear checkpoints</h2><p className={s.description}>Sandbox PayPal authorize → ship → owner confirms → capture.</p></div></div>
+              <div className={s.inlineTitle}><span className={s.paymentIcon}><CreditCard size={22} /></span><div><h2>Payments, with clear checkpoints</h2><p className={s.description}>Sandbox PayPal authorize → ship → Supervisor confirms → capture.</p></div></div>
               <span className={s.pending}>{activeOrder?.status ?? "No order yet"}</span>
             </div>
             <p className={s.flowCaption}>Live sandbox lifecycle · AI never captures by itself</p>
             <ol className={s.paymentFlow}>
               {[
-                { title: "Owner approval", detail: "Required when total > $20; ≤$20 auto-allows", active: Boolean(activeOrder) || Boolean(pendingOwnerApproval) },
+                { title: "Supervisor approval", detail: "Required when total > $20; ≤$20 auto-allows", active: Boolean(activeOrder) || Boolean(pendingOwnerApproval) },
                 { title: "Funds held", detail: "Authorized, not captured", active: activeOrder?.status === "HELD" || activeOrder?.status === "SHIPPED" || activeOrder?.status === "CAPTURED" },
                 { title: "Seller ships", detail: "Carrier and tracking recorded", active: activeOrder?.status === "SHIPPED" || activeOrder?.status === "CAPTURED" },
-                { title: "Owner confirms", detail: "Capture after delivery", active: activeOrder?.status === "CAPTURED" },
+                { title: "Supervisor confirms", detail: "Capture after delivery", active: activeOrder?.status === "CAPTURED" },
               ].map((step, index) => <li key={step.title}>
                 <span className={s.stepNumber}>{index + 1}</span>
                 <div><strong>{step.title}</strong><small>{step.detail}{step.active ? " · done/current" : ""}</small></div>
@@ -2494,7 +2511,7 @@ export default function Dashboard() {
               <div className={s.reviewPanel}>
                 <div className={s.sectionHeader}>
                   <div>
-                    <h3>Owner approval required</h3>
+                    <h3>Supervisor approval required</h3>
                     <p className={s.description}>
                       Order total ${pendingOwnerApproval.orderTotal.toFixed(2)} is above the ${pendingOwnerApproval.threshold} auto-allow threshold.
                       Approve to create the PayPal hold order, or deny to stop.
@@ -2510,7 +2527,7 @@ export default function Dashboard() {
                 </dl>
                 {!isOwner && (
                   <p className={s.summaryNote}>
-                    You are signed in as <strong>Buyer</strong>. Switch to <strong>Owner</strong> (sidebar or owner/owner) to approve this spend.
+                    You are signed in as <strong>Buyer</strong>. Switch to <strong>Supervisor</strong> (sidebar or supervisor/supervisor) to approve this spend.
                   </p>
                 )}
                 <div className={s.reviewActions}>
@@ -2518,7 +2535,7 @@ export default function Dashboard() {
                     Deny
                   </button>
                   <button type="button" className={s.primary} disabled={orderBusy || !isOwner} onClick={() => void decideOwnerCheckout(true)}>
-                    Approve as owner <ArrowRight size={16} />
+                    Approve as Supervisor <ArrowRight size={16} />
                   </button>
                 </div>
               </div>
@@ -2772,11 +2789,11 @@ export default function Dashboard() {
                       <p className={s.summaryNote} style={{ flexBasis: "100%", margin: "0 0 4px" }}>
                         Supplier reported <strong>SHIPPED</strong>
                         {activeOrder.tracking ? ` (${activeOrder.tracking.carrier} ${activeOrder.tracking.number})` : ""}.
-                        Money is still on hold until Owner confirms delivery.
+                        Money is still on hold until Supervisor confirms delivery.
                       </p>
                       {!isOwner && (
                         <p className={s.summaryNote} style={{ flexBasis: "100%" }}>
-                          Capture requires <strong>Owner</strong> login (owner / owner).
+                          Capture requires <strong>Supervisor</strong> login (supervisor / supervisor).
                         </p>
                       )}
                       <button type="button" className={s.primary} disabled={orderBusy || !isOwner} onClick={() => void confirmDeliveryCapture()}>

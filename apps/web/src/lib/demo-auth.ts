@@ -18,10 +18,12 @@ export const DEMO_ACCOUNTS = {
   },
   owner: {
     role: "owner" as const,
-    name: "Owner · Controller",
-    username: "owner",
-    password: "owner",
-    blurb: "Approve spends over $20, confirm delivery & capture, accept disputes.",
+    name: "Supervisor · Approvals",
+    username: "supervisor",
+    password: "supervisor",
+    blurb: "Approve spends over $20 (Supervisor approval), confirm delivery & capture, accept disputes.",
+    /** Legacy sandbox aliases still accepted at login. */
+    aliases: ["owner"] as const,
   },
 } as const;
 
@@ -54,4 +56,9 @@ export function demoRoleHeaders(role: DemoRole | null | undefined): HeadersInit 
 
 export function isOwnerRole(role: DemoRole | null | undefined): boolean {
   return role === "owner";
+}
+
+/** Supervisor is the demo role that can approve spends / capture / disputes. */
+export function isSupervisorRole(role: DemoRole | null | undefined): boolean {
+  return isOwnerRole(role);
 }
