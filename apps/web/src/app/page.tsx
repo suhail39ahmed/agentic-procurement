@@ -905,13 +905,16 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
+    // Restore demo role after mount so SSR HTML matches (avoids hydration mismatch).
     const existing = readDemoSession();
-    if (existing) {
-      setDemoSession(existing);
-      setLoginUser(existing.role === "owner" ? "supervisor" : "buyer");
-      setLoginPass(existing.role === "owner" ? "supervisor" : "buyer");
-    }
-    setDemoAuthReady(true);
+    queueMicrotask(() => {
+      if (existing) {
+        setDemoSession(existing);
+        setLoginUser(existing.role === "owner" ? "supervisor" : "buyer");
+        setLoginPass(existing.role === "owner" ? "supervisor" : "buyer");
+      }
+      setDemoAuthReady(true);
+    });
   }, []);
 
   useEffect(() => {
