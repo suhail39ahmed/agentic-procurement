@@ -19,8 +19,9 @@ export type PolicyDecision = {
 };
 
 export const DEFAULT_POLICY: PolicyConfig = {
-  maxOrderTotal: Number(process.env.POLICY_MAX_ORDER_TOTAL ?? 10),
-  approvalThreshold: Number(process.env.POLICY_APPROVAL_THRESHOLD ?? 2),
+  maxOrderTotal: Number(process.env.POLICY_MAX_ORDER_TOTAL ?? 10_000),
+  // Totals above this require human approval (ALLOW below).
+  approvalThreshold: Number(process.env.POLICY_APPROVAL_THRESHOLD ?? 250),
   maxPerSupplierTotal: {},
   blockedSuppliers: [],
 };

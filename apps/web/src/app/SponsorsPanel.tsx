@@ -74,7 +74,7 @@ export function SponsorsPanel({
       const response = await fetch("/api/sponsors/channel3/search", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ query, maxPrice: 2 }),
+        body: JSON.stringify({ query, maxPrice: 250 }),
       });
       const payload = await response.json().catch(() => ({})) as {
         error?: string;
@@ -185,7 +185,7 @@ export function SponsorsPanel({
             <div>
               <h2>Channel3 → RFQ for sellers</h2>
               <p className={s.description}>
-                Search catalog (≤$2), load Overview RFQ, then Queue negotiation so sellers quote that product.{" "}
+                Search catalog, load Overview RFQ, then Queue negotiation so sellers quote that product.{" "}
                 {status.channel3 ? "API key live." : "Set CHANNEL3_API_KEY to activate."}
               </p>
             </div>

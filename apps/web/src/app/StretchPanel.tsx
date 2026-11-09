@@ -60,7 +60,7 @@ export function StretchPanel({
   } | null>(null);
 
   const [sku, setSku] = useState("MICRO-PACK-01");
-  const [label, setLabel] = useState("Demo micro pack");
+  const [label, setLabel] = useState("Office supply restock");
   const [threshold, setThreshold] = useState("5");
   const [reorder, setReorder] = useState("1");
   const [onHand, setOnHand] = useState("3");

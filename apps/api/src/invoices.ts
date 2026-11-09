@@ -145,7 +145,7 @@ invoicesRouter.post("/extract", async (req, res) => {
     }
     const capped = assertDemoAmount(amount, "extracted invoice amount");
     if (!capped.ok) {
-      return res.status(400).json({ error: capped.error, hint: "Paste a sample invoice totaling ≤ DEMO_MAX_USD." });
+      return res.status(400).json({ error: capped.error, hint: "Use a smaller invoice amount for this environment." });
     }
 
     const invoice = await saveSupplierInvoice({

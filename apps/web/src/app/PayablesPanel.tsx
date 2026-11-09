@@ -21,12 +21,12 @@ type SupplierInvoice = {
   dueDate?: string;
 };
 
-const SAMPLE_INVOICE = `INVOICE INV-DEMO-150
+const SAMPLE_INVOICE = `INVOICE INV-DEMO-4500
 Vendor: BundleBits Supply Co
 Bill to: ProcureAI Sandbox
 Due: 2026-11-20
-Line: Demo micro pack x1 @ 1.50 USD
-Total due: 1.50 USD
+Line: Office supplies restock x1 @ 45.00 USD
+Total due: 45.00 USD
 `;
 
 export function PayablesPanel({
@@ -45,11 +45,11 @@ export function PayablesPanel({
       : SAMPLE_INVOICE,
   );
   const [items, setItems] = useState<SupplierInvoice[]>([]);
-  const [poAmount, setPoAmount] = useState("1.50");
-  const [receiptAmount, setReceiptAmount] = useState("1.50");
+  const [poAmount, setPoAmount] = useState("45.00");
+  const [receiptAmount, setReceiptAmount] = useState("45.00");
   const [receiver, setReceiver] = useState("seller-a@business.example.com");
   const [clientEmail, setClientEmail] = useState("client-agentic@personal.example.com");
-  const [clientAmount, setClientAmount] = useState("1.50");
+  const [clientAmount, setClientAmount] = useState("45.00");
 
   async function refresh() {
     const response = await fetch("/api/invoices/extracted", { cache: "no-store" });
@@ -163,7 +163,7 @@ export function PayablesPanel({
         body: JSON.stringify({
           email: clientEmail,
           amount: clientAmount,
-          note: "ProcureAI sandbox client invoice (≤$2 demo)",
+          note: "ProcureAI sandbox client invoice",
           send: true,
         }),
       });
@@ -191,7 +191,7 @@ export function PayablesPanel({
             <div>
               <h2>Supplier invoice extract</h2>
               <p className={s.description}>
-                Paste invoice text (or load via Automation → KERNEL) → Extract → Match → Payout. Demo cap ≤ $2.
+                Paste invoice text (or load via Automation → KERNEL) → Extract → Match → Payout.
                 Sample text below works without a URL.
               </p>
             </div>
@@ -249,7 +249,7 @@ export function PayablesPanel({
           <div className={s.empty}>
             <span className={s.emptyIcon}><FileText size={24} /></span>
             <h3>No extracted invoices</h3>
-            <p>Extract the sample $1.50 invoice first, then match and pay.</p>
+            <p>Extract the sample invoice first, then match and pay.</p>
           </div>
         ) : (
           <ul className={s.draftList}>
@@ -273,7 +273,7 @@ export function PayablesPanel({
                       type="button"
                       className={s.primary}
                       disabled={busy || inv.matchStatus !== "MATCHED"}
-                      title="Submit PayPal Payouts batch (MATCHED only, ≤$2)"
+                      title="Submit PayPal Payouts batch (MATCHED only)"
                       onClick={() => void payout(inv.id)}
                     >
                       Payout <ArrowRight size={15} />
@@ -292,7 +292,7 @@ export function PayablesPanel({
             <span className={s.iconTile}><Send size={20} /></span>
             <div>
               <h2>Client invoice (Toolkit)</h2>
-              <p className={s.description}>create_invoice + send_invoice via PayPal Agent Toolkit. Default $1.50.</p>
+              <p className={s.description}>create_invoice + send_invoice via PayPal Agent Toolkit.</p>
             </div>
           </div>
         </div>
@@ -302,7 +302,7 @@ export function PayablesPanel({
             <input id="client-email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} />
           </div>
           <div className={s.field}>
-            <label htmlFor="client-amt">Amount (USD ≤ 2)</label>
+            <label htmlFor="client-amt">Amount (USD)</label>
             <input id="client-amt" value={clientAmount} onChange={(e) => setClientAmount(e.target.value)} />
           </div>
         </div>

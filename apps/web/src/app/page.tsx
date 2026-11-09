@@ -153,20 +153,20 @@ const priorities: { value: Priority; label: string; detail: string }[] = [
 
 const examples: RequestFields[] = [
   {
-    brief: "1 demo micro pack for sandbox smoke (≤$2). Prefer durable packaging.",
+    brief: "12 ergonomic desk chairs. Prefer durable mesh backs and 5-year warranty.",
     priority: "price",
-    quantity: "1",
-    maxUnitPrice: "2.00",
+    quantity: "12",
+    maxUnitPrice: "180.00",
     currency: "USD",
-    neededByDays: "14",
+    neededByDays: "30",
   },
   {
-    brief: "1 express mini pack — speed priority, sandbox demo budget.",
+    brief: "8 standing desks — speed priority for office expansion.",
     priority: "speed",
-    quantity: "1",
-    maxUnitPrice: "1.95",
+    quantity: "8",
+    maxUnitPrice: "220.00",
     currency: "USD",
-    neededByDays: "7",
+    neededByDays: "14",
   },
 ];
 
@@ -751,7 +751,7 @@ export default function Dashboard() {
       const response = await fetch("/api/sponsors/channel3/search", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ query, maxPrice: 2 }),
+        body: JSON.stringify({ query, maxPrice: 250 }),
       });
       const payload = await response.json().catch(() => ({})) as {
         error?: string;
@@ -774,7 +774,7 @@ export default function Dashboard() {
         return;
       }
       if (!payload.suggestion) {
-        setNotice(payload.note ?? "No Channel3 products under $2 for that query — try another.");
+        setNotice(payload.note ?? "No Channel3 products matched that query — try another.");
         return;
       }
       setFields({
@@ -813,7 +813,7 @@ export default function Dashboard() {
     setComposerMode("review");
     setFieldErrors({});
     setStreamLines([]);
-    setNotice("Seeding demo: queueing ≤$2 micro-pack negotiation…");
+    setNotice("Seeding demo: queueing sample negotiation…");
     setQueueBusy(true);
     try {
       const response = await fetch("/api/negotiations", {
@@ -1144,7 +1144,7 @@ export default function Dashboard() {
                 {view === "Automation"
                   ? "Replenishment, FX, Slack, forecasts, sponsors — stretch + partner tools."
                   : view === "Payables"
-                    ? "Extract supplier invoices, three-way match, payout, client invoice, disputes. Demo amounts ≤ $2."
+                    ? "Extract supplier invoices, three-way match, payout, client invoice, disputes."
                     : "Marketplace negotiate → approve → authorize → capture. Payables extend the same control plane."}
               </p>
             </div>
@@ -1152,7 +1152,7 @@ export default function Dashboard() {
               <button
                 type="button"
                 className={s.secondary}
-                title="Fill the composer with the ≤$2 micro-pack demo brief"
+                title="Fill the composer with a sample procurement brief"
                 onClick={loadDemoRequest}
               >
                 Load demo request
@@ -1160,7 +1160,7 @@ export default function Dashboard() {
               <button
                 type="button"
                 className={s.secondary}
-                title="Queue a live ≤$2 micro-pack negotiation in one click"
+                title="Queue a live sample negotiation in one click"
                 onClick={() => void seedDemoWorkspace()}
                 disabled={queueBusy}
               >
@@ -1191,7 +1191,7 @@ export default function Dashboard() {
             <ShieldCheck size={17} />
             <p>
               Dual track: <strong>Negotiate</strong> (marketplace) and <strong>Payables</strong> (invoices/payouts).
-              Demo spend capped at <strong>$2</strong>. Use Seed demo or open Payables for the judge path.
+              Sandbox PayPal only. Use Seed demo or open Payables for the judge path.
             </p>
           </div>
 
@@ -1202,13 +1202,13 @@ export default function Dashboard() {
                 className={s.trackCard}
                 onClick={() => void seedDemoWorkspace()}
                 disabled={queueBusy}
-                title="Queue a ≤$2 micro-pack negotiation"
+                title="Queue a sample negotiation"
               >
                 <span className={s.iconTile}><Sparkles size={20} /></span>
                 <h3>1 · Agent marketplace</h3>
                 <p>Buyer AI negotiates with seller AIs, ranks offers in AG Grid, then PayPal authorize → capture.</p>
                 <ul className={s.trackSteps}>
-                  <li>Seed or compose a ≤$2 request</li>
+                  <li>Seed or compose a request</li>
                   <li>Watch live SSE + Supplier offers</li>
                   <li>Checkout → approve → authorize → ship → capture</li>
                 </ul>
@@ -1260,14 +1260,14 @@ export default function Dashboard() {
               </h2>
               <p className={s.description}>
                 {composerMode === "compose"
-                  ? "Use Channel3 to pick a real catalog product (≤$2), or type a brief. Review → Queue negotiation sends that RFQ to seller AIs."
+                  ? "Use Channel3 to pick a catalog product, or type a brief. Review → Queue negotiation sends that RFQ to seller AIs."
                   : "Edit anything that looks off. Queue negotiation is what sellers actually receive."}
               </p>
 
               {composerMode === "compose" ? (
                 <form onSubmit={reviewDraft} className={s.briefForm} noValidate>
                   <div className={s.field}>
-                    <label htmlFor={`${formId}-channel3`}>Channel3 product search (≤$2)</label>
+                    <label htmlFor={`${formId}-channel3`}>Channel3 product search</label>
                     <div className={s.budgetRow}>
                       <input
                         id={`${formId}-channel3`}

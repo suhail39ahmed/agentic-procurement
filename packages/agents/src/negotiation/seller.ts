@@ -47,7 +47,7 @@ export type SellerConfig = {
     },
   ];
   
-  /** Micro-price sellers for DEMO_MAX_USD / ≤$2 sandbox smoke tests. */
+  /** Micro-price sellers for small sandbox smoke tests. */
   export const microSellers: SellerConfig[] = [
     {
       id: "seller-micro-a",

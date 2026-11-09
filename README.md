@@ -6,7 +6,7 @@
 
 **Two tracks in one product:** (1) **Agent-to-agent marketplace** — buyer AI negotiates with seller AIs, scores offers, then PayPal authorize→capture. (2) **AI procurement & payables** — extract supplier invoices, three-way match, payouts, client invoicing, disputes.
 
-> **Status:** PayPal AI Hackathon 2026 (sandbox only). Demo spend guard `DEMO_MAX_USD=2` by default. Hosted on Render.
+> **Status:** PayPal AI Hackathon 2026 (sandbox only). Hosted on Render. Order totals above the policy approval threshold require human approval.
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=nodedotjs&logoColor=white)
@@ -69,7 +69,7 @@ flowchart TB
     WH[Webhooks]
   end
 
-  UI --> C3 -.->|catalog ≤$2| B
+  UI --> C3 -.->|catalog enrich| B
   UI --> B
   B <--> S
   B --> SC --> PE
@@ -111,7 +111,7 @@ Legend: **solid** = primary money / negotiation path · **dotted** = enrichment 
 - CI: `.github/workflows/ci.yml` (typecheck/lint/build + secret scan).
 - API refuses to start unless `PAYPAL_ENV=sandbox` and `MANDATE_SECRET` is set.
 - Dashboard: negotiation SSE feed, AG Grid `applyTransaction`, Payables panel (extract/match/payout/client invoice), Automation (FX/replenish/Slack/forecast) + partner panels.
-- E2E checklist: `docs/TEST_PLAN.md` (use qty 1, max unit ≤ $2).
+- E2E checklist: `docs/TEST_PLAN.md`.
 - Hackathon / sponsor tools used:
   - **PayPal** sandbox REST + Checkout AUTHORIZE, webhooks, Agent Toolkit/MCP
   - **AG Grid** Community (live grids)
@@ -121,7 +121,7 @@ Legend: **solid** = primary money / negotiation path · **dotted** = enrichment 
   - **KERNEL** invoice page fetch bridge (`KERNEL_API_KEY`, env-gated)
   - Slack approvals stretch (`SLACK_WEBHOOK_URL`)
 
-**Judge path (≤ $2):** Overview → track cards → Seed negotiation **or** Open Payables.
+**Judge path:** Overview → track cards → Seed negotiation **or** Open Payables.
 
 ---
 

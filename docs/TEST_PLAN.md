@@ -9,7 +9,7 @@ Use this after the latest deploy is live. Prefer hosted URLs for submission demo
 
 Sandbox buyer: `OWNER_BUYER_EMAIL` / `PAYPAL_SANDBOX_PASSWORD` from your private `.env` (never commit).
 
-**Spend guard:** keep every sandbox charge ≤ **$2** (`DEMO_MAX_USD=2`). Demo seed uses qty `1` / max unit `$2.00` (micro sellers). Do not use large chair budgets.
+Sandbox only. Order totals above the policy approval threshold require human approval.
 
 ---
 
@@ -81,7 +81,7 @@ Negative case:
 
 - [ ] **Payables** → extract sample $1.50 invoice text
 - [ ] Match with PO/receipt `$1.50` → MATCHED
-- [ ] Payout to sandbox seller email (≤$2)
+- [ ] Payout to sandbox seller email
 - [ ] Create & send client invoice `$1.50`
 - [ ] Disputes: simulate → draft → owner-approved accept
 
@@ -94,7 +94,7 @@ Negative case:
 
 ## 5d. Partners + payables smoke
 
-- [ ] Overview: Channel3 **Use for RFQ** fills brief ≤$2 → Review → **Queue negotiation** (sellers see Channel3 product RFQ)
+- [ ] Overview: Channel3 **Use for RFQ** fills brief → Review → **Queue negotiation** (sellers see Channel3 product RFQ)
 - [ ] Automation: Channel3 enrich also loads Overview RFQ
 - [ ] Bryntum Gantt loads; Simulate late capture / refund / dispute moves or flags bars; Reset plan restores baseline
 - [ ] KERNEL fetch → opens **Payables** with page text → **Extract** (or paste sample invoice text with no URL)

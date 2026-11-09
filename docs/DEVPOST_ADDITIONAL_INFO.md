@@ -59,7 +59,7 @@ AI tools / models:
 • Azure AI Foundry — buyer agent and seller agents (negotiation dialogue, BATNA/counters); invoice extractor (AP track); buying assistant with Agent Toolkit tool-calling.
 • Deterministic TypeScript (not the model) owns scoring, policy ALLOW/REQUIRE_APPROVAL/DENY, HMAC payment mandates, and order state transitions.
 
-Demo guard DEMO_MAX_USD=2 keeps every path sandbox-safe for judges.
+Order totals above the policy approval threshold require human approval before payment.
 ```
 
 ---
@@ -92,13 +92,13 @@ https://agentic-procurement-web.onrender.com
 ### Testing instructions or credentials the judges need
 
 ```
-No login required for the hosted demo. Sandbox only; DEMO_MAX_USD=2.
+No login required for the hosted demo. Sandbox only.
 
 Quick path (≈2 min):
 1) https://agentic-procurement-web.onrender.com (cold start may take ~30–60s on free Render).
-2) Overview → Channel3 “Use for RFQ” (or type a ≤$2 brief) → Review → Queue negotiation.
+2) Overview → Channel3 “Use for RFQ” (or type a brief) → Review → Queue negotiation.
 3) Supplier offers → AG Grid ranks; optional Checkout → PayPal sandbox approve → Authorize hold.
-4) Payables → Extract sample invoice → Match (~$1.50) → optional Payout.
+4) Payables → Extract sample invoice → Match → optional Payout.
 5) Automation → Bryntum → “Simulate late capture” / refund / dispute → Reset plan.
 
 Full checklist: see uploaded JUDGE_TEST_GUIDE.md (also in repo at docs/JUDGE_TEST_GUIDE.md).

@@ -4,19 +4,19 @@
 **API health:** https://agentic-procurement-api.onrender.com/health  
 **Source:** https://github.com/suhail39ahmed/agentic-procurement (MIT)
 
-Sandbox only. Demo spend guard: **`DEMO_MAX_USD=2`**. Prefer qty **1** and max unit ≤ **$2**.
+Sandbox only. Free Render services may cold-start (~30–60s). If the first click is slow, wait and retry once.
 
-Free Render services may cold-start (~30–60s). If the first click is slow, wait and retry once.
+Order totals above the **policy approval threshold** require human approval before payment can proceed.
 
 ---
 
 ## 60-second smoke (minimum)
 
 1. Open the hosted web URL.
-2. **Overview** → Channel3 **Use for RFQ** (or type a ≤$2 brief) → **Review draft** → **Queue negotiation**.
+2. **Overview** → Channel3 **Use for RFQ** (or type a brief) → **Review draft** → **Queue negotiation**.
 3. Wait for status **SUCCEEDED** → **Supplier offers** → inspect AG Grid ranks.
 4. (Optional money path) **Checkout winning offer** → complete PayPal sandbox approve → **Authorize hold**.
-5. **Payables** → keep sample invoice text → **Extract** → **Match** with PO/receipt ≈ $1.50.
+5. **Payables** → keep sample invoice text → **Extract** → **Match**.
 6. **Automation** → Bryntum Gantt → **Simulate late capture** (bars should move/flag) → **Reset plan**.
 
 ---
@@ -26,7 +26,7 @@ Free Render services may cold-start (~30–60s). If the first click is slow, wai
 | Step | Where | What to expect |
 |---|---|---|
 | A1 | Overview | Dual-track cards: Marketplace + Payables |
-| A2 | Channel3 **Use for RFQ** | Brief fills with a real catalog product ≤ $2 (needs `CHANNEL3_API_KEY` on API) |
+| A2 | Channel3 **Use for RFQ** | Brief fills from catalog (needs `CHANNEL3_API_KEY` on API) |
 | A3 | Queue negotiation | Buyer/seller agents run; SSE stream shows messages |
 | A4 | Supplier offers | AG Grid ranks offers; eligible winner highlighted |
 | A5 | Checkout | PayPal AUTHORIZE order created; approve as sandbox buyer |
@@ -42,7 +42,7 @@ Free Render services may cold-start (~30–60s). If the first click is slow, wai
 | Step | Where | What to expect |
 |---|---|---|
 | B1 | Payables | Sample invoice text already loaded |
-| B2 | Extract | LLM extracts vendor / amount / due (≤ $2) |
+| B2 | Extract | LLM extracts vendor / amount / due |
 | B3 | Match | PO + receipt ≈ invoice → MATCHED |
 | B4 | Payout | PayPal Payouts batch when MATCHED (sandbox) |
 | B5 | Client invoice | Agent Toolkit create/send invoice (optional) |

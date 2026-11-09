@@ -43,7 +43,7 @@ sponsorsRouter.post("/channel3/search", async (req, res) => {
   if (!query || query.length > 200) {
     return res.status(400).json({ error: "query must be 1..200 characters" });
   }
-  const cap = demoMaxUsd() ?? 2;
+  const cap = demoMaxUsd() ?? 250;
   const maxPrice = Number(req.body?.maxPrice ?? cap);
   const priceCap = assertDemoAmount(maxPrice, "Channel3 maxPrice");
   if (!priceCap.ok) return res.status(400).json({ error: priceCap.error });

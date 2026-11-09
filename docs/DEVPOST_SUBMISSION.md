@@ -38,18 +38,18 @@ https://github.com/suhail39ahmed/agentic-procurement
 
 ## Text description (paste into Devpost)
 
-**ProcureAI** is a dual-track agentic procurement platform for small businesses, built for the PayPal AI Hackathon (sandbox only, demo spend cap ≤ $2).
+**ProcureAI** is a dual-track agentic procurement platform for small businesses, built for the PayPal AI Hackathon (sandbox only).
 
 ### Track 1 — Agent-to-agent marketplace
-1. Owner creates an RFQ (or enriches it from **Channel3** catalog search ≤ $2).
+1. Owner creates an RFQ (or enriches it from **Channel3** catalog search).
 2. Buyer AI negotiates with seller AIs (BATNA, multi-round counters).
-3. Offers rank live in **AG Grid**; policy + signed mandate gate payment.
+3. Offers rank live in **AG Grid**; policy + signed mandate gate payment (above-threshold totals need human approval).
 4. **PayPal** AUTHORIZE holds funds → seller ships → owner confirms → CAPTURE.
 5. Verified webhooks keep a replay-safe order ledger (including disputes).
 
 ### Track 2 — AI procurement & payables
 1. Paste supplier invoice text (or fetch a page via **KERNEL**) → LLM extract.
-2. Three-way match (PO / receipt / invoice) under the demo cap.
+2. Three-way match (PO / receipt / invoice).
 3. **PayPal Payouts** when MATCHED; client invoices via Agent Toolkit.
 4. **Bryntum Gantt**: an agent watches PayPal capture / refund / dispute signals and moves or flags authorize → delivery → capture → payout milestones (demo buttons + live webhooks).
 

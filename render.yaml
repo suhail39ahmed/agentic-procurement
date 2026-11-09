@@ -39,7 +39,11 @@ services:
       - key: MANDATE_SECRET
         sync: false
       - key: DEMO_MAX_USD
-        value: "2"
+        value: "250"
+      - key: POLICY_APPROVAL_THRESHOLD
+        value: "250"
+      - key: POLICY_MAX_ORDER_TOTAL
+        value: "10000"
       - key: CHANNEL3_API_KEY
         sync: false
       - key: KERNEL_API_KEY
