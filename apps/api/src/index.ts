@@ -49,6 +49,20 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", paypalEnv: "sandbox" });
 });
 
+/** Public PayPal JS SDK config (client id is designed to be browser-visible). */
+app.get("/api/paypal/browser-config", (_req, res) => {
+  const clientId = process.env.PAYPAL_CLIENT_ID?.trim() ?? "";
+  if (!clientId) {
+    return res.status(503).json({ error: "PAYPAL_CLIENT_ID not configured" });
+  }
+  return res.json({
+    clientId,
+    currency: "USD",
+    intent: "authorize",
+    env: (process.env.PAYPAL_ENV ?? "sandbox").toLowerCase() === "live" ? "live" : "sandbox",
+  });
+});
+
 app.use("/api/webhooks/paypal", webhookLimiter, paypalWebhookRouter);
 app.use("/api", apiLimiter);
 app.use("/api/audit", auditRouter);

@@ -131,6 +131,7 @@ checkoutRouter.post("/negotiations/:id/checkout", async (req, res) => {
         negotiationId: row.id,
         orderId: existing.orderId,
         status: order?.status ?? "UNKNOWN",
+        paypalOrderId: existing.paypalOrderId,
         approveUrl: existing.approveUrl,
         amount: existing.amount,
         supplierId: existing.supplierId,
@@ -192,6 +193,7 @@ checkoutRouter.post("/negotiations/:id/checkout", async (req, res) => {
       negotiationId: row.id,
       orderId: order.id,
       status: order.status,
+      paypalOrderId: intent.orderId,
       approveUrl: intent.approveUrl,
       amount: expected.amount,
       supplierId: decision.supplierId,
@@ -203,7 +205,7 @@ checkoutRouter.post("/negotiations/:id/checkout", async (req, res) => {
       },
       policy: decision.outcome,
       reuse: false,
-      note: "Open approveUrl as the sandbox buyer, then call authorize.",
+      note: "Approve with the in-app PayPal button (popup), then Authorize hold — or use approveUrl as fallback.",
     });
   } catch (err) {
     console.error("[checkout] create failed", err);
@@ -346,6 +348,7 @@ checkoutRouter.get("/orders/:id", async (req, res) => {
     const checkout = checkoutFromResult(negotiation.result);
     return res.json({
       ...order,
+      paypalOrderId: checkout?.paypalOrderId ?? order.paypalOrderId ?? null,
       approveUrl: checkout?.approveUrl ?? null,
       negotiationId: negotiation.id,
     });

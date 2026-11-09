@@ -19,6 +19,7 @@ import { StretchPanel } from "./StretchPanel";
 import { PayablesPanel } from "./PayablesPanel";
 import { DisputePanel } from "./DisputePanel";
 import { SponsorsPanel } from "./SponsorsPanel";
+import { PayPalApproveButtons, paypalOrderIdFromApproveUrl } from "./PayPalApproveButtons";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -358,6 +359,7 @@ export default function Dashboard() {
   const [activeOrder, setActiveOrder] = useState<{
     orderId: string;
     status: string;
+    paypalOrderId?: string | null;
     approveUrl?: string | null;
     amount?: string;
     supplierId?: string;
@@ -451,7 +453,7 @@ export default function Dashboard() {
 
   async function hydrateOrder(
     orderId: string,
-    fallback?: { approveUrl?: string; amount?: string; supplierId?: string },
+    fallback?: { paypalOrderId?: string; approveUrl?: string; amount?: string; supplierId?: string },
   ) {
     try {
       const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, { cache: "no-store" });
@@ -459,6 +461,7 @@ export default function Dashboard() {
         setActiveOrder({
           orderId,
           status: "APPROVED",
+          paypalOrderId: fallback?.paypalOrderId ?? paypalOrderIdFromApproveUrl(fallback?.approveUrl),
           approveUrl: fallback?.approveUrl,
           amount: fallback?.amount,
           supplierId: fallback?.supplierId,
@@ -468,6 +471,7 @@ export default function Dashboard() {
       const payload = await response.json() as {
         id?: string;
         status?: string;
+        paypalOrderId?: string | null;
         approveUrl?: string | null;
         amount?: number | string;
         supplierId?: string;
@@ -475,10 +479,14 @@ export default function Dashboard() {
         captureId?: string;
         tracking?: { carrier: string; number: string };
       };
+      const approveUrl = payload.approveUrl ?? fallback?.approveUrl;
       setActiveOrder({
         orderId: payload.id ?? orderId,
         status: payload.status ?? "APPROVED",
-        approveUrl: payload.approveUrl ?? fallback?.approveUrl,
+        paypalOrderId: payload.paypalOrderId
+          ?? fallback?.paypalOrderId
+          ?? paypalOrderIdFromApproveUrl(approveUrl),
+        approveUrl,
         amount: payload.amount != null ? String(payload.amount) : fallback?.amount,
         supplierId: payload.supplierId ?? fallback?.supplierId,
         authorizationId: payload.authorizationId,
@@ -489,6 +497,7 @@ export default function Dashboard() {
       setActiveOrder({
         orderId,
         status: "APPROVED",
+        paypalOrderId: fallback?.paypalOrderId ?? paypalOrderIdFromApproveUrl(fallback?.approveUrl),
         approveUrl: fallback?.approveUrl,
         amount: fallback?.amount,
         supplierId: fallback?.supplierId,
@@ -1006,6 +1015,7 @@ export default function Dashboard() {
         error?: string;
         orderId?: string;
         status?: string;
+        paypalOrderId?: string;
         approveUrl?: string;
         amount?: string;
         supplierId?: string;
@@ -1017,11 +1027,12 @@ export default function Dashboard() {
       setActiveOrder({
         orderId: payload.orderId ?? "",
         status: payload.status ?? "APPROVED",
+        paypalOrderId: payload.paypalOrderId ?? paypalOrderIdFromApproveUrl(payload.approveUrl),
         approveUrl: payload.approveUrl,
         amount: payload.amount,
         supplierId: payload.supplierId,
       });
-      setNotice("Checkout created. Open the PayPal approve link as the sandbox buyer, finish Pay Now, then Authorize hold.");
+      setNotice("Checkout created. Use Pay with PayPal (popup) as the sandbox buyer, then we authorize the hold.");
       setView("Payments & orders");
     } catch {
       setNotice("Checkout failed. Check API/PayPal sandbox configuration.");
@@ -1861,16 +1872,31 @@ export default function Dashboard() {
                   {activeOrder.tracking && <div><dt>Tracking</dt><dd>{activeOrder.tracking.carrier} {activeOrder.tracking.number}</dd></div>}
                   {activeOrder.captureId && <div><dt>Capture</dt><dd>{activeOrder.captureId}</dd></div>}
                 </dl>
-                {activeOrder.approveUrl && activeOrder.status === "APPROVED" && (
-                  <p className={s.summaryNote}>
-                    Step 1 — open this link as the sandbox buyer and click Complete Purchase:{" "}
-                    <a href={activeOrder.approveUrl} target="_blank" rel="noreferrer">Approve on PayPal</a>
-                    . Step 2 — return here and click Authorize hold (it fails until PayPal approval finishes).
-                  </p>
+                {activeOrder.status === "APPROVED" && (activeOrder.paypalOrderId || activeOrder.approveUrl) && (
+                  <div className={s.paypalApproveBlock}>
+                    {activeOrder.paypalOrderId && (
+                      <PayPalApproveButtons
+                        paypalOrderId={activeOrder.paypalOrderId}
+                        onApproved={async () => {
+                          setNotice("PayPal buyer approved in popup — authorizing hold…");
+                          await authorizeHold();
+                        }}
+                        onCancel={() => setNotice("PayPal popup cancelled — approve again when ready.")}
+                        onError={(message) => setNotice(message)}
+                      />
+                    )}
+                    {activeOrder.approveUrl && (
+                      <p className={s.summaryNote}>
+                        Fallback — open in a new tab as the sandbox buyer:{" "}
+                        <a href={activeOrder.approveUrl} target="_blank" rel="noreferrer">Approve on PayPal</a>
+                        , then click Authorize hold.
+                      </p>
+                    )}
+                  </div>
                 )}
                 <div className={s.reviewActions}>
                   {activeOrder.status === "APPROVED" && (
-                    <button type="button" className={s.primary} disabled={orderBusy} onClick={() => void authorizeHold()}>
+                    <button type="button" className={s.secondary} disabled={orderBusy} onClick={() => void authorizeHold()}>
                       Authorize hold
                     </button>
                   )}
