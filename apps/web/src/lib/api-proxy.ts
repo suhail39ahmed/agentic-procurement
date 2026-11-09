@@ -9,23 +9,26 @@ export function backendConfig() {
 
 export async function proxyToApi(
   path: string,
-  init: RequestInit & { timeoutMs?: number } = {},
+  init: RequestInit & { timeoutMs?: number; demoRole?: "buyer" | "owner" | null } = {},
 ) {
   const config = backendConfig();
   if (!config) {
     return NextResponse.json({ error: "Server configuration is missing" }, { status: 503 });
   }
 
+  const { demoRole, timeoutMs, ...fetchInit } = init;
+
   try {
     const response = await fetch(new URL(path, config.baseUrl), {
-      ...init,
+      ...fetchInit,
       headers: {
         "x-owner-key": config.ownerKey,
-        ...(init.body ? { "content-type": "application/json" } : {}),
-        ...init.headers,
+        ...(demoRole ? { "x-demo-role": demoRole } : {}),
+        ...(fetchInit.body ? { "content-type": "application/json" } : {}),
+        ...fetchInit.headers,
       },
       cache: "no-store",
-      signal: AbortSignal.timeout(init.timeoutMs ?? 60_000),
+      signal: AbortSignal.timeout(timeoutMs ?? 60_000),
     });
     const text = await response.text();
     return new NextResponse(text, {

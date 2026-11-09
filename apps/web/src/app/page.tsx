@@ -3,9 +3,9 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   ArrowRight, ArrowUpRight, Bot, Check, ChevronDown, ChevronRight,
-  CircleHelp, CreditCard, FileText, Layers3, LayoutDashboard,
+  CircleHelp, CreditCard, FileText, Layers3, LayoutDashboard, LogOut,
   Maximize2, Menu, Minimize2, Package, PackageSearch, Plus,
-  RefreshCw, Search, Send, ShieldCheck, Sparkles, Wallet, X,
+  RefreshCw, Search, Send, ShieldCheck, Sparkles, UserRound, Wallet, X,
 } from "lucide-react";
 import { AgGridReact } from "ag-grid-react";
 import {
@@ -22,6 +22,16 @@ import { DisputePanel } from "./DisputePanel";
 import { SponsorsPanel } from "./SponsorsPanel";
 import { OverviewSchedulePanel } from "./OverviewSchedulePanel";
 import { PayPalApproveButtons, paypalOrderIdFromApproveUrl } from "./PayPalApproveButtons";
+import {
+  DEMO_ACCOUNTS,
+  clearDemoSession,
+  demoRoleHeaders,
+  isOwnerRole,
+  readDemoSession,
+  writeDemoSession,
+  type DemoRole,
+  type DemoSession,
+} from "../lib/demo-auth";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -382,6 +392,14 @@ export default function Dashboard() {
   const [offerSearch, setOfferSearch] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [notice, setNotice] = useState(paypalBoot.notice);
+  const [demoSession, setDemoSession] = useState<DemoSession | null>(() => {
+    if (typeof window === "undefined") return null;
+    return readDemoSession();
+  });
+  const [demoAuthReady] = useState(true);
+  const [loginUser, setLoginUser] = useState(() => readDemoSession()?.role === "owner" ? "owner" : "buyer");
+  const [loginPass, setLoginPass] = useState(() => readDemoSession()?.role === "owner" ? "owner" : "buyer");
+  const [loginError, setLoginError] = useState("");
   const [processHelpOpen, setProcessHelpOpen] = useState(false);
   const [needsAttentionOpen, setNeedsAttentionOpen] = useState(true);
   const [recentCapturedOpen, setRecentCapturedOpen] = useState(true);
@@ -478,8 +496,8 @@ export default function Dashboard() {
 
   function nextPaymentStepLabel(payment: string): string {
     if (payment === "APPROVED") return "Needs PayPal approve → Authorize hold";
-    if (payment === "HELD") return "Needs Mark shipped";
-    if (payment === "SHIPPED") return "Needs Confirm delivery & capture";
+    if (payment === "HELD") return "Waiting for seller ship notice";
+    if (payment === "SHIPPED") return "Needs owner Confirm delivery & capture";
     if (payment === "CAPTURED") return "Complete";
     return payment;
   }
@@ -582,9 +600,10 @@ export default function Dashboard() {
     if (payment === "APPROVED") {
       setNotice("Resumed checkout — approve in the PayPal popup (or link), then Authorize hold.");
     } else if (payment === "HELD") {
-      setNotice("Funds already held — next step: Mark shipped.");
+      setNotice("Funds on hold — waiting for seller ship notice (auto ~2s), or Force seller ship notice.");
+      void watchForSellerShipment(saved.orderId);
     } else if (payment === "SHIPPED") {
-      setNotice("Shipped — next step: Confirm delivery & capture.");
+      setNotice("Seller already shipped — Owner must Confirm delivery & capture.");
     } else {
       setNotice("Opened Payments for this request.");
     }
@@ -605,8 +624,8 @@ export default function Dashboard() {
 
   function paymentActionLabel(payment: string): string | null {
     if (payment === "APPROVED") return "Pay";
-    if (payment === "HELD") return "Mark shipped";
-    if (payment === "SHIPPED") return "Capture";
+    if (payment === "HELD") return "Await ship";
+    if (payment === "SHIPPED") return "Confirm";
     if (payment === "CAPTURED") return "View";
     return null;
   }
@@ -834,6 +853,7 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
+    if (!demoSession) return;
     void loadNegotiations();
     if (paypalBoot.clearQuery) {
       window.history.replaceState({}, "", "/");
@@ -843,7 +863,48 @@ export default function Dashboard() {
       eventSourceRef.current?.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [demoSession?.role]);
+
+  const demoRole: DemoRole | null = demoSession?.role ?? null;
+  const isOwner = isOwnerRole(demoRole);
+
+  function signInAs(role: DemoRole) {
+    const account = DEMO_ACCOUNTS[role];
+    const session: DemoSession = {
+      role: account.role,
+      name: account.name,
+      signedInAt: new Date().toISOString(),
+    };
+    writeDemoSession(session);
+    setDemoSession(session);
+    setLoginError("");
+    setNotice(`Signed in as ${account.name}.`);
+  }
+
+  function submitDemoLogin(event: FormEvent) {
+    event.preventDefault();
+    const user = loginUser.trim().toLowerCase();
+    const pass = loginPass.trim();
+    const buyerOk = user === DEMO_ACCOUNTS.buyer.username && pass === DEMO_ACCOUNTS.buyer.password;
+    const ownerOk = user === DEMO_ACCOUNTS.owner.username && pass === DEMO_ACCOUNTS.owner.password;
+    if (buyerOk) {
+      signInAs("buyer");
+      return;
+    }
+    if (ownerOk) {
+      signInAs("owner");
+      return;
+    }
+    setLoginError("Use buyer/buyer or owner/owner for this sandbox demo.");
+  }
+
+  function signOutDemo() {
+    clearDemoSession();
+    setDemoSession(null);
+    setPendingOwnerApproval(null);
+    setActiveOrder(null);
+    setNotice("Signed out. Pick Buyer or Owner to continue the demo.");
+  }
 
   useEffect(() => {
     syncGridRows(offersGridApi.current, offers, (row) => row.supplier);
@@ -1313,11 +1374,15 @@ export default function Dashboard() {
     setOrderBusy(true);
     setNotice(approve ? "Recording owner approval…" : "Recording owner denial…");
     try {
+      if (!isOwner) {
+        setNotice("Switch to Owner login (owner / owner) to approve or deny this spend.");
+        return;
+      }
       const response = await fetch(
         `/api/negotiations/${encodeURIComponent(pendingOwnerApproval.negotiationId)}/checkout/owner-decide`,
         {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", ...demoRoleHeaders(demoRole) },
           body: JSON.stringify({ approve }),
         },
       );
@@ -1410,7 +1475,8 @@ export default function Dashboard() {
         amount: payload.amount,
       });
       await loadNegotiations();
-      setNotice("Funds on hold (HELD). Stop here for the metric — or Mark shipped when you want to continue.");
+      setNotice("Funds on hold (HELD). Listening for seller shipment notice…");
+      void watchForSellerShipment(orderId);
     } catch {
       setNotice("Authorize failed.");
     } finally {
@@ -1418,33 +1484,54 @@ export default function Dashboard() {
     }
   }
 
+  async function ingestSellerShipNotice(
+    orderId: string,
+    source: "seller-agent" | "email-bridge" = "seller-agent",
+  ) {
+    const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}/seller-shipped`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source }),
+    });
+    const payload = await response.json().catch(() => ({})) as {
+      error?: string;
+      status?: string;
+      tracking?: { carrier: string; number: string };
+      note?: string;
+    };
+    if (!response.ok) {
+      throw new Error(payload.error ?? `Seller ship notice failed (${response.status})`);
+    }
+    setActiveOrder((current) => current && current.orderId === orderId ? {
+      ...current,
+      status: payload.status ?? "SHIPPED",
+      tracking: payload.tracking,
+    } : current);
+    await loadNegotiations();
+    setNotice(
+      payload.note
+      ?? "Seller reported shipped. Switch to Owner and click Confirm delivery & capture — money stays on hold until then.",
+    );
+  }
+
+  /** After funds are held, wait briefly then ingest a seller-agent (or email-style) ship notice. Capture stays owner-click only. */
+  async function watchForSellerShipment(orderId: string) {
+    setNotice("Funds on hold — waiting for seller agent shipment notice (demo ~2s)…");
+    await new Promise((resolve) => window.setTimeout(resolve, 2200));
+    try {
+      await ingestSellerShipNotice(orderId, "seller-agent");
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Seller ship notice failed — use Force seller ship notice.");
+    }
+  }
+
   async function markOrderShipped() {
     if (!activeOrder?.orderId || orderBusy) return;
     setOrderBusy(true);
-    setNotice("Recording shipment…");
     try {
-      const response = await fetch(`/api/orders/${encodeURIComponent(activeOrder.orderId)}/ship`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ carrier: "UPS", number: "1Z999AA10123456784" }),
-      });
-      const payload = await response.json().catch(() => ({})) as {
-        error?: string;
-        status?: string;
-        tracking?: { carrier: string; number: string };
-      };
-      if (!response.ok) {
-        setNotice(payload.error ?? `Ship failed (${response.status}).`);
-        return;
-      }
-      setActiveOrder(current => current ? {
-        ...current,
-        status: payload.status ?? "SHIPPED",
-        tracking: payload.tracking,
-      } : current);
-      setNotice("Marked shipped. Confirm delivery to capture.");
-    } catch {
-      setNotice("Ship failed.");
+      await ingestSellerShipNotice(activeOrder.orderId, "email-bridge");
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Ship failed.");
     } finally {
       setOrderBusy(false);
     }
@@ -1452,11 +1539,16 @@ export default function Dashboard() {
 
   async function confirmDeliveryCapture() {
     if (!activeOrder?.orderId || orderBusy) return;
+    if (!isOwner) {
+      setNotice("Switch to Owner login (owner / owner) to confirm delivery & capture.");
+      return;
+    }
     setOrderBusy(true);
     setNotice("Confirming delivery and capturing funds…");
     try {
       const response = await fetch(`/api/orders/${encodeURIComponent(activeOrder.orderId)}/confirm-delivery`, {
         method: "POST",
+        headers: { ...demoRoleHeaders(demoRole) },
       });
       const payload = await response.json().catch(() => ({})) as {
         error?: string;
@@ -1492,6 +1584,70 @@ export default function Dashboard() {
     }
   }
 
+  if (!demoAuthReady) {
+    return <div className={s.app}><p className={s.description} style={{ padding: 40 }}>Loading workspace…</p></div>;
+  }
+
+  if (!demoSession) {
+    return (
+      <div className={s.app}>
+        <main className={s.loginShell}>
+          <section className={s.loginCard}>
+            <div className={s.inlineTitle}>
+              <span className={s.brandIcon}><Layers3 size={22} /></span>
+              <div>
+                <h1>ProcureAI demo login</h1>
+                <p className={s.description}>
+                  Sandbox roles only — Buyer creates buys; Owner approves spends over $20 and captures.
+                </p>
+              </div>
+            </div>
+            <div className={s.loginRoleGrid}>
+              <button type="button" className={s.trackCard} onClick={() => signInAs("buyer")}>
+                <span className={s.iconTile}><UserRound size={20} /></span>
+                <h3>Buyer</h3>
+                <p>{DEMO_ACCOUNTS.buyer.blurb}</p>
+                <span className={s.trackCta}>
+                  <span className={s.trackRadio} aria-hidden />
+                  <ArrowRight size={14} aria-hidden />
+                  Continue as Buyer
+                </span>
+              </button>
+              <button type="button" className={s.trackCard} onClick={() => signInAs("owner")}>
+                <span className={s.iconTile}><ShieldCheck size={20} /></span>
+                <h3>Owner</h3>
+                <p>{DEMO_ACCOUNTS.owner.blurb}</p>
+                <span className={s.trackCta}>
+                  <span className={s.trackRadio} aria-hidden />
+                  <ArrowRight size={14} aria-hidden />
+                  Continue as Owner
+                </span>
+              </button>
+            </div>
+            <form className={s.loginForm} onSubmit={submitDemoLogin}>
+              <p className={s.description}>Or sign in with demo credentials</p>
+              <div className={s.fieldGrid}>
+                <div className={s.field}>
+                  <label htmlFor="demo-user">Username</label>
+                  <input id="demo-user" value={loginUser} onChange={(e) => setLoginUser(e.target.value)} autoComplete="username" />
+                </div>
+                <div className={s.field}>
+                  <label htmlFor="demo-pass">Password</label>
+                  <input id="demo-pass" type="password" value={loginPass} onChange={(e) => setLoginPass(e.target.value)} autoComplete="current-password" />
+                </div>
+              </div>
+              {loginError && <p className={s.fieldError} role="alert">{loginError}</p>}
+              <div className={s.reviewActions}>
+                <button type="submit" className={s.primary}>Sign in</button>
+              </div>
+              <p className={s.tableNote}>buyer / buyer · owner / owner</p>
+            </form>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className={s.app}>
       <a className={s.skip} href="#workspace-main">Skip to workspace</a>
@@ -1502,8 +1658,11 @@ export default function Dashboard() {
           <span>Procure<span className={s.brandAI}>AI</span><small>AGENTIC PROCUREMENT</small></span>
           </Link>
         <div className={s.workspace}>
-          <span className={s.avatar}>S</span>
-          <div>My workspace<small>Owner workspace</small></div>
+          <span className={s.avatar}>{isOwner ? "O" : "B"}</span>
+          <div>
+            {demoSession.name}
+            <small>{isOwner ? "Owner session" : "Buyer session"}</small>
+          </div>
           <ShieldCheck size={17} />
         </div>
         <p className={s.navLabel}>WORKSPACE</p>
@@ -1523,7 +1682,34 @@ export default function Dashboard() {
             <strong>AI negotiates.<br />You stay in control.</strong>
             <p>Payment authorization and capture remain separate, guarded actions.</p>
           </div>
-          <div className={s.profile}><span className={s.avatar}>S</span><div>Suhail<small>Workspace owner</small></div></div>
+          <div className={s.profile}>
+            <span className={s.avatar}>{isOwner ? "O" : "B"}</span>
+            <div>
+              {isOwner ? "Owner" : "Buyer"}
+              <small>{isOwner ? "Can approve & capture" : "Can buy & hold"}</small>
+            </div>
+            <button type="button" className={s.textButton} title="Sign out of demo role" onClick={signOutDemo}>
+              <LogOut size={15} />
+            </button>
+          </div>
+          <div className={s.roleSwitch}>
+            <button
+              type="button"
+              className={isOwner ? s.secondary : s.primary}
+              disabled={!isOwner}
+              onClick={() => signInAs("buyer")}
+            >
+              Buyer
+            </button>
+            <button
+              type="button"
+              className={isOwner ? s.primary : s.secondary}
+              disabled={isOwner}
+              onClick={() => signInAs("owner")}
+            >
+              Owner
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -1595,8 +1781,8 @@ export default function Dashboard() {
                       <li><em>Overview</em> → Channel3 search (e.g. sticky notes) → pick product → <em>Use market price → Review</em> → <em>Queue negotiation</em>. Or <em>Load demo request</em> / track card <em>Start negotiation demo</em> for chairs.</li>
                       <li>Wait until status <em>SUCCEEDED</em> (Requests / Negotiations grid). Click <em>Offers</em> on that row.</li>
                       <li>Check AG Grid: unit price, delivery days, match score, Eligible. Live SSE shows buyer/seller counters.</li>
-                      <li><em>Checkout winning offer</em> → <em>Payments</em> → PayPal popup (sandbox buyer). Hold runs automatically → <em>HELD</em> / Funds on hold. Use <em>Authorize hold</em> only after the fallback approve link.</li>
-                      <li>Stop at HELD for the Funds on hold metric. Then Needs attention: <em>Ship</em> → <em>Capture</em>. Captured: <em>Recently captured → View</em>.</li>
+                      <li><em>Checkout</em> → PayPal popup. Hold → <em>HELD</em>. Seller agent ship notice auto-moves to <em>SHIPPED</em> (~2s). Capture is never automatic.</li>
+                      <li>Switch to <em>Owner</em> → <em>Confirm delivery &amp; capture</em>. Captured: <em>Recently captured → View</em>.</li>
                       <li>Overview Bryntum Gantt: one bar per live checkout; hover status dots (green done / orange action / blue hold).</li>
                     </ol>
 
@@ -2276,11 +2462,16 @@ export default function Dashboard() {
                   <div><dt>Order total</dt><dd>${pendingOwnerApproval.orderTotal.toFixed(2)} USD</dd></div>
                   <div><dt>Policy</dt><dd>{pendingOwnerApproval.reasons.join("; ") || "Above approval threshold"}</dd></div>
                 </dl>
+                {!isOwner && (
+                  <p className={s.summaryNote}>
+                    You are signed in as <strong>Buyer</strong>. Switch to <strong>Owner</strong> (sidebar or owner/owner) to approve this spend.
+                  </p>
+                )}
                 <div className={s.reviewActions}>
-                  <button type="button" className={s.secondary} disabled={orderBusy} onClick={() => void decideOwnerCheckout(false)}>
+                  <button type="button" className={s.secondary} disabled={orderBusy || !isOwner} onClick={() => void decideOwnerCheckout(false)}>
                     Deny
                   </button>
-                  <button type="button" className={s.primary} disabled={orderBusy} onClick={() => void decideOwnerCheckout(true)}>
+                  <button type="button" className={s.primary} disabled={orderBusy || !isOwner} onClick={() => void decideOwnerCheckout(true)}>
                     Approve as owner <ArrowRight size={16} />
                   </button>
                 </div>
@@ -2486,23 +2677,42 @@ export default function Dashboard() {
                   {activeOrder.status === "HELD" && (
                     <>
                       <p className={s.summaryNote} style={{ flexBasis: "100%", margin: "0 0 4px" }}>
-                        Status is <strong>HELD</strong> — Funds on hold. Stop here for the demo metric, or continue to ship.
+                        <strong>HELD</strong> — funds on hold. Seller agent (or shipment email bridge) should move this to SHIPPED automatically.
+                        Capture still needs an Owner click.
                       </p>
-                      <button type="button" className={s.primary} disabled={orderBusy} onClick={() => void markOrderShipped()}>
-                        Mark shipped
+                      <button
+                        type="button"
+                        className={s.secondary}
+                        disabled={orderBusy}
+                        title="Simulate seller-agent / shipment-email notice now"
+                        onClick={() => void markOrderShipped()}
+                      >
+                        Force seller ship notice
                       </button>
                     </>
                   )}
                   {activeOrder.status === "SHIPPED" && (
-                    <button type="button" className={s.primary} disabled={orderBusy} onClick={() => void confirmDeliveryCapture()}>
-                      Confirm delivery & capture
-                    </button>
+                    <>
+                      <p className={s.summaryNote} style={{ flexBasis: "100%", margin: "0 0 4px" }}>
+                        Supplier reported <strong>SHIPPED</strong>
+                        {activeOrder.tracking ? ` (${activeOrder.tracking.carrier} ${activeOrder.tracking.number})` : ""}.
+                        Money is still on hold until Owner confirms delivery.
+                      </p>
+                      {!isOwner && (
+                        <p className={s.summaryNote} style={{ flexBasis: "100%" }}>
+                          Capture requires <strong>Owner</strong> login (owner / owner).
+                        </p>
+                      )}
+                      <button type="button" className={s.primary} disabled={orderBusy || !isOwner} onClick={() => void confirmDeliveryCapture()}>
+                        Confirm delivery & capture
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
             )}
             {view === "Payments & orders" && (
-              <DisputePanel notice={notice} setNotice={setNotice} />
+              <DisputePanel notice={notice} setNotice={setNotice} demoRole={demoRole} />
             )}
             <div className={s.paymentFoot}><ShieldCheck size={16} /><span>AI recommendations do not authorize or capture payments.</span></div>
           </section>}

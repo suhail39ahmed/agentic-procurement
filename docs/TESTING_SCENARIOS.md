@@ -4,6 +4,15 @@
 
 If the first load is slow, wait about a minute and refresh once (hosted demo can sleep when idle).
 
+### Demo logins
+
+| Role | Username / password | Can do |
+|---|---|---|
+| **Buyer** | `buyer` / `buyer` | RFQ, negotiate, checkout, PayPal approve; seller ship notice is automatic |
+| **Owner** | `owner` / `owner` | Approve spends **over $20**, **Confirm delivery & capture**, accept disputes |
+
+Use the login screen (or sidebar Buyer/Owner switch). Over-$20 checkout stops until an **Owner** approves.
+
 ---
 
 ## What you’re doing in plain terms
@@ -63,11 +72,11 @@ You run a small business buying supplies.
 
 1. Repeat a small buy like Story A (another sticky-note or low-budget request).  
 2. Checkout → PayPal approve → wait for **on hold**.  
-3. Click **Mark shipped** (seller delivered / you record shipment).  
-4. Click **Confirm delivery & capture** (you accept delivery; PayPal takes the funds).  
+3. **Seller ship is automated** — after hold, the seller agent (demo) posts a shipment notice (~2s) → status **SHIPPED**. (Optional: **Force seller ship notice** if you don’t want to wait.)  
+4. Switch to **Owner** → click **Confirm delivery & capture** (you still confirm; money is not taken automatically).  
 5. Under **Recently captured**, click **View** to see order / capture details.
 
-**You should see:** Status **CAPTURED**; money is no longer only on hold.
+**You should see:** HELD → SHIPPED without you typing tracking; **CAPTURED** only after Owner confirm.
 
 ---
 

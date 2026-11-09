@@ -304,6 +304,15 @@ checkoutRouter.post("/negotiations/:id/checkout/owner-decide", async (req, res) 
   if (!ownerId) return res.sendStatus(404);
   if (!process.env.DATABASE_URL) return res.status(503).json({ error: "Database unavailable" });
 
+  const demoRole = String(req.header("x-demo-role") ?? "").toLowerCase();
+  if (demoRole && demoRole !== "owner") {
+    return res.status(403).json({
+      error: "Owner login required to approve or deny this spend.",
+      requiredRole: "owner",
+      currentRole: demoRole,
+    });
+  }
+
   const approve = req.body?.approve === true;
   const note = typeof req.body?.note === "string" ? req.body.note.slice(0, 300) : undefined;
 
@@ -442,7 +451,7 @@ checkoutRouter.post("/orders/:id/ship", async (req, res) => {
     const negotiation = await getNegotiationForOwner(ownerId, order.rfqId);
     if (!negotiation) return res.sendStatus(404);
 
-    // Owner-triggered demo ship on behalf of the winning supplier (sandbox convenience).
+    // Manual / ops ship (fallback). Prefer /seller-shipped for agent or email-bridge notices.
     const shipped = markShipped(order, order.supplierId, carrier, number);
     await saveOrder(shipped);
     const checkout = checkoutFromResult(negotiation.result);
@@ -456,6 +465,62 @@ checkoutRouter.post("/orders/:id/ship", async (req, res) => {
     });
   } catch (err) {
     console.error("[checkout] ship failed", err);
+    return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+/**
+ * Seller agent / shipment-email bridge: moves HELD → SHIPPED.
+ * Capture still requires an explicit owner Confirm delivery click.
+ */
+checkoutRouter.post("/orders/:id/seller-shipped", async (req, res) => {
+  const ownerId = requireOwner(req);
+  if (!ownerId) return res.sendStatus(404);
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: "Database unavailable" });
+
+  const source = typeof req.body?.source === "string" ? req.body.source.trim() : "seller-agent";
+  const carrier = typeof req.body?.carrier === "string" && req.body.carrier.trim()
+    ? req.body.carrier.trim().toUpperCase()
+    : "UPS";
+  const number = typeof req.body?.number === "string" && req.body.number.trim()
+    ? req.body.number.trim()
+    : `1Z${Date.now().toString().slice(-10)}`;
+
+  try {
+    const order = await getOrder(req.params.id);
+    if (!order) return res.sendStatus(404);
+    if (order.status === "SHIPPED" || order.status === "CAPTURED") {
+      return res.json({
+        orderId: order.id,
+        status: order.status,
+        tracking: order.tracking,
+        reuse: true,
+        note: "Already past hold — shipment notice ignored.",
+      });
+    }
+    if (order.status !== "HELD") {
+      return res.status(409).json({ error: `Seller ship notice only applies when HELD (now ${order.status})` });
+    }
+    const negotiation = await getNegotiationForOwner(ownerId, order.rfqId);
+    if (!negotiation) return res.sendStatus(404);
+
+    const shipped = markShipped(order, order.supplierId, carrier, number);
+    await saveOrder(shipped);
+    const checkout = checkoutFromResult(negotiation.result);
+    if (checkout && checkout.orderId === order.id) {
+      await mergeCheckout(negotiation, ownerId, { ...checkout, lastStatus: shipped.status });
+    }
+    return res.json({
+      orderId: shipped.id,
+      status: shipped.status,
+      tracking: shipped.tracking,
+      source,
+      note: source === "email-bridge"
+        ? "Shipment email ingested — status SHIPPED. Owner must still confirm delivery to capture."
+        : "Seller agent reported shipped — status SHIPPED. Owner must still confirm delivery to capture.",
+    });
+  } catch (err) {
+    console.error("[checkout] seller-shipped failed", err);
     return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
 });

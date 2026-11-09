@@ -17,10 +17,13 @@ type LocalDispute = {
 export function DisputePanel({
   notice,
   setNotice,
+  demoRole = null,
 }: {
   notice: string;
   setNotice: (value: string) => void;
+  demoRole?: "buyer" | "owner" | null;
 }) {
+  const isOwner = demoRole === "owner";
   const [items, setItems] = useState<LocalDispute[]>([]);
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -92,11 +95,18 @@ export function DisputePanel({
   }
 
   async function accept(id: string) {
+    if (!isOwner) {
+      setNotice("Switch to Owner login (owner / owner) to accept a dispute claim.");
+      return;
+    }
     setBusy(true);
     try {
       const response = await fetch(`/api/disputes/${encodeURIComponent(id)}/accept`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          ...(demoRole ? { "x-demo-role": demoRole } : {}),
+        },
         body: JSON.stringify({ approved: true, note: "Owner approved from dashboard" }),
       });
       const payload = await response.json().catch(() => ({})) as { error?: string };
@@ -146,10 +156,10 @@ export function DisputePanel({
                   <button
                     type="button"
                     className={s.textButton}
-                    disabled={busy || !item.agentDraft || Boolean(item.acceptApprovedBy)}
+                    disabled={busy || !isOwner || !item.agentDraft || Boolean(item.acceptApprovedBy)}
                     onClick={() => void accept(item.disputeId)}
                   >
-                    Approve accept_dispute_claim <ArrowRight size={15} />
+                    {isOwner ? "Approve accept_dispute_claim" : "Owner login required"} <ArrowRight size={15} />
                   </button>
                 </div>
               </details>
