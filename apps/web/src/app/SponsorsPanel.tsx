@@ -113,7 +113,7 @@ export function SponsorsPanel({
       if (rows.length) setSelected("0");
       setNotice(
         rows.length
-          ? `${payload.note ?? "Channel3 results"} · choose from the dropdown, then Use for RFQ.`
+          ? `${payload.note ?? "Channel3 live results"} · pick one, then Use market price → Review.`
           : (payload.note ?? (payload.configured ? "No products" : "Channel3 not configured")),
       );
     } finally {
@@ -132,14 +132,14 @@ export function SponsorsPanel({
       : 25;
     const retailer = product.retailer ? ` from ${product.retailer}` : "";
     onChannel3Suggestion({
-      brief: `Supply 1× "${product.title}"${retailer}. Match or beat unit price ≤ $${unit.toFixed(2)} USD. Prefer in-stock; ship within 14 days.`.slice(0, 500),
+      brief: `Supply 1× "${product.title}"${retailer}. Match or beat Channel3 market unit price ≤ $${unit.toFixed(2)} USD. Prefer in-stock; ship within 14 days.`.slice(0, 500),
       quantity: "1",
       maxUnitPrice: unit.toFixed(2),
       currency: "USD",
       neededByDays: "14",
       priority: "balanced",
     });
-    setNotice(`Selected “${product.title}” — Overview RFQ filled. Review → Queue.`);
+    setNotice(`“${product.title}” @ $${unit.toFixed(2)} → Overview review (sellers must match/beat this).`);
   }
 
   async function kernelFetch() {
@@ -218,9 +218,9 @@ export function SponsorsPanel({
           <div className={s.inlineTitle}>
             <span className={s.iconTile}><PackageSearch size={20} /></span>
             <div>
-              <h2>Channel3 product catalog</h2>
+              <h2>Channel3 → RFQ ceiling</h2>
               <p className={s.description}>
-                Search real products and prices, pick one to fill the Overview RFQ.{" "}
+                Live Channel3 search (not our Postgres). Pick a product; its market price becomes the seller ceiling on Overview.{" "}
                 {status.channel3 ? "API key live." : "Set CHANNEL3_API_KEY to activate."}
               </p>
             </div>
@@ -263,7 +263,7 @@ export function SponsorsPanel({
                   if (product) applyCatalogProduct(product);
                 }}
               >
-                Use for RFQ <ArrowRight size={15} />
+                Use market price → Review <ArrowRight size={15} />
               </button>
             </div>
           )}

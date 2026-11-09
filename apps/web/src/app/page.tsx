@@ -796,7 +796,7 @@ export default function Dashboard() {
       if (products.length) setChannel3Selected("0");
       setNotice(
         products.length
-          ? `${payload.note ?? "Channel3 results"} · choose a product in the dropdown, then Use for RFQ.`
+          ? `${payload.note ?? "Channel3 live results"} · pick one, then Use market price → Review.`
           : (payload.note ?? "No Channel3 products matched — try another query."),
       );
     } finally {
@@ -804,7 +804,10 @@ export default function Dashboard() {
     }
   }
 
-  /** Apply one catalog row into the RFQ form (still Review → Queue to send to sellers). */
+  /**
+   * Channel3 utilization: live catalog search (not Postgres) → product title + market price
+   * become the RFQ ceiling sellers must match/beat. Queue later persists that RFQ in Postgres.
+   */
   function applyChannel3Product(product: {
     title: string;
     price?: number;
@@ -814,18 +817,29 @@ export default function Dashboard() {
       ? Math.min(product.price, 250)
       : 25;
     const retailer = product.retailer ? ` from ${product.retailer}` : "";
-    setFields({
-      brief: `Supply 1× "${product.title}"${retailer}. Match or beat unit price ≤ $${unit.toFixed(2)} USD. Prefer in-stock; ship within 14 days.`.slice(0, 500),
-      priority: "balanced",
+    const next = {
+      brief: `Supply 1× "${product.title}"${retailer}. Match or beat Channel3 market unit price ≤ $${unit.toFixed(2)} USD. Prefer in-stock; ship within 14 days.`.slice(0, 500),
+      priority: "balanced" as const,
       quantity: "1",
       maxUnitPrice: unit.toFixed(2),
-      currency: "USD",
+      currency: "USD" as const,
       neededByDays: "14",
-    });
-    setFieldErrors({});
+    };
+    setFields(next);
+    const result = validateFields(next);
+    setFieldErrors(result.errors);
+    if (result.draft) {
+      setPendingDraft(result.draft);
+      setComposerMode("review");
+      setNotice(
+        `Channel3 market price $${unit.toFixed(2)} is your RFQ ceiling. Confirm below, then Queue — sellers compete to match or beat it.`,
+      );
+      requestAnimationFrame(() => reviewHeadingRef.current?.focus());
+      return;
+    }
     setComposerMode("compose");
     setPendingDraft(null);
-    setNotice(`Selected “${product.title}” at $${unit.toFixed(2)}. Edit details if needed, then Review draft → Queue negotiation.`);
+    setNotice("Catalog product loaded — fix highlighted fields, then Review draft.");
     requestAnimationFrame(() => briefRef.current?.focus());
   }
 
@@ -1291,16 +1305,16 @@ export default function Dashboard() {
               </h2>
               <p className={s.description}>
                 {composerMode === "compose"
-                  ? "Use Channel3 to pick a catalog product, or type a brief. Review → Queue negotiation sends that RFQ to seller AIs."
-                  : "Edit anything that looks off. Queue negotiation is what sellers actually receive."}
+                  ? "Channel3 looks up a live market product + price; that price becomes the RFQ ceiling sellers must beat. Or write your own brief. Queue stores the RFQ in Postgres and starts seller negotiation."
+                  : "This draft uses the Channel3 market ceiling (or your typed budget). Queue negotiation is what sellers receive — that RFQ is saved in Postgres."}
               </p>
 
               {composerMode === "compose" ? (
                 <form onSubmit={reviewDraft} className={s.briefForm} noValidate>
                   <div className={s.channel3Box}>
-                    <label htmlFor={`${formId}-channel3`}>Option A — Channel3 catalog</label>
+                    <label htmlFor={`${formId}-channel3`}>1 · Market lookup (Channel3 live API)</label>
                     <p className={s.description}>
-                      Search products, pick one from the dropdown (name + price), then Use for RFQ.
+                      Not stored in our database — each search hits Channel3. Pick a product; we use its title + price as the seller ceiling, then open Review.
                     </p>
                     <div className={s.budgetRow}>
                       <input
@@ -1314,7 +1328,7 @@ export default function Dashboard() {
                         type="button"
                         className={s.secondary}
                         disabled={channel3Busy || !channel3Query.trim()}
-                        title="Search Channel3 catalog"
+                        title="Search Channel3 live catalog"
                         onClick={() => void searchChannel3Catalog()}
                       >
                         <PackageSearch size={15} /> {channel3Busy ? "Searching…" : "Search"}
@@ -1323,7 +1337,7 @@ export default function Dashboard() {
                     {channel3Products.length > 0 && (
                       <div className={s.channel3Pick}>
                         <div className={s.field}>
-                          <label htmlFor={`${formId}-channel3-pick`}>Select product</label>
+                          <label htmlFor={`${formId}-channel3-pick`}>Pick product (name · price · retailer)</label>
                           <select
                             id={`${formId}-channel3-pick`}
                             value={channel3Selected}
@@ -1346,21 +1360,21 @@ export default function Dashboard() {
                           type="button"
                           className={s.primary}
                           disabled={channel3Selected === ""}
-                          title="Fill RFQ fields from the selected Channel3 product"
+                          title="Set RFQ ceiling from Channel3 market price and open Review"
                           onClick={() => {
                             const product = channel3Products[Number(channel3Selected)];
                             if (product) applyChannel3Product(product);
                           }}
                         >
-                          Use for RFQ
+                          Use market price → Review
                         </button>
                       </div>
                     )}
                   </div>
 
-                  <div className={s.formDivider} role="separator">or fill in all the details yourself</div>
+                  <div className={s.formDivider} role="separator">or write your own brief</div>
 
-                  <label htmlFor={`${formId}-brief`}>Your procurement brief (sent to sellers)</label>
+                  <label htmlFor={`${formId}-brief`}>2 · Procurement brief (what sellers see)</label>
                   <textarea
                     ref={briefRef}
                     id={`${formId}-brief`}
@@ -1799,18 +1813,30 @@ export default function Dashboard() {
               <SponsorsPanel
                 setNotice={setNotice}
                 onChannel3Suggestion={(next) => {
-                  setFields({
+                  const loaded = {
                     brief: next.brief,
                     priority: next.priority,
                     quantity: next.quantity,
                     maxUnitPrice: next.maxUnitPrice,
                     currency: next.currency,
                     neededByDays: next.neededByDays,
-                  });
-                  setComposerMode("compose");
-                  setPendingDraft(null);
+                  };
+                  setFields(loaded);
+                  const result = validateFields(loaded);
+                  setFieldErrors(result.errors);
                   setView("Overview");
-                  setNotice("Channel3 RFQ loaded on Overview — Review draft → Queue negotiation for sellers.");
+                  if (result.draft) {
+                    setPendingDraft(result.draft);
+                    setComposerMode("review");
+                    setNotice(
+                      "Channel3 market price set as RFQ ceiling — confirm on Overview, then Queue so sellers compete to beat it.",
+                    );
+                    requestAnimationFrame(() => reviewHeadingRef.current?.focus());
+                  } else {
+                    setPendingDraft(null);
+                    setComposerMode("compose");
+                    setNotice("Channel3 product loaded on Overview — fix fields, then Review → Queue.");
+                  }
                 }}
                 onKernelInvoiceText={(text) => {
                   setPayablesSeed(text);

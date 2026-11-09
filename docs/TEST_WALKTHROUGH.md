@@ -64,12 +64,15 @@ Use this RFQ so the story is clear for the video and for you:
 | 2B.4 | Quantity `12`, Max unit `180`, Currency **USD**, Needed within `30` | Fields filled |
 | 2B.5 | **Review draft** | Summary of brief / qty / $180 / 30 days |
 
-### Path C — Channel3 (catalog)
+### Path C — Channel3 (live catalog → RFQ ceiling)
+
+Channel3 results are **not** stored in Postgres. Each Search calls Channel3’s API. Postgres only stores the RFQ/negotiation **after** you Queue.
 
 | Step | You do | You should see |
 |---|---|---|
-| 2C.1 | Channel3 search (e.g. `office sticky notes pack`) → **Use for RFQ** | Brief + budget prefilled from catalog |
-| 2C.2 | **Review draft** | Channel3 product named in the brief |
+| 2C.1 | Overview → search `office sticky notes pack` → **Search** | Dropdown of products with **prices** (and retailer when available) |
+| 2C.2 | Pick one → **Use market price → Review** | Jumps straight to Review; brief says “match or beat Channel3 market unit price ≤ $X” |
+| 2C.3 | **Queue negotiation** | RFQ saved in Postgres; sellers compete against that market ceiling |
 
 ---
 
