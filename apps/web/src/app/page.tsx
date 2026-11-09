@@ -439,6 +439,25 @@ export default function Dashboard() {
   const heldCount = allFeedRows.filter((row) => row.payment === "HELD" || row.payment === "SHIPPED").length;
   const capturedCount = allFeedRows.filter((row) => row.payment === "CAPTURED").length;
 
+  /** Multi-user payment inbox: anything past checkout that is not finished yet. */
+  const paymentNeedsAttention = useMemo(
+    () => allFeedRows.filter((row) =>
+      row.payment === "APPROVED" || row.payment === "HELD" || row.payment === "SHIPPED"),
+    [allFeedRows],
+  );
+  const paymentRecentCaptured = useMemo(
+    () => allFeedRows.filter((row) => row.payment === "CAPTURED").slice(0, 5),
+    [allFeedRows],
+  );
+
+  function nextPaymentStepLabel(payment: string): string {
+    if (payment === "APPROVED") return "Needs PayPal approve → Authorize hold";
+    if (payment === "HELD") return "Needs Mark shipped";
+    if (payment === "SHIPPED") return "Needs Confirm delivery & capture";
+    if (payment === "CAPTURED") return "Complete";
+    return payment;
+  }
+
   async function openNegotiationOffers(id: string) {
     setActiveNegotiationId(id);
     activeIdRef.current = id;
@@ -1935,9 +1954,76 @@ export default function Dashboard() {
                 <div><strong>{step.title}</strong><small>{step.detail}{step.active ? " · done/current" : ""}</small></div>
               </li>)}
             </ol>
-            {view === "Payments & orders" && !activeOrder && <div className={s.empty}>
-              <span className={s.emptyIcon}><Package size={26} /></span><h3>No order yet</h3>
-              <p>Checkout a winning offer, or from Negotiations click Pay / Ship / Capture on an APPROVED row to resume.</p>
+
+            {view === "Payments & orders" && (
+              <div className={s.paymentInbox}>
+                <div className={s.sectionHeader}>
+                  <div>
+                    <h3>Needs attention</h3>
+                    <p className={s.description}>
+                      Shared queue for every checkout still open — APPROVED (buyer), Authorize hold / HELD (ops ships), SHIPPED (owner captures).
+                    </p>
+                  </div>
+                  <button type="button" className={s.secondary} onClick={() => void loadNegotiations()}>Refresh</button>
+                </div>
+                {paymentNeedsAttention.length > 0 ? (
+                  <ul className={s.paymentQueue}>
+                    {paymentNeedsAttention.map((row) => {
+                      const payLabel = paymentActionLabel(row.payment) ?? "Open";
+                      const selected = activeNegotiationId === row.id;
+                      return (
+                        <li key={row.id} className={selected ? s.paymentQueueSelected : undefined}>
+                          <div>
+                            <strong>{row.brief.slice(0, 88)}{row.brief.length > 88 ? "…" : ""}</strong>
+                            <p>{row.payment} · {nextPaymentStepLabel(row.payment)} · max {money.format(row.maxUnitPrice)}</p>
+                          </div>
+                          <div className={s.gridActions}>
+                            <span className={s.draftBadge}>{row.payment}</span>
+                            <button
+                              type="button"
+                              className={s.primary}
+                              disabled={orderBusy}
+                              onClick={() => void resumePayment(row.id, row.payment)}
+                            >
+                              {payLabel}
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className={s.tableNote}>Nothing pending — no APPROVED / HELD / SHIPPED checkouts right now.</p>
+                )}
+
+                {paymentRecentCaptured.length > 0 && (
+                  <>
+                    <h3 className={s.paymentInboxSub}>Recently captured</h3>
+                    <ul className={s.paymentQueue}>
+                      {paymentRecentCaptured.map((row) => (
+                        <li key={row.id}>
+                          <div>
+                            <strong>{row.brief.slice(0, 88)}{row.brief.length > 88 ? "…" : ""}</strong>
+                            <p>CAPTURED · max {money.format(row.maxUnitPrice)}</p>
+                          </div>
+                          <button
+                            type="button"
+                            className={s.textButton}
+                            onClick={() => void resumePayment(row.id, row.payment)}
+                          >
+                            View
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            )}
+
+            {view === "Payments & orders" && !activeOrder && paymentNeedsAttention.length === 0 && <div className={s.empty}>
+              <span className={s.emptyIcon}><Package size={26} /></span><h3>No open payment work</h3>
+              <p>Checkout a winning offer from Supplier offers, or resume an APPROVED row from Negotiations.</p>
             </div>}
             {view === "Payments & orders" && activeOrder && (
               <div className={s.reviewPanel}>
