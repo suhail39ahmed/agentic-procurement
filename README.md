@@ -91,7 +91,7 @@ flowchart LR
   - **AG Grid** Community (live grids)
   - **Render** web + API + Workflows package
   - **Channel3** catalog enrich (`CHANNEL3_API_KEY`, env-gated)
-  - **Bryntum**-category schedule timeline (delivery / replenish / payout dues)
+  - **Bryntum Gantt Enterprise** — agent reschedules milestones on PayPal capture/refund/dispute (`NEXT_PUBLIC_BRYNTUM_LICENSE_KEY` / `VITE_BRYNTUM_LICENSE_KEY` on web)
   - **KERNEL** invoice page fetch bridge (`KERNEL_API_KEY`, env-gated)
   - Slack approvals stretch (`SLACK_WEBHOOK_URL`)
 

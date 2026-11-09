@@ -62,6 +62,11 @@ services:
         sync: false
       - key: ADMIN_API_KEY
         sync: false
+      # Bryntum license is client-side — set on WEB (also accept VITE_ name)
+      - key: NEXT_PUBLIC_BRYNTUM_LICENSE_KEY
+        sync: false
+      - key: VITE_BRYNTUM_LICENSE_KEY
+        sync: false
 
   # Render Workflows — long-running agent tasks (negotiate, replenish, FX, forecast)
   - type: workflow

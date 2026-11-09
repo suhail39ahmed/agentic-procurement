@@ -6,7 +6,7 @@ Paste into Devpost “APIs, libraries, and frameworks”:
 - **AG Grid** — Community grids with live `applyTransaction` + SSE negotiation feed
 - **Render** — Web + API services, Postgres, Workflows package (`packages/workflows`)
 - **Channel3** — Product catalog enrich for RFQ prefill (env-gated `CHANNEL3_API_KEY`)
-- **Bryntum** — Schedule/timeline UI for delivery, replenishment, and payout dues
+- **Bryntum Gantt Enterprise** — Agent-driven Gantt: PayPal capture/refund/dispute webhooks (or demo signals) move & flag authorize → delivery → capture → payout milestones
 - **KERNEL** — Browser/agent page fetch bridge for supplier invoice HTML → extract
 - **Slack** — Approval cards via `SLACK_WEBHOOK_URL` (stretch)
 - Azure AI Foundry — buyer/seller/extractor/assistant models

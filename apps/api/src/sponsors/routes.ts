@@ -2,6 +2,13 @@ import { Router } from "express";
 import { assertDemoAmount, demoMaxUsd } from "../demo-cap";
 import { channel3Configured, searchChannel3 } from "./channel3";
 import { fetchInvoicePageText, kernelConfigured } from "./kernel";
+import {
+  applyPaymentSignal,
+  getScheduleSnapshot,
+  resetSchedule,
+  timelineEventsFromSchedule,
+  type PaymentSignalKind,
+} from "./schedule-agent";
 
 export const sponsorsRouter = Router();
 
@@ -19,7 +26,12 @@ sponsorsRouter.get("/status", (_req, res) => {
     channel3: channel3Configured(),
     kernel: kernelConfigured(),
     bryntum: true,
-    note: "Env-gated sponsors: set CHANNEL3_API_KEY / KERNEL_API_KEY to activate live calls.",
+    bryntumLicenseConfigured: Boolean(
+      process.env.BRYNTUM_LICENSE_KEY?.trim()
+      || process.env.VITE_BRYNTUM_LICENSE_KEY?.trim()
+      || process.env.NEXT_PUBLIC_BRYNTUM_LICENSE_KEY?.trim(),
+    ),
+    note: "Env-gated sponsors: CHANNEL3_API_KEY / KERNEL_API_KEY. Bryntum Gantt uses web NEXT_PUBLIC_BRYNTUM_LICENSE_KEY (or VITE_BRYNTUM_LICENSE_KEY).",
   });
 });
 
@@ -85,41 +97,49 @@ sponsorsRouter.post("/kernel/fetch-invoice", async (req, res) => {
 sponsorsRouter.get("/timeline", (req, res) => {
   const ownerId = requireOwner(req);
   if (!ownerId) return res.sendStatus(404);
-
-  const now = Date.now();
-  const day = 86_400_000;
+  const snap = getScheduleSnapshot();
   return res.json({
-    provider: "bryntum-style-schedule",
-    note: "Delivery / replenishment / payout due timeline (Bryntum Calendar/Scheduler category UI).",
-    events: [
-      {
-        id: "delivery-eta",
-        title: "Supplier delivery ETA",
-        start: new Date(now + 3 * day).toISOString(),
-        end: new Date(now + 5 * day).toISOString(),
-        type: "delivery",
-      },
-      {
-        id: "replenish-check",
-        title: "Replenishment evaluate",
-        start: new Date(now + 1 * day).toISOString(),
-        end: new Date(now + 1 * day + 3_600_000).toISOString(),
-        type: "replenish",
-      },
-      {
-        id: "invoice-due",
-        title: "Supplier invoice due",
-        start: new Date(now + 7 * day).toISOString(),
-        end: new Date(now + 7 * day + 3_600_000).toISOString(),
-        type: "payout",
-      },
-      {
-        id: "client-invoice",
-        title: "Client invoice follow-up",
-        start: new Date(now + 2 * day).toISOString(),
-        end: new Date(now + 2 * day + 3_600_000).toISOString(),
-        type: "client",
-      },
-    ],
+    ...snap,
+    events: timelineEventsFromSchedule(),
   });
+});
+
+sponsorsRouter.get("/schedule", (req, res) => {
+  const ownerId = requireOwner(req);
+  if (!ownerId) return res.sendStatus(404);
+  return res.json(getScheduleSnapshot());
+});
+
+sponsorsRouter.post("/schedule/reset", (req, res) => {
+  const ownerId = requireOwner(req);
+  if (!ownerId) return res.sendStatus(404);
+  resetSchedule();
+  return res.json(getScheduleSnapshot());
+});
+
+const SIGNAL_KINDS = new Set<PaymentSignalKind>([
+  "capture_ok",
+  "capture_late",
+  "capture_fail",
+  "refund",
+  "dispute",
+  "authorize_ok",
+]);
+
+/** Demo / agent hook: apply a payment signal and reschedule Gantt milestones. */
+sponsorsRouter.post("/schedule/reschedule", (req, res) => {
+  const ownerId = requireOwner(req);
+  if (!ownerId) return res.sendStatus(404);
+  const kind = typeof req.body?.kind === "string" ? req.body.kind.trim() : "";
+  if (!SIGNAL_KINDS.has(kind as PaymentSignalKind)) {
+    return res.status(400).json({
+      error: `kind must be one of: ${[...SIGNAL_KINDS].join(", ")}`,
+    });
+  }
+  const snap = applyPaymentSignal(kind as PaymentSignalKind, {
+    orderId: typeof req.body?.orderId === "string" ? req.body.orderId : undefined,
+    eventType: typeof req.body?.eventType === "string" ? req.body.eventType : kind,
+    forceLate: Boolean(req.body?.forceLate),
+  });
+  return res.json(snap);
 });

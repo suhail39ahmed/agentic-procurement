@@ -9,6 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@bryntum/core-enterprise": "8.0.0",
+    "@bryntum/gantt-enterprise": "8.0.0",
+    "@bryntum/gantt-react-enterprise": "8.0.0",
     "ag-grid-community": "^36.3.0",
     "ag-grid-react": "^36.3.0",
     "lucide-react": "^1.70.0",

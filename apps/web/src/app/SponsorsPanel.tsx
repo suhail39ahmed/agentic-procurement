@@ -1,15 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ArrowRight, CalendarDays, PackageSearch, Globe } from "lucide-react";
+import dynamic from "next/dynamic";
+import { useCallback, useEffect, useState } from "react";
+import { ArrowRight, CalendarDays, PackageSearch, Globe, RefreshCw } from "lucide-react";
 import s from "./dashboard.module.css";
+import type { GanttDependency, GanttTaskRow } from "./BryntumGanttPanel";
 
-type TimelineEvent = {
-  id: string;
-  title: string;
-  start: string;
-  end: string;
-  type: string;
+const BryntumGanttPanel = dynamic(
+  () => import("./BryntumGanttPanel").then((m) => m.BryntumGanttPanel),
+  { ssr: false, loading: () => <p className={s.description}>Loading Bryntum Gantt…</p> },
+);
+
+type AgentLogEntry = {
+  at: string;
+  signal: string;
+  action: string;
+  taskIds: string[];
+};
+
+type SchedulePayload = {
+  provider?: string;
+  note?: string;
+  tasks?: GanttTaskRow[];
+  dependencies?: GanttDependency[];
+  agentLog?: AgentLogEntry[];
+  projectStartDate?: string;
+  projectEndDate?: string;
+  error?: string;
 };
 
 export function SponsorsPanel({
@@ -31,25 +48,25 @@ export function SponsorsPanel({
   const [status, setStatus] = useState<Record<string, boolean | number | null>>({});
   const [query, setQuery] = useState("office sticky notes pack");
   const [kernelUrl, setKernelUrl] = useState("https://example.com");
-  const [events, setEvents] = useState<TimelineEvent[]>([]);
+  const [schedule, setSchedule] = useState<SchedulePayload | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const loadSchedule = useCallback(async () => {
+    const response = await fetch("/api/sponsors/schedule", { cache: "no-store" });
+    const payload = await response.json().catch(() => ({})) as SchedulePayload;
+    if (response.ok) setSchedule(payload);
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void (async () => {
-        const [st, tl] = await Promise.all([
-          fetch("/api/sponsors/status", { cache: "no-store" }),
-          fetch("/api/sponsors/timeline", { cache: "no-store" }),
-        ]);
+        const st = await fetch("/api/sponsors/status", { cache: "no-store" });
         if (st.ok) setStatus(await st.json() as Record<string, boolean | number | null>);
-        if (tl.ok) {
-          const payload = await tl.json() as { events?: TimelineEvent[] };
-          setEvents(Array.isArray(payload.events) ? payload.events : []);
-        }
+        await loadSchedule();
       })().catch(() => undefined);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [loadSchedule]);
 
   async function searchChannel3() {
     setBusy(true);
@@ -119,6 +136,46 @@ export function SponsorsPanel({
     }
   }
 
+  async function reschedule(kind: string) {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/sponsors/schedule/reschedule", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind }),
+      });
+      const payload = await response.json().catch(() => ({})) as SchedulePayload;
+      if (!response.ok) {
+        setNotice(payload.error ?? "Reschedule failed.");
+        return;
+      }
+      setSchedule(payload);
+      const latest = payload.agentLog?.[0];
+      setNotice(latest ? `Bryntum agent: ${latest.action}` : `Applied ${kind}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resetSchedule() {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/sponsors/schedule/reset", { method: "POST" });
+      const payload = await response.json().catch(() => ({})) as SchedulePayload;
+      if (!response.ok) {
+        setNotice(payload.error ?? "Reset failed.");
+        return;
+      }
+      setSchedule(payload);
+      setNotice("Schedule reset to baseline milestones.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const tasks = schedule?.tasks ?? [];
+  const dependencies = schedule?.dependencies ?? [];
+
   return (
     <div className={s.stretchGrid}>
       <section className={`${s.card} ${s.stretchCard}`}>
@@ -169,26 +226,50 @@ export function SponsorsPanel({
         </div>
       </section>
 
-      <section className={`${s.card} ${s.stretchCard}`}>
+      <section className={`${s.card} ${s.stretchCard}`} style={{ gridColumn: "1 / -1" }}>
         <div className={s.sectionHeader}>
           <div className={s.inlineTitle}>
             <span className={s.iconTile}><CalendarDays size={20} /></span>
             <div>
-              <h2>Bryntum schedule timeline</h2>
-              <p className={s.description}>Delivery, replenishment, and payout due dates (scheduler category UI).</p>
+              <h2>Bryntum Gantt — payment-aware rescheduler</h2>
+              <p className={s.description}>
+                Agent watches PayPal capture / refund / dispute signals and moves or flags milestones.
+                {status.bryntumLicenseConfigured ? " License env seen on API." : " Set NEXT_PUBLIC_BRYNTUM_LICENSE_KEY (or VITE_) on the web service."}
+              </p>
             </div>
           </div>
+          <button type="button" className={s.secondary} disabled={busy} title="Reload schedule" onClick={() => void loadSchedule()}>
+            <RefreshCw size={14} /> Refresh
+          </button>
         </div>
-        <div className={s.timeline}>
-          {events.map((ev) => (
-            <div key={ev.id} className={s.timelineRow}>
-              <strong>{ev.type}</strong>
-              <div className={s.timelineBar} title={`${ev.start} → ${ev.end}`}>
-                {ev.title}
-              </div>
-            </div>
-          ))}
+
+        <BryntumGanttPanel
+          tasks={tasks}
+          dependencies={dependencies}
+          projectStartDate={schedule?.projectStartDate}
+          projectEndDate={schedule?.projectEndDate}
+        />
+
+        <div className={s.reviewActions} style={{ flexWrap: "wrap", marginTop: 12 }}>
+          <button type="button" className={s.secondary} disabled={busy} onClick={() => void reschedule("capture_ok")}>Simulate capture OK</button>
+          <button type="button" className={s.secondary} disabled={busy} onClick={() => void reschedule("capture_late")}>Simulate late capture</button>
+          <button type="button" className={s.secondary} disabled={busy} onClick={() => void reschedule("capture_fail")}>Simulate fail</button>
+          <button type="button" className={s.secondary} disabled={busy} onClick={() => void reschedule("refund")}>Simulate refund</button>
+          <button type="button" className={s.secondary} disabled={busy} onClick={() => void reschedule("dispute")}>Simulate dispute</button>
+          <button type="button" className={s.primary} disabled={busy} onClick={() => void resetSchedule()}>Reset plan</button>
         </div>
+
+        {schedule?.agentLog && schedule.agentLog.length > 0 && (
+          <div className={s.agentRegistry} style={{ marginTop: 12 }}>
+            {schedule.agentLog.slice(0, 5).map((entry) => (
+              <article key={`${entry.at}-${entry.signal}`}>
+                <strong>{entry.signal}</strong>
+                <p>{entry.action}</p>
+                <p>{new Date(entry.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST · {entry.taskIds.join(", ")}</p>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

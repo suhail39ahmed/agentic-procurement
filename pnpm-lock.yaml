@@ -63,6 +63,15 @@ importers:
 
   apps/web:
     dependencies:
+      '@bryntum/core-enterprise':
+        specifier: 8.0.0
+        version: 8.0.0
+      '@bryntum/gantt-enterprise':
+        specifier: 8.0.0
+        version: 8.0.0
+      '@bryntum/gantt-react-enterprise':
+        specifier: 8.0.0
+        version: 8.0.0
       ag-grid-community:
         specifier: ^36.3.0
         version: 36.3.0
@@ -189,7 +198,7 @@ importers:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.6.1
-        version: 1.32.2(zod@4.6.7)
+        version: 1.32.2(zod@3.25.76)
       '@paypal/agent-toolkit':
         specifier: ^1.11.0
         version: 1.11.0(react@19.3.0)
@@ -369,6 +378,42 @@ packages:
   '@babel/types@7.29.11':
     resolution: {integrity: sha512-WCsemW40Cpc6gouC1SrY6PBaZ+oLRlEVY9XBvZBI7il/HyUrb2nJ505wE1MHEFyDZNnrWDEuy4jL50WVHfTTSQ==}
     engines: {node: '>=6.9.0'}
+
+  '@bryntum/core-enterprise@8.0.0':
+    resolution: {integrity: sha512-AqsM1r8X1asFF1fNOio16XEFQ8HqoRII6DhFaeyz/Q0rDsE4jXUjZkM68jIgTmx+PP5nQxJx5uQPz16q6vY6/g==}
+    engines: {node: '>=0.10.0'}
+
+  '@bryntum/core-react-enterprise@8.0.0':
+    resolution: {integrity: sha512-+eSePvfJAHWdHdGOOFdx1xo4b0aMoMg/bzBOlbn/q7TujC3TWT0Aim1JOiJcd7kBlrXZdBpjshJcn3oVMxPafw==}
+    engines: {node: '>=0.10.0'}
+
+  '@bryntum/engine-enterprise@8.0.0':
+    resolution: {integrity: sha512-ipfvMVnnwRDcL/tMLqIMiu7slI8sBtRvwqhFXxiacHI7ZFIMZzwQVGvIfANLSPX9EOEy1QWeUvWauQ8QUjqBKg==}
+    engines: {node: '>=0.10.0'}
+
+  '@bryntum/gantt-enterprise@8.0.0':
+    resolution: {integrity: sha512-l1JW/H4Vj/N0zDgBWwX/1G8Y2fzJYnUik4UKjPQBRwW6yE7P2I7Ogg61+fBce6O/eEr2H9IB57M4oqPV/NtnFg==}
+    engines: {node: '>=0.10.0'}
+
+  '@bryntum/gantt-react-enterprise@8.0.0':
+    resolution: {integrity: sha512-bWKHcdsVFcwCIR4E+x2BNtnMyahZV6YIg+P61sMPAPZ3vc5eayBhGnzZMt4XSi7mmRfOG+ZfS2Vhg/M3/bUmWQ==}
+    engines: {node: '>=0.10.0'}
+
+  '@bryntum/grid-enterprise@8.0.0':
+    resolution: {integrity: sha512-qdCGyH6xJQMHWqnTG8t8JayLOdpWkLmHK6/oPfXuoGpRwklaAazaaYVq+DHyIqqynhebzD1skWt7zkHXmUzCbQ==}
+    engines: {node: '>=0.10.0'}
+
+  '@bryntum/grid-react-enterprise@8.0.0':
+    resolution: {integrity: sha512-5NbxwnNfWibjUhoNXrw7RSs61G0loYeEolU6UlbJ6TDAOMAh578VLghpIuH0GSve04aToMA7EiNkHgINMI5LbA==}
+    engines: {node: '>=0.10.0'}
+
+  '@bryntum/scheduler-enterprise@8.0.0':
+    resolution: {integrity: sha512-eVpzMZPFyY0P2XYqILbPEdJEDxBf8O7aSKPen0hIWmKs/Pi7v7qIz93DbGND3J5QUrqeokSpNmrSsggtAGQZmg==}
+    engines: {node: '>=0.10.0'}
+
+  '@bryntum/scheduler-react-enterprise@8.0.0':
+    resolution: {integrity: sha512-eyJ9PrkjFh5vmIDFhdNFz/ORMNzY193M8b0miLd/TkbdVtqhLSEbbsTuYr4DMYp+HhyGLLRSD55wwqk2soSwjg==}
+    engines: {node: '>=0.10.0'}
 
   '@dotenvx/dotenvx@1.75.1':
     resolution: {integrity: sha512-/BITOC9dmS/edY2zQwZNicQ059O6RKabtQfyEafV0nGtfYRNHYy1DIPiYVcov40+tob9hfmBnbR963dS+EQ1DQ==}
@@ -3983,6 +4028,49 @@ snapshots:
       '@babel/helper-string-parser': 7.29.13
       '@babel/helper-validator-identifier': 7.29.7
 
+  '@bryntum/core-enterprise@8.0.0': {}
+
+  '@bryntum/core-react-enterprise@8.0.0':
+    dependencies:
+      '@bryntum/core-enterprise': 8.0.0
+
+  '@bryntum/engine-enterprise@8.0.0': {}
+
+  '@bryntum/gantt-enterprise@8.0.0':
+    dependencies:
+      '@bryntum/core-enterprise': 8.0.0
+      '@bryntum/engine-enterprise': 8.0.0
+      '@bryntum/grid-enterprise': 8.0.0
+      '@bryntum/scheduler-enterprise': 8.0.0
+
+  '@bryntum/gantt-react-enterprise@8.0.0':
+    dependencies:
+      '@bryntum/core-react-enterprise': 8.0.0
+      '@bryntum/gantt-enterprise': 8.0.0
+      '@bryntum/grid-react-enterprise': 8.0.0
+      '@bryntum/scheduler-react-enterprise': 8.0.0
+
+  '@bryntum/grid-enterprise@8.0.0':
+    dependencies:
+      '@bryntum/core-enterprise': 8.0.0
+
+  '@bryntum/grid-react-enterprise@8.0.0':
+    dependencies:
+      '@bryntum/core-react-enterprise': 8.0.0
+      '@bryntum/grid-enterprise': 8.0.0
+
+  '@bryntum/scheduler-enterprise@8.0.0':
+    dependencies:
+      '@bryntum/core-enterprise': 8.0.0
+      '@bryntum/engine-enterprise': 8.0.0
+      '@bryntum/grid-enterprise': 8.0.0
+
+  '@bryntum/scheduler-react-enterprise@8.0.0':
+    dependencies:
+      '@bryntum/core-react-enterprise': 8.0.0
+      '@bryntum/grid-react-enterprise': 8.0.0
+      '@bryntum/scheduler-enterprise': 8.0.0
+
   '@dotenvx/dotenvx@1.75.1':
     dependencies:
       '@dotenvx/primitives': 0.8.0
@@ -4466,28 +4554,6 @@ snapshots:
       raw-body: 3.0.2
       zod: 3.25.76
       zod-to-json-schema: 3.25.2(zod@3.25.76)
-    transitivePeerDependencies:
-      - supports-color
-
-  '@modelcontextprotocol/sdk@1.32.2(zod@4.6.7)':
-    dependencies:
-      '@hono/node-server': 2.1.6(hono@4.13.17)
-      ajv: 8.20.0
-      ajv-formats: 3.0.1(ajv@8.20.0)
-      content-type: 1.0.5
-      cors: 2.8.6
-      cross-spawn: 7.0.6
-      eventsource: 3.0.7
-      eventsource-parser: 3.1.1
-      express: 5.3.0
-      express-rate-limit: 8.7.2(express@5.3.0)
-      hono: 4.13.17
-      jose: 6.2.16
-      json-schema-typed: 8.0.2
-      pkce-challenge: 5.0.1
-      raw-body: 3.0.2
-      zod: 4.6.7
-      zod-to-json-schema: 3.25.2(zod@4.6.7)
     transitivePeerDependencies:
       - supports-color
 
@@ -7444,10 +7510,6 @@ snapshots:
   zod-to-json-schema@3.25.2(zod@3.25.76):
     dependencies:
       zod: 3.25.76
-
-  zod-to-json-schema@3.25.2(zod@4.6.7):
-    dependencies:
-      zod: 4.6.7
 
   zod-validation-error@4.0.2(zod@4.6.7):
     dependencies:

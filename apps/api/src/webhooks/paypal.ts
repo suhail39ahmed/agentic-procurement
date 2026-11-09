@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { verifyWebhook } from "./verify";
 import { applyWebhookEvent, listLedger, listDisputes, listEvents, type PayPalWebhookEvent } from "agents";
+import { applyPaymentSignal, signalFromPaypalEventType } from "../sponsors/schedule-agent";
 
 type PayPalEvent = PayPalWebhookEvent & { create_time: string };
 
@@ -32,6 +33,17 @@ paypalWebhookRouter.post("/", async (req: Request, res: Response) => {
       `[webhook] ${isNew ? "accepted" : "duplicate"} ${event.event_type} ${event.resource?.id ?? ""} ${event.resource?.status ?? ""}`,
     );
     console.log(`[ledger] ${entry.outcome} ${entry.orderId ?? "-"} ${entry.reason}`);
+
+    if (isNew) {
+      const signal = signalFromPaypalEventType(event.event_type);
+      if (signal) {
+        applyPaymentSignal(signal, {
+          orderId: entry.orderId ?? event.resource?.id,
+          eventType: event.event_type,
+        });
+        console.log(`[bryntum-agent] rescheduled for ${event.event_type} → ${signal}`);
+      }
+    }
 
     return res.sendStatus(200);
   } catch (err) {
