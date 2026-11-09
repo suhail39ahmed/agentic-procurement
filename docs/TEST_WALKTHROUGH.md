@@ -66,9 +66,9 @@ Chair checkouts are **>$20** → REQUIRE_APPROVAL. For auto-allow, use Channel3 
 |---|---|---|
 | 4.1 | **Checkout winning offer** | Payments active order / inbox |
 | 4.2 | Sandbox buyer approve | Popup or approve URL |
-| 4.3 | **Authorize hold** (or auto after PayPal) | **HELD** — stays held |
-| 4.4 | Gmail paste / **Load sample email** → Extract → **Apply ship notice** | **SHIPPED** |
-| 4.5 | Owner **Confirm delivery & capture** | **CAPTURED**; nested Payments queues update |
+| 4.3 | **Authorize hold** (or auto after PayPal) | **HELD** → Inbox waiting |
+| 4.4 | Wait ~2s (or **Replay seller email**) | Winning seller email appears → auto **SHIPPED** |
+| 4.5 | Buyer or Supervisor **Confirm delivery & capture** | **CAPTURED**; nested Payments queues update |
 
 ---
 

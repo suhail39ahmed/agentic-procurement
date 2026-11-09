@@ -442,6 +442,9 @@ export default function Dashboard() {
     matchedBy: string;
   } | null>(null);
   const [shipEmailBusy, setShipEmailBusy] = useState(false);
+  /** Demo inbox after PayPal hold: waiting → seller email → auto-parse → SHIPPED */
+  const [shipDemoPhase, setShipDemoPhase] = useState<"idle" | "waiting" | "received" | "applying" | "done">("idle");
+  const shipDemoTokenRef = useRef(0);
   const [channel3Busy, setChannel3Busy] = useState(false);
   const [channel3Query, setChannel3Query] = useState("office sticky notes pack");
   const [channel3Products, setChannel3Products] = useState<Array<{
@@ -530,8 +533,8 @@ export default function Dashboard() {
   function nextPaymentStepLabel(payment: string): string {
     if (payment === "PENDING_APPROVAL") return "Needs Supervisor approval before PayPal";
     if (payment === "APPROVED") return "Needs PayPal approve → Authorize hold";
-    if (payment === "HELD") return "Paste shipment email → Apply";
-    if (payment === "SHIPPED") return "Needs Supervisor Confirm delivery & capture";
+    if (payment === "HELD") return "Waiting for seller shipment email";
+    if (payment === "SHIPPED") return "Confirm delivery & capture (Buyer or Supervisor)";
     if (payment === "CAPTURED") return "Complete";
     return payment;
   }
@@ -701,9 +704,13 @@ export default function Dashboard() {
       if (payment === "APPROVED") {
         setNotice("Pay opened — use Pay with PayPal (Buyer or Supervisor), then Authorize hold if needed.");
       } else if (payment === "HELD") {
-        setNotice("Hold opened under this row — paste shipment email → Extract → Apply. Buyer or Supervisor can apply.");
+        setNotice("Hold opened — seller shipment email arrives in ~2s, then auto-moves to SHIPPED.");
+        void runSellerShipEmailDemo({
+          orderId: saved.orderId,
+          supplierId: saved.supplierId,
+        });
       } else if (payment === "SHIPPED") {
-        setNotice("Ready to capture — only Supervisor can Confirm delivery & capture.");
+        setNotice("Ready to capture — Buyer or Supervisor can Confirm delivery & capture.");
       } else {
         setNotice("Opened Payments for this request.");
       }
@@ -1597,8 +1604,12 @@ export default function Dashboard() {
     const orderId = orderIdOverride ?? activeOrder?.orderId;
     if (!orderId) return;
     if (activeOrder?.status === "HELD" && activeOrder.orderId === orderId) {
-      setNotice("Funds already on hold — paste shipment email → Apply ship notice when ready.");
+      setNotice("Funds already on hold — waiting for seller shipment email…");
       await loadNegotiations();
+      void runSellerShipEmailDemo({
+        orderId,
+        supplierId: activeOrder.supplierId,
+      });
       return;
     }
     setOrderBusy(true);
@@ -1620,13 +1631,18 @@ export default function Dashboard() {
         amount?: string;
         paypalOrderId?: string;
         approveUrl?: string;
+        supplierId?: string;
         reuse?: boolean;
       };
       if (!response.ok) {
         if (response.status === 409 && /now HELD|already/i.test(payload.error ?? "")) {
           await hydrateOrder(orderId);
           await loadNegotiations();
-          setNotice("Funds already on hold — leave HELD for Funds on hold, or Apply ship notice when ready.");
+          setNotice("Funds already on hold — waiting for seller shipment email…");
+          void runSellerShipEmailDemo({
+            orderId,
+            supplierId: payload.supplierId ?? activeOrder?.supplierId,
+          });
           return;
         }
         setNotice(payload.error ?? `Authorize failed (${response.status}). Approve with the PayPal popup first, then retry Authorize hold.`);
@@ -1637,14 +1653,20 @@ export default function Dashboard() {
         status: payload.status ?? "HELD",
         authorizationId: payload.authorizationId,
         amount: payload.amount ?? current.amount,
+        supplierId: payload.supplierId ?? current.supplierId,
       } : {
         orderId,
         status: payload.status ?? "HELD",
         authorizationId: payload.authorizationId,
         amount: payload.amount,
+        supplierId: payload.supplierId,
       });
       await loadNegotiations();
-      setNotice("Funds on hold (HELD). Paste shipment email from Gmail → Extract → Apply. Nothing moves to SHIPPED until you apply.");
+      setNotice("Funds on hold (HELD). Waiting for the winning seller to email shipment details…");
+      void runSellerShipEmailDemo({
+        orderId,
+        supplierId: payload.supplierId ?? activeOrder?.supplierId,
+      });
     } catch {
       setNotice("Authorize failed.");
     } finally {
@@ -1652,105 +1674,96 @@ export default function Dashboard() {
     }
   }
 
-  async function loadSampleShipmentEmail() {
+  async function runSellerShipEmailDemo(opts: { orderId: string; supplierId?: string | null }) {
+    const orderId = opts.orderId?.trim();
+    if (!orderId) return;
+    const token = ++shipDemoTokenRef.current;
+    setShipEmailBusy(true);
+    setShipDemoPhase("waiting");
+    setShipmentEmailText("");
+    setShipmentParsed(null);
+    setNotice("Funds on hold — waiting for seller shipment email…");
     try {
-      const response = await fetch("/api/shipment-email/sample", { cache: "no-store" });
-      const payload = await response.json().catch(() => ({})) as { text?: string; error?: string };
-      if (!response.ok || !payload.text) {
-        setNotice(payload.error ?? "Could not load sample shipment email.");
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (token !== shipDemoTokenRef.current) return;
+
+      const supplierId = (opts.supplierId ?? "seller").trim() || "seller";
+      const qs = new URLSearchParams({ supplierId, orderId });
+      const sampleRes = await fetch(`/api/shipment-email/sample?${qs.toString()}`, { cache: "no-store" });
+      const sample = await sampleRes.json().catch(() => ({})) as { text?: string; error?: string };
+      if (!sampleRes.ok || !sample.text) {
+        setShipDemoPhase("idle");
+        setNotice(sample.error ?? "Seller shipment email did not arrive — retry Open hold.");
         return;
       }
-      setShipmentEmailText(payload.text);
-      setShipmentParsed(null);
-      setNotice("Sample shipment email loaded — click Extract tracking, then Apply ship notice.");
-    } catch {
-      setNotice("Could not load sample shipment email.");
-    }
-  }
+      if (token !== shipDemoTokenRef.current) return;
+      setShipmentEmailText(sample.text);
+      setShipDemoPhase("received");
+      setNotice(`Email received from ${supplierId} — reading tracking…`);
 
-  async function extractShipmentEmail() {
-    if (!shipmentEmailText.trim()) {
-      setNotice("Paste a shipment email from Gmail (or load the sample) first.");
-      return;
-    }
-    setShipEmailBusy(true);
-    try {
-      const response = await fetch("/api/shipment-email/parse", {
+      const parseRes = await fetch("/api/shipment-email/parse", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: shipmentEmailText }),
+        body: JSON.stringify({ text: sample.text }),
       });
-      const payload = await response.json().catch(() => ({})) as {
+      const parsedPayload = await parseRes.json().catch(() => ({})) as {
         error?: string;
         parsed?: { carrier: string; number: string; confidence: string; matchedBy: string };
-        note?: string;
       };
-      if (!response.ok || !payload.parsed) {
-        setShipmentParsed(null);
-        setNotice(payload.error ?? "Could not parse tracking from that email.");
+      if (!parseRes.ok || !parsedPayload.parsed) {
+        setShipDemoPhase("received");
+        setNotice(parsedPayload.error ?? "Could not read tracking from seller email.");
         return;
       }
-      setShipmentParsed(payload.parsed);
-      setNotice(payload.note ?? `Found ${payload.parsed.carrier} ${payload.parsed.number}. Click Apply ship notice.`);
-    } catch {
-      setNotice("Parse failed.");
-    } finally {
-      setShipEmailBusy(false);
-    }
-  }
+      if (token !== shipDemoTokenRef.current) return;
+      setShipmentParsed(parsedPayload.parsed);
+      setShipDemoPhase("applying");
+      setNotice(`Tracking ${parsedPayload.parsed.carrier} ${parsedPayload.parsed.number} — marking SHIPPED…`);
 
-  async function applyShipmentEmailNotice() {
-    if (!activeOrder?.orderId || orderBusy) return;
-    if (!shipmentParsed) {
-      setNotice("Extract tracking from the email before applying.");
-      return;
-    }
-    setOrderBusy(true);
-    setNotice("Applying shipment email → SHIPPED…");
-    try {
-      const response = await fetch(`/api/orders/${encodeURIComponent(activeOrder.orderId)}/seller-shipped`, {
+      const shipRes = await fetch(`/api/orders/${encodeURIComponent(orderId)}/seller-shipped`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           source: "email-bridge",
-          carrier: shipmentParsed.carrier,
-          number: shipmentParsed.number,
+          carrier: parsedPayload.parsed.carrier,
+          number: parsedPayload.parsed.number,
         }),
       });
-      const payload = await response.json().catch(() => ({})) as {
+      const shipPayload = await shipRes.json().catch(() => ({})) as {
         error?: string;
         status?: string;
         tracking?: { carrier: string; number: string };
         note?: string;
       };
-      if (!response.ok) {
-        setNotice(payload.error ?? `Ship notice failed (${response.status}).`);
+      if (!shipRes.ok) {
+        setShipDemoPhase("received");
+        setNotice(shipPayload.error ?? `Ship notice failed (${shipRes.status}).`);
         return;
       }
-      setActiveOrder((current) => current ? {
+      if (token !== shipDemoTokenRef.current) return;
+      setActiveOrder((current) => current && current.orderId === orderId ? {
         ...current,
-        status: payload.status ?? "SHIPPED",
-        tracking: payload.tracking,
+        status: shipPayload.status ?? "SHIPPED",
+        tracking: shipPayload.tracking,
       } : current);
+      setShipDemoPhase("done");
       await loadNegotiations();
-      setShipmentParsed(null);
       setNotice(
-        payload.note
-        ?? "Shipment email applied — SHIPPED. Switch to Supervisor and Confirm delivery & capture.",
+        shipPayload.note
+        ?? "Seller email applied — SHIPPED. Confirm delivery & capture when ready (Buyer or Supervisor).",
       );
     } catch {
-      setNotice("Ship notice failed.");
+      if (token === shipDemoTokenRef.current) {
+        setShipDemoPhase("idle");
+        setNotice("Seller email demo failed — open the hold row again to retry.");
+      }
     } finally {
-      setOrderBusy(false);
+      if (token === shipDemoTokenRef.current) setShipEmailBusy(false);
     }
   }
 
   async function confirmDeliveryCapture() {
     if (!activeOrder?.orderId || orderBusy) return;
-    if (!isOwner) {
-      setNotice("Switch to Supervisor login (supervisor / supervisor) to confirm delivery & capture.");
-      return;
-    }
     setOrderBusy(true);
     setNotice("Confirming delivery and capturing funds…");
     try {
@@ -1894,7 +1907,7 @@ export default function Dashboard() {
             <span className={s.avatar}>{isOwner ? "S" : "B"}</span>
             <div>
               {isOwner ? "Supervisor" : "Buyer"}
-              <small>{isOwner ? "Full path + approve & capture" : "Full path except approve & capture"}</small>
+              <small>{isOwner ? "Full path + over-$20 approve" : "Full path; Supervisor for over-$20 approve"}</small>
             </div>
             <button type="button" className={s.textButton} title="Sign out of demo role" onClick={signOutDemo}>
               <LogOut size={15} />
@@ -1989,7 +2002,7 @@ export default function Dashboard() {
                       <li><em>Overview</em> → Channel3 search (e.g. sticky notes) → pick product → <em>Use market price → Review</em> → <em>Queue negotiation</em>. Or <em>Load demo request</em> / track card <em>Start negotiation demo</em> for chairs.</li>
                       <li>Wait until status <em>SUCCEEDED</em> (Requests / Negotiations grid). Click <em>Offers</em> on that row.</li>
                       <li>Check AG Grid: unit price, delivery days, match score, Eligible. Live SSE shows buyer/seller counters.</li>
-                      <li><em>Checkout</em> → PayPal → <em>HELD</em> (stays held). Paste Gmail shipment email → Extract → Apply → <em>SHIPPED</em>.</li>
+                      <li><em>Checkout</em> → PayPal → <em>HELD</em> → seller email (~2s) auto-reads → <em>SHIPPED</em> → Confirm capture.</li>
                       <li>Switch to <em>Supervisor</em> → <em>Confirm delivery &amp; capture</em>. Capture is never automatic.</li>
                       <li>Overview Bryntum Gantt: one bar per live checkout; hover status dots (green done / orange action / blue hold).</li>
                     </ol>
@@ -2636,7 +2649,7 @@ export default function Dashboard() {
 
           {(view === "Overview" || view === "Payments & orders") && <section className={`${s.card} ${s.paymentCard}`}>
             <div className={s.sectionHeader}>
-              <div className={s.inlineTitle}><span className={s.paymentIcon}><CreditCard size={22} /></span><div><h2>Payments, with clear checkpoints</h2><p className={s.description}>Sandbox PayPal authorize → ship → Supervisor confirms → capture.</p></div></div>
+              <div className={s.inlineTitle}><span className={s.paymentIcon}><CreditCard size={22} /></span><div><h2>Payments, with clear checkpoints</h2><p className={s.description}>Sandbox PayPal authorize → seller email → SHIPPED → Confirm capture.</p></div></div>
               <span className={s.pending}>{activeOrder?.status ?? "No order yet"}</span>
             </div>
             <p className={s.flowCaption}>Live sandbox lifecycle · AI never captures by itself</p>
@@ -2645,7 +2658,7 @@ export default function Dashboard() {
                 { title: "Supervisor approval", detail: "Required when total > $20; ≤$20 auto-allows", active: Boolean(activeOrder) || Boolean(pendingOwnerApproval) },
                 { title: "Funds held", detail: "Authorized, not captured", active: activeOrder?.status === "HELD" || activeOrder?.status === "SHIPPED" || activeOrder?.status === "CAPTURED" },
                 { title: "Seller ships", detail: "Carrier and tracking recorded", active: activeOrder?.status === "SHIPPED" || activeOrder?.status === "CAPTURED" },
-                { title: "Supervisor confirms", detail: "Capture after delivery", active: activeOrder?.status === "CAPTURED" },
+                { title: "Confirm delivery", detail: "Buyer or Supervisor captures", active: activeOrder?.status === "CAPTURED" },
               ].map((step, index) => <li key={step.title}>
                 <span className={s.stepNumber}>{index + 1}</span>
                 <div><strong>{step.title}</strong><small>{step.detail}{step.active ? " · done/current" : ""}</small></div>
@@ -2698,7 +2711,7 @@ export default function Dashboard() {
                   <div>
                     <h3>Payment queues</h3>
                     <p className={s.description}>
-                      Pay / Open hold / Confirm expand actions under that row. Buyer and Supervisor can continue the flow; only over-$20 approve and capture need Supervisor.
+                      Pay / Open hold / Confirm expand under that row. Buyer and Supervisor share the path; only over-$20 spend approve (and dispute accept) need Supervisor.
                     </p>
                   </div>
                   <button type="button" className={s.secondary} onClick={() => void loadNegotiations()}>Refresh</button>
@@ -2718,7 +2731,7 @@ export default function Dashboard() {
                   {needsAttentionOpen && (
                     <div className={s.paymentNestBody}>
                       <p className={s.description}>
-                        PENDING_APPROVAL → Supervisor Approve · APPROVED → PayPal · HELD → ship · SHIPPED → capture
+                        PENDING_APPROVAL → Supervisor Approve · APPROVED → PayPal · HELD → seller email → SHIPPED → capture
                       </p>
                       {paymentNeedsAttention.length > 0 ? (
                         <ul className={s.paymentQueueOpen}>
@@ -2758,8 +2771,8 @@ export default function Dashboard() {
                                       <strong>
                                         {row.payment === "PENDING_APPROVAL" && "Pending Supervisor approval"}
                                         {row.payment === "APPROVED" && "PayPal approve → Authorize hold"}
-                                        {row.payment === "HELD" && "Shipment email → Apply ship notice"}
-                                        {row.payment === "SHIPPED" && "Supervisor Confirm delivery & capture"}
+                                        {row.payment === "HELD" && "Seller shipment email (auto)"}
+                                        {row.payment === "SHIPPED" && "Confirm delivery & capture"}
                                       </strong>
                                       <button type="button" className={s.textButton} onClick={() => setExpandedNeedsId(null)}>
                                         Close
@@ -2834,43 +2847,46 @@ export default function Dashboard() {
                                           {activeOrder.status === "HELD" && (
                                             <div className={s.shipmentEmailBlock}>
                                               <p className={s.summaryNote}>
-                                                <strong>HELD</strong> — paste seller shipment email (Gmail) or load sample → Extract → Apply.
-                                                Buyer or Supervisor can do this step.
+                                                <strong>HELD</strong> — winning seller sends a shipment email (~2s), we read tracking, then move to <strong>SHIPPED</strong>.
                                               </p>
-                                              <div className={s.field}>
-                                                <label htmlFor={`ship-email-${row.id}`}>Shipment email</label>
-                                                <textarea
-                                                  id={`ship-email-${row.id}`}
-                                                  rows={6}
-                                                  value={shipmentEmailText}
-                                                  onChange={(e) => {
-                                                    setShipmentEmailText(e.target.value);
-                                                    setShipmentParsed(null);
-                                                  }}
-                                                  placeholder="Paste the carrier / seller shipped email…"
-                                                />
+                                              <div className={s.shipInbox}>
+                                                <div className={s.shipInboxHead}>
+                                                  <strong>Inbox</strong>
+                                                  <span className={s.pending}>
+                                                    {shipDemoPhase === "waiting" && "Waiting for email…"}
+                                                    {shipDemoPhase === "received" && "Email received"}
+                                                    {shipDemoPhase === "applying" && "Applying tracking…"}
+                                                    {shipDemoPhase === "done" && "Applied"}
+                                                    {(shipDemoPhase === "idle" || !shipDemoPhase) && (shipEmailBusy ? "Working…" : "Ready")}
+                                                  </span>
+                                                </div>
+                                                {shipDemoPhase === "waiting" && (
+                                                  <p className={s.description}>Listening for fulfillment mail from {activeOrder.supplierId ?? "winning seller"}…</p>
+                                                )}
+                                                {shipmentEmailText ? (
+                                                  <pre className={s.shipInboxBody} aria-live="polite">{shipmentEmailText}</pre>
+                                                ) : (
+                                                  <p className={s.tableNote}>No seller email yet.</p>
+                                                )}
+                                                {shipmentParsed && (
+                                                  <dl className={s.summaryList}>
+                                                    <div><dt>Carrier</dt><dd>{shipmentParsed.carrier}</dd></div>
+                                                    <div><dt>Tracking</dt><dd>{shipmentParsed.number}</dd></div>
+                                                    <div><dt>Match</dt><dd>{shipmentParsed.matchedBy} · {shipmentParsed.confidence}</dd></div>
+                                                  </dl>
+                                                )}
                                               </div>
-                                              {shipmentParsed && (
-                                                <dl className={s.summaryList}>
-                                                  <div><dt>Carrier</dt><dd>{shipmentParsed.carrier}</dd></div>
-                                                  <div><dt>Tracking</dt><dd>{shipmentParsed.number}</dd></div>
-                                                  <div><dt>Match</dt><dd>{shipmentParsed.matchedBy} · {shipmentParsed.confidence}</dd></div>
-                                                </dl>
-                                              )}
                                               <div className={s.reviewActions} style={{ flexWrap: "wrap" }}>
-                                                <button type="button" className={s.secondary} disabled={shipEmailBusy || orderBusy} onClick={() => void loadSampleShipmentEmail()}>
-                                                  Load sample email
-                                                </button>
-                                                <button type="button" className={s.secondary} disabled={shipEmailBusy || orderBusy} onClick={() => void extractShipmentEmail()}>
-                                                  Extract tracking
-                                                </button>
                                                 <button
                                                   type="button"
-                                                  className={s.primary}
-                                                  disabled={orderBusy || shipEmailBusy || !shipmentParsed}
-                                                  onClick={() => void applyShipmentEmailNotice()}
+                                                  className={s.secondary}
+                                                  disabled={shipEmailBusy || orderBusy}
+                                                  onClick={() => void runSellerShipEmailDemo({
+                                                    orderId: activeOrder.orderId,
+                                                    supplierId: activeOrder.supplierId,
+                                                  })}
                                                 >
-                                                  Apply ship notice → SHIPPED
+                                                  {shipEmailBusy ? "Receiving…" : "Replay seller email"}
                                                 </button>
                                               </div>
                                             </div>
@@ -2880,14 +2896,9 @@ export default function Dashboard() {
                                               <p className={s.summaryNote} style={{ flexBasis: "100%", margin: "0 0 4px" }}>
                                                 Supplier reported <strong>SHIPPED</strong>
                                                 {activeOrder.tracking ? ` (${activeOrder.tracking.carrier} ${activeOrder.tracking.number})` : ""}.
-                                                Only Supervisor can capture.
+                                                Buyer or Supervisor can capture.
                                               </p>
-                                              {!isOwner && (
-                                                <p className={s.summaryNote} style={{ flexBasis: "100%" }}>
-                                                  Switch to <strong>Supervisor</strong> (supervisor / supervisor) to capture.
-                                                </p>
-                                              )}
-                                              <button type="button" className={s.primary} disabled={orderBusy || !isOwner} onClick={() => void confirmDeliveryCapture()}>
+                                              <button type="button" className={s.primary} disabled={orderBusy} onClick={() => void confirmDeliveryCapture()}>
                                                 Confirm delivery & capture
                                               </button>
                                             </>

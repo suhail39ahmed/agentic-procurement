@@ -8,8 +8,8 @@ If the first load is slow, wait about a minute and refresh once (hosted demo can
 
 | Role | Username / password | Can do |
 |---|---|---|
-| **Buyer** | `buyer` / `buyer` | RFQ, negotiate, checkout, PayPal approve; paste shipment email → Apply ship |
-| **Supervisor** | `supervisor` / `supervisor` | **Supervisor approval** for spends **over $20**, **Confirm delivery & capture**, accept disputes |
+| **Buyer** | `buyer` / `buyer` | RFQ, negotiate, checkout, PayPal, watch seller ship email → SHIPPED, **Confirm delivery & capture** |
+| **Supervisor** | `supervisor` / `supervisor` | **Supervisor approval** for spends **over $20**, dispute accept; can also run the full buy path |
 
 Use the login screen (or sidebar Buyer/Supervisor switch). Over-$20 checkout stops until a **Supervisor** approves.
 
@@ -24,11 +24,11 @@ You run a small business buying supplies.
 
 **Money rules you should know**
 
-- Orders **$20 or under** can proceed without an extra owner approval step.  
-- Orders **over $20** need **your approval** before payment.  
+- Orders **$20 or under** can proceed without an extra Supervisor approval step.  
+- Orders **over $20** need **Supervisor approval** before payment.  
 - After the buyer approves in PayPal, funds go **on hold** (not taken yet).  
-- Funds stay on hold while the order is held or marked shipped.  
-- Money is only **captured** when you confirm delivery.  
+- ~2s later the **winning seller** sends a shipment email in the Payments inbox; ProcureAI reads tracking and moves to **SHIPPED**.  
+- Money is only **captured** when Buyer or Supervisor clicks **Confirm delivery & capture**.  
 - AI can negotiate and advise — it cannot capture money by itself.
 
 ---
@@ -37,9 +37,9 @@ You run a small business buying supplies.
 
 | Story | Business goal |
 |---|---|
-| **A** | Buy a cheap office item and leave money **on hold** |
+| **A** | Buy a cheap office item and leave money **on hold** briefly (watch seller email) |
 | **B** | Complete a buy through **delivery confirmed / paid** |
-| **C** | Buy something **over $20** and go through **owner approval** |
+| **C** | Buy something **over $20** and go through **Supervisor approval** |
 | **D** | Handle a **customer dispute** |
 | then | Process a **supplier invoice** in Payables |
 
@@ -47,7 +47,7 @@ You run a small business buying supplies.
 
 ## Story A — “I need sticky notes; hold the money”
 
-**Goal:** See **Funds on hold** without finishing the order.
+**Goal:** See **Funds on hold**, then the live seller-email inbox.
 
 1. Open **Overview**.  
 2. In Channel3 / catalog search, type `office sticky notes pack` → **Search**.  
@@ -59,10 +59,10 @@ You run a small business buying supplies.
 8. Check the table: prices, delivery days, **Eligible**.  
 9. Click **Checkout winning offer**.  
 10. On **Payments**, approve as the PayPal sandbox buyer in the popup.  
-11. Status should become **HELD** / **Funds on hold** (hold is placed for you after approve).  
-12. **Stop here** — leave it **HELD**. Do not paste a shipment email or click **Apply ship notice** yet.
+11. Status becomes **HELD** — Inbox shows **Waiting for email…**, then the winning seller’s shipment email appears, tracking is read, status becomes **SHIPPED**.  
+12. Optional stop: leave it **SHIPPED** without capturing if you only want hold + ship for the video.
 
-**You should see:** Funds on hold count go up; Needs attention shows this order still **HELD** (stays held until you apply a ship notice in Story B).
+**You should see:** Funds on hold, then an in-window seller email from the winning supplier, then **SHIPPED**.
 
 ---
 
@@ -71,13 +71,11 @@ You run a small business buying supplies.
 **Goal:** Full happy path to paid/captured.
 
 1. Repeat a small buy like Story A (another sticky-note or low-budget request).  
-2. Checkout → PayPal approve → status **HELD** (funds stay here until you apply a ship notice).  
-3. On Payments, paste the seller shipment email from **Gmail** (or **Load sample email**) → **Extract tracking** → **Apply ship notice → SHIPPED**.  
-4. Switch to **Supervisor** → **Confirm delivery & capture** (money is not taken until this click).  
-5. Under **Recently captured**, click **View**.
+2. Checkout → PayPal approve → **HELD** → seller email (~2s) → **SHIPPED**.  
+3. Stay as **Buyer** (or Supervisor) → **Confirm delivery & capture**.  
+4. Under **Recently captured**, click **View**.
 
-**You should see:** Order remains **HELD** until email apply; then **SHIPPED**; **CAPTURED** only after Supervisor confirm.  
-**Gmail:** copy/paste from Gmail is the sandbox path (no OAuth inbox yet). Full Gmail API can be added later.
+**You should see:** **HELD** → inbox email → **SHIPPED** → **CAPTURED** after Confirm. No Load sample / paste / Extract steps.
 
 ---
 
@@ -93,10 +91,10 @@ You run a small business buying supplies.
 4. **Review** → **Queue negotiation** (wait until status **SUCCEEDED** — AI can take ~20–40s).  
 5. Open **Supplier offers** for **this** request → **Checkout winning offer**.  
 6. App jumps to **Payments & orders**. Right under the checkpoints you must see a highlighted panel: **Supervisor approval required** with total, Deny, **Switch to Supervisor**, and **Approve as Supervisor**.  
-7. In **Needs attention**, the same request appears as **PENDING_APPROVAL** · Needs Supervisor approval before PayPal. **Review approval** re-opens the panel (works after refresh too).  
-8. Click **Switch to Supervisor** (or sidebar) → **Approve as Supervisor** → PayPal approve → hold.
+7. In **Needs attention**, the same request appears as **PENDING_APPROVAL**. **Review approval** re-opens the panel (works after refresh too).  
+8. Click **Switch to Supervisor** (or sidebar) → **Approve as Supervisor** → PayPal approve → hold → seller email → SHIPPED → Confirm capture (Buyer or Supervisor).
 
-**You should see:** Checkout does **not** create PayPal until Supervisor approves. The request stays in Needs attention as PENDING_APPROVAL until Approve. The approval card is above Needs attention — not buried in Disputes.  
+**You should see:** Checkout does **not** create PayPal until Supervisor approves. The request stays in Needs attention as PENDING_APPROVAL until Approve.  
 **Fail if:** Headphones/chairs over $20 vanish from Payments, or you only see a toast under Disputes with no approval panel / Approve button.
 
 ---
@@ -132,11 +130,10 @@ You run a small business buying supplies.
 ## Suggested order for a short walkthrough / video
 
 1. Overview — what the workspace is; ask the buying assistant a quick question.  
-2. **Story A** — stop at Funds on hold.  
-3. **Story B** — finish one order to captured (or shorten if time is tight).  
-4. **Story D** — dispute draft.  
-5. Jump to **Payables** — extract + match.  
-6. Closing line: agents negotiate; you and PayPal control the money (hold until you confirm delivery; over $20 needs approval).
+2. Story A or B — sticky notes through PayPal hold + live seller email → SHIPPED (and capture for B).  
+3. Story C — over-$20 Supervisor approve.  
+4. Story D — dispute draft / accept.  
+5. Payables — extract → match → payout.  
 
 Add **Story C** if you have ~20 more seconds.
 
@@ -147,10 +144,24 @@ Add **Story C** if you have ~20 more seconds.
 | Situation | What to do |
 |---|---|
 | Offers look wrong / old prices | Open a **new** finished request — old offer lists don’t refresh |
-| Authorize hold does nothing after PayPal popup | Hold already ran — look for **HELD** / Funds on hold |
-| Want Funds on hold on screen | Finish Story A and **don’t** apply a ship notice yet |
-| Order stuck on HELD / nothing in SHIPPED | Expected until you paste email → **Extract tracking** → **Apply ship notice** |
-| No real Gmail handy | Use **Load sample email** on Payments, then Extract → Apply |
-| Checkout winning → only a toast under Disputes | Hard refresh; look for **Supervisor approval required** panel under checkpoints (above Needs attention). Switch to Supervisor → Approve |
+| Authorize hold does nothing after PayPal popup | Hold already ran — look for **HELD** / seller Inbox |
+| Want Funds on hold on screen | Finish Story A and watch the Inbox for ~2s before SHIPPED |
+| Order stuck on HELD | Click **Replay seller email** on the hold row |
 | Headphones / over-$20 order missing from Payments | Refresh; open **Needs attention** — status should be **PENDING_APPROVAL**. Click **Review approval**, switch to Supervisor, Approve |
+| Checkout winning → only a toast under Disputes | Hard refresh; look for **Supervisor approval required** panel under checkpoints (above Needs attention). Switch to Supervisor → Approve |
 | Page empty / slow | Wait, refresh once; confirm you’re on the hosted demo URL |
+
+---
+
+## Email integration (locked demo vs real Gmail)
+
+**Locked for this demo (live now):** after PayPal authorize → wait 2s → generate a shipment email **from the winning supplier id** → show it in the Payments Inbox → parse tracking → `seller-shipped` → **SHIPPED**. No new credentials.
+
+**If you want real Gmail later, provide:**
+
+1. Google Cloud project with **Gmail API** enabled  
+2. OAuth client (web) + refresh token for the buyer inbox (or a shared demo mailbox)  
+3. Preferred: Pub/Sub push watch on that inbox, or poll every few seconds during HELD  
+4. Optional: SMTP/API for the *seller* side to actually send mail (otherwise sellers stay simulated)
+
+Until those are wired, the in-app seller Inbox is the intentional demo path.

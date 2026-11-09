@@ -8,7 +8,7 @@ export function demoRoleFromRequest(request: Request): DemoRole | null {
   return null;
 }
 
-/** Supervisor-only actions (approve spend, capture, dispute accept). */
+/** Supervisor-only actions (over-$20 spend approve, dispute accept). Capture is allowed for Buyer too. */
 export function requireOwnerDemoRole(request: Request): NextResponse | null {
   const role = demoRoleFromRequest(request);
   if (role === "owner") return null;

@@ -5,21 +5,54 @@ export type ParsedShipmentEmail = {
   matchedBy: string;
 };
 
-const SAMPLE_SHIPMENT_EMAIL = `Subject: Your order has shipped
-From: fulfillment@seller-c.example.com
+function supplierLabel(supplierId: string): string {
+  const cleaned = supplierId.trim() || "seller";
+  return cleaned
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+function supplierEmail(supplierId: string): string {
+  const slug = (supplierId.trim() || "seller").toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  return `fulfillment@${slug}.example.com`;
+}
+
+/** Stable UPS-looking tracking that still parses with the 1Z rule. */
+export function demoTrackingNumber(seed = "DEMO"): string {
+  const hex = seed.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().padEnd(8, "0").slice(0, 8);
+  return `1Z999AA10${hex}`;
+}
+
+/** Seller-branded shipment email for the winning supplier (demo inbox / Gmail paste). */
+export function buildSellerShipmentEmail(opts: {
+  supplierId: string;
+  orderId?: string;
+  trackingNumber?: string;
+}): string {
+  const supplierId = opts.supplierId || "seller";
+  const label = supplierLabel(supplierId);
+  const from = supplierEmail(supplierId);
+  const tracking = opts.trackingNumber ?? demoTrackingNumber(opts.orderId ?? supplierId);
+  return `Subject: Your order has shipped — ${label}
+From: ${from}
 
 Hi ProcureAI buyer,
 
-Good news — your marketplace order is on the way.
+Good news — ${label} has shipped your marketplace order${opts.orderId ? ` (${opts.orderId})` : ""}.
 
 Carrier: UPS
-Tracking number: 1Z999AA10123456784
+Tracking number: ${tracking}
 
-You can track delivery on the carrier site. Please confirm receipt in ProcureAI when it arrives so funds can be captured.
+You can track delivery on the carrier site. Confirm receipt in ProcureAI when it arrives so funds can be captured.
 
 Thanks,
-Seller C Fulfillment
+${label} Fulfillment
 `;
+}
+
+export function sampleShipmentEmail(supplierId = "seller-c"): string {
+  return buildSellerShipmentEmail({ supplierId });
+}
 
 /** Deterministic parse of a pasted carrier / seller shipment email (Gmail copy-paste friendly). */
 export function parseShipmentEmail(raw: string): ParsedShipmentEmail | null {
@@ -60,8 +93,4 @@ export function parseShipmentEmail(raw: string): ParsedShipmentEmail | null {
   }
 
   return null;
-}
-
-export function sampleShipmentEmail(): string {
-  return SAMPLE_SHIPMENT_EMAIL;
 }

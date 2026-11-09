@@ -194,6 +194,10 @@
   .paymentInlineDetail { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e4ebf5; }
   .shipmentEmailBlock { display: grid; gap: 10px; width: 100%; margin-top: 4px; }
   .shipmentEmailBlock textarea { width: 100%; min-height: 140px; resize: vertical; border: 1px solid #d5e3f4; border-radius: 10px; padding: 10px 12px; background: #fbfcfe; color: #16375f; font-size: 12px; line-height: 1.45; }
+  .shipInbox { border: 1px solid #cfe0f5; border-radius: 12px; background: linear-gradient(180deg, #f7fbff 0%, #ffffff 48%); padding: 12px; display: grid; gap: 10px; }
+  .shipInboxHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .shipInboxHead strong { font-size: 13px; color: #16375f; }
+  .shipInboxBody { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; line-height: 1.45; color: #16375f; background: #fff; border: 1px solid #e4ebf5; border-radius: 10px; padding: 10px 12px; max-height: 220px; overflow: auto; }
   .paymentInlineWindow { margin-top: 12px; border: 1px solid #cfe0f5; border-radius: 12px; background: #fff; padding: 14px; box-shadow: 0 8px 24px rgba(22, 55, 95, 0.06); }
   .paymentInlineWindowHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
   .paymentInlineWindowHead strong { font-size: 13px; color: #16375f; }

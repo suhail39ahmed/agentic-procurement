@@ -30,7 +30,7 @@ Order totals above the **policy approval threshold** require human approval befo
 | A3 | Queue negotiation | Buyer/seller agents run; SSE stream shows messages |
 | A4 | Supplier offers | AG Grid ranks offers; eligible winner highlighted |
 | A5 | Checkout | PayPal AUTHORIZE order created; approve as sandbox buyer |
-| A6 | Payments | Authorize hold → **HELD** stays until shipment email Extract → Apply → Owner capture |
+| A6 | Payments | Authorize hold → **HELD** → seller email (~2s) → **SHIPPED** → Buyer/Supervisor capture |
 
 **PayPal tools used here:** Orders API (`intent=AUTHORIZE`), Captures, Checkout approve URL, verified webhooks → order ledger.  
 **AI used here:** Azure AI buyer + seller agents (negotiation language); scoring/policy/mandates are **code**, not the LLM.

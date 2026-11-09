@@ -24,7 +24,7 @@ import {
   type PaymentIntent,
   type ApprovalRequest,
 } from "agents";
-import { parseShipmentEmail, sampleShipmentEmail } from "./shipment-email";
+import { buildSellerShipmentEmail, parseShipmentEmail, sampleShipmentEmail } from "./shipment-email";
 
 export const checkoutRouter = Router();
 
@@ -378,6 +378,7 @@ checkoutRouter.post("/orders/:id/authorize", async (req, res) => {
         status: order.status,
         authorizationId: order.authorizationId,
         amount: checkout.amount,
+        supplierId: order.supplierId ?? checkout.supplierId,
         reuse: true,
       });
     }
@@ -430,6 +431,7 @@ checkoutRouter.post("/orders/:id/authorize", async (req, res) => {
       status: held.status,
       authorizationId,
       amount: checkout.amount,
+      supplierId: held.supplierId ?? checkout.supplierId,
     });
   } catch (err) {
     console.error("[checkout] authorize failed", err);
@@ -470,10 +472,21 @@ checkoutRouter.post("/orders/:id/ship", async (req, res) => {
   }
 });
 
-checkoutRouter.get("/shipment-email/sample", (_req, res) => {
+checkoutRouter.get("/shipment-email/sample", (req, res) => {
+  const supplierId = typeof req.query.supplierId === "string" && req.query.supplierId.trim()
+    ? req.query.supplierId.trim()
+    : "seller-c";
+  const orderId = typeof req.query.orderId === "string" && req.query.orderId.trim()
+    ? req.query.orderId.trim()
+    : undefined;
+  const text = orderId
+    ? buildSellerShipmentEmail({ supplierId, orderId })
+    : sampleShipmentEmail(supplierId);
   return res.json({
-    text: sampleShipmentEmail(),
-    note: "Demo shipment email — paste from Gmail the same way, then Extract → Apply.",
+    text,
+    supplierId,
+    orderId: orderId ?? null,
+    note: "Seller fulfillment email for the winning supplier (demo inbox).",
   });
 });
 
@@ -490,8 +503,8 @@ checkoutRouter.post("/shipment-email/parse", (req, res) => {
 
 /**
  * Seller agent / shipment-email bridge: moves HELD → SHIPPED.
- * Capture still requires an explicit owner Confirm delivery click.
- * Not automatic after HELD — caller must paste/parse email (or force) then POST here.
+ * Capture still requires an explicit Confirm delivery click (Buyer or Supervisor).
+ * Demo UI auto-receives a seller email ~2s after authorize, then POSTs here.
  */
 checkoutRouter.post("/orders/:id/seller-shipped", async (req, res) => {
   const ownerId = requireOwner(req);
@@ -537,7 +550,7 @@ checkoutRouter.post("/orders/:id/seller-shipped", async (req, res) => {
       source,
       note: source === "email-bridge"
         ? "Shipment email ingested — status SHIPPED. Owner must still confirm delivery to capture."
-        : "Seller agent reported shipped — status SHIPPED. Owner must still confirm delivery to capture.",
+        : "Seller reported shipped — status SHIPPED. Buyer or Supervisor can Confirm delivery & capture.",
     });
   } catch (err) {
     console.error("[checkout] seller-shipped failed", err);

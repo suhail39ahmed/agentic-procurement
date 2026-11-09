@@ -1,12 +1,11 @@
 import { proxyToApi } from "@/lib/api-proxy";
-import { demoRoleFromRequest, requireOwnerDemoRole } from "@/lib/demo-role-gate";
+import { demoRoleFromRequest } from "@/lib/demo-role-gate";
 
+/** Buyer or Supervisor may confirm delivery & capture. Supervisor-only gates stay on spend approve + dispute accept. */
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const blocked = requireOwnerDemoRole(request);
-  if (blocked) return blocked;
   const { id } = await context.params;
   return proxyToApi(`/api/orders/${encodeURIComponent(id)}/confirm-delivery`, {
     method: "POST",
