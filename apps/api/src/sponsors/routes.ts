@@ -1,9 +1,11 @@
 import { Router } from "express";
+import { listNegotiationsForOwner } from "db";
 import { assertDemoAmount, demoMaxUsd } from "../demo-cap";
 import { channel3Configured, searchChannel3 } from "./channel3";
 import { fetchInvoicePageText, kernelConfigured } from "./kernel";
 import {
   applyPaymentSignal,
+  buildOverviewSchedule,
   getScheduleSnapshot,
   resetSchedule,
   timelineEventsFromSchedule,
@@ -107,6 +109,36 @@ sponsorsRouter.get("/schedule", (req, res) => {
   const ownerId = requireOwner(req);
   if (!ownerId) return res.sendStatus(404);
   return res.json(getScheduleSnapshot());
+});
+
+/** Overview: demo history + live negotiation payment milestones (no simulate). */
+sponsorsRouter.get("/schedule/overview", async (req, res) => {
+  const ownerId = requireOwner(req);
+  if (!ownerId) return res.sendStatus(404);
+  if (!process.env.DATABASE_URL) {
+    return res.json(buildOverviewSchedule([]));
+  }
+  try {
+    const rows = await listNegotiationsForOwner(ownerId);
+    const payments = rows.map((row) => {
+      const result = row.result && typeof row.result === "object" ? row.result as Record<string, unknown> : null;
+      const checkout = result?.checkout && typeof result.checkout === "object"
+        ? result.checkout as { orderId?: string; lastStatus?: string }
+        : null;
+      const paymentStatus = checkout?.lastStatus
+        ?? (checkout?.orderId ? "APPROVED" : "");
+      return {
+        id: row.id,
+        brief: row.brief,
+        paymentStatus,
+        updatedAt: String(row.updatedAt),
+      };
+    }).filter((r) => r.paymentStatus);
+    return res.json(buildOverviewSchedule(payments));
+  } catch (err) {
+    console.error("[schedule/overview] failed", err);
+    return res.json(buildOverviewSchedule([]));
+  }
 });
 
 sponsorsRouter.post("/schedule/reset", (req, res) => {

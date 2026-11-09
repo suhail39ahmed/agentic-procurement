@@ -348,3 +348,198 @@ export function timelineEventsFromSchedule() {
     note: t.note,
   }));
 }
+
+export type WorkspacePaymentRow = {
+  id: string;
+  brief: string;
+  paymentStatus: string;
+  updatedAt: string;
+};
+
+/**
+ * Overview Gantt: demo history + live negotiation payment checkpoints
+ * (APPROVED / HELD / SHIPPED / CAPTURED). Not the simulate playground.
+ */
+export function buildOverviewSchedule(rows: WorkspacePaymentRow[]) {
+  const tasks: ScheduleTask[] = [];
+  const deps: ScheduleDependency[] = [];
+  const log: AgentLogEntry[] = [];
+
+  // Stable dummy history so the Overview always has completed context for judges.
+  const demoCompleted: ScheduleTask[] = [
+    {
+      id: "demo-auth",
+      name: "Demo · Authorize hold (office chairs)",
+      startDate: isoDay(-10),
+      endDate: isoDay(-9),
+      duration: 1,
+      flag: "ok",
+      type: "authorize",
+      note: "Sandbox history · completed authorize",
+      eventColor: colorFor("ok"),
+      manuallyScheduled: true,
+    },
+    {
+      id: "demo-cap",
+      name: "Demo · Capture complete (office chairs)",
+      startDate: isoDay(-7),
+      endDate: isoDay(-6),
+      duration: 1,
+      flag: "ok",
+      type: "capture",
+      note: "Sandbox history · owner confirmed delivery",
+      eventColor: colorFor("ok"),
+      manuallyScheduled: true,
+    },
+    {
+      id: "demo-notes",
+      name: "Demo · Sticky notes capture",
+      startDate: isoDay(-4),
+      endDate: isoDay(-3),
+      duration: 1,
+      flag: "ok",
+      type: "capture",
+      note: "Sandbox history · Channel3 RFQ path",
+      eventColor: colorFor("ok"),
+      manuallyScheduled: true,
+    },
+  ];
+  tasks.push(...demoCompleted);
+  deps.push({ id: "demo-d1", fromTask: "demo-auth", toTask: "demo-cap" });
+  log.push({
+    at: new Date(Date.now() - 3 * dayMs).toISOString(),
+    signal: "demo_history",
+    action: "Loaded dummy completed authorize → capture for Overview",
+    taskIds: ["demo-auth", "demo-cap", "demo-notes"],
+  });
+
+  const ranked = [...rows]
+    .filter((r) => ["APPROVED", "HELD", "SHIPPED", "CAPTURED"].includes(r.paymentStatus))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 8);
+
+  for (const row of ranked) {
+    const short = row.brief.replace(/\s+/g, " ").trim().slice(0, 42);
+    const label = short.length < row.brief.trim().length ? `${short}…` : short;
+    const base = row.updatedAt.slice(0, 10) || isoDay(0);
+    const authId = `live-auth-${row.id.slice(0, 8)}`;
+    const capId = `live-cap-${row.id.slice(0, 8)}`;
+
+    if (row.paymentStatus === "APPROVED") {
+      tasks.push({
+        id: authId,
+        name: `Awaiting approve · ${label}`,
+        startDate: base,
+        endDate: addDays(base, 1),
+        duration: 1,
+        flag: "late",
+        type: "authorize",
+        note: `Open Payments → Pay · ${row.id.slice(0, 8)}`,
+        eventColor: colorFor("late"),
+        manuallyScheduled: true,
+      });
+      log.unshift({
+        at: row.updatedAt,
+        signal: "APPROVED",
+        action: `Checkout open — needs PayPal approve / Authorize hold · ${label}`,
+        taskIds: [authId],
+      });
+      continue;
+    }
+
+    tasks.push({
+      id: authId,
+      name: `Authorized · ${label}`,
+      startDate: addDays(base, -2),
+      endDate: addDays(base, -1),
+      duration: 1,
+      flag: "ok",
+      type: "authorize",
+      note: `Hold placed · ${row.id.slice(0, 8)}`,
+      eventColor: colorFor("ok"),
+      manuallyScheduled: true,
+    });
+
+    if (row.paymentStatus === "HELD") {
+      tasks.push({
+        id: capId,
+        name: `On hold · ship next · ${label}`,
+        startDate: base,
+        endDate: addDays(base, 1),
+        duration: 1,
+        flag: "late",
+        type: "capture",
+        note: "Needs Mark shipped",
+        eventColor: colorFor("late"),
+        manuallyScheduled: true,
+      });
+      log.unshift({
+        at: row.updatedAt,
+        signal: "HELD",
+        action: `Authorize hold complete — awaiting ship · ${label}`,
+        taskIds: [authId, capId],
+      });
+    } else if (row.paymentStatus === "SHIPPED") {
+      tasks.push({
+        id: capId,
+        name: `Shipped · capture next · ${label}`,
+        startDate: base,
+        endDate: addDays(base, 1),
+        duration: 1,
+        flag: "late",
+        type: "capture",
+        note: "Needs Confirm delivery & capture",
+        eventColor: colorFor("late"),
+        manuallyScheduled: true,
+      });
+      log.unshift({
+        at: row.updatedAt,
+        signal: "SHIPPED",
+        action: `Shipped — awaiting owner capture · ${label}`,
+        taskIds: [authId, capId],
+      });
+    } else {
+      tasks.push({
+        id: capId,
+        name: `Captured · ${label}`,
+        startDate: base,
+        endDate: addDays(base, 1),
+        duration: 1,
+        flag: "ok",
+        type: "capture",
+        note: "Completed negotiation payment",
+        eventColor: colorFor("ok"),
+        manuallyScheduled: true,
+      });
+      log.unshift({
+        at: row.updatedAt,
+        signal: "CAPTURED",
+        action: `Negotiation payment complete · ${label}`,
+        taskIds: [authId, capId],
+      });
+    }
+    deps.push({ id: `d-${row.id.slice(0, 8)}`, fromTask: authId, toTask: capId });
+  }
+
+  const projectStartDate = tasks.reduce(
+    (min, t) => (t.startDate < min ? t.startDate : min),
+    tasks[0]?.startDate ?? isoDay(-10),
+  );
+  const projectEndDate = addDays(
+    tasks.reduce((max, t) => (t.endDate > max ? t.endDate : max), tasks[0]?.endDate ?? isoDay(0)),
+    2,
+  );
+
+  return {
+    provider: "bryntum-gantt-enterprise",
+    mode: "overview" as const,
+    note: "Overview plan mixes demo completed milestones with live negotiation payment checkpoints.",
+    tasks,
+    dependencies: deps,
+    agentLog: log.slice(0, 12),
+    projectStartDate,
+    projectEndDate,
+    liveCount: ranked.length,
+    completedCount: ranked.filter((r) => r.paymentStatus === "CAPTURED").length + 2,
+  };
+}

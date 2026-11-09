@@ -158,9 +158,9 @@ export function SponsorsPanel({
           <div className={s.inlineTitle}>
             <span className={s.iconTile}><CalendarDays size={20} /></span>
             <div>
-              <h2>Bryntum Gantt — payment-aware rescheduler</h2>
+              <h2>Bryntum Gantt — simulate payment signals</h2>
               <p className={s.description}>
-                Agent watches PayPal capture / refund / dispute signals and moves or flags milestones.
+                Automation playground only. Overview shows completed + live negotiation checkpoints without these buttons.
                 {status.bryntumLicenseConfigured ? " License env seen on API." : " Set NEXT_PUBLIC_BRYNTUM_LICENSE_KEY (or VITE_) on the web service."}
               </p>
             </div>

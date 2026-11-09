@@ -20,6 +20,7 @@ import { StretchPanel } from "./StretchPanel";
 import { PayablesPanel } from "./PayablesPanel";
 import { DisputePanel } from "./DisputePanel";
 import { SponsorsPanel } from "./SponsorsPanel";
+import { OverviewSchedulePanel } from "./OverviewSchedulePanel";
 import { PayPalApproveButtons, paypalOrderIdFromApproveUrl } from "./PayPalApproveButtons";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -1764,6 +1765,10 @@ export default function Dashboard() {
               </form>
             </section>
           </div>}
+
+          {view === "Overview" && (
+            <OverviewSchedulePanel setNotice={setNotice} />
+          )}
 
           {(view === "Overview" || view === "Requests") && <>
             <section className={s.card}>
