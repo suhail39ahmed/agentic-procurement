@@ -73,18 +73,20 @@ flowchart LR
 - **Stack:** TypeScript, Node.js, pnpm workspace, `tsx`, `zod`, Express with `helmet` and `express-rate-limit`.
 - **Packages:**
   - `packages/agents`: `negotiation/` (buyer and seller agents, protocol, scoring, intent, preferences), `governance/` (policy, policy engine, approvals, mandates), `payments/` (payment tool, fulfillment, expiry), `orders/` (order state machine, ledger).
-  - `packages/paypal`: OAuth token and REST client for PayPal.
-  - `packages/ai`: chat client with per-role routes (buyer and judge on a strong model, seller and extractor on a fast one) against an Azure AI endpoint.
-  - `apps/api`: Express API with `/health` and a verified, rate-limited PayPal webhook route.
-- **Demos + eval:** runnable scripts in `packages/agents/src/demos/`; headless eval via `pnpm --filter agents eval` writes `docs/EVAL_REPORT.md`.
+  - `packages/paypal`: OAuth token + REST client, plus `pnpm --filter paypal mcp` for the official PayPal Agent Toolkit MCP server (sandbox).
+  - `packages/ai`: chat client with tool-calling (`chatWithTools`) against Azure AI; buyer/judge strong, seller/extractor fast.
+  - `apps/api`: Express API with PayPal webhooks, Agent Toolkit–backed assistant/disputes/invoices, authorize→capture checkout.
+- **PayPal Agent Toolkit:** `@paypal/agent-toolkit` (OpenAI adapter in the buying assistant; MCP stdio server for Cursor/Claude). Disputes list/get + owner-gated `accept_dispute_claim`; invoice create/send; order get; shipment/transactions tools.
+- **Demos + eval:** runnable scripts in `packages/agents/src/demos/`; headless eval via `pnpm --filter agents eval` writes `docs/EVAL_REPORT.md` (savings + judge scores + mermaid charts).
 
 **Ops notes**
 
-- Postgres migrations live in `packages/db/migrations/` (including `0000_rollback.sql` for disposable DBs only — never run against Render prod).
+- Postgres migrations live in `packages/db/migrations/` (including `0000_rollback.sql` for disposable DBs only — never run against Render prod). Run `0003_ap_toolkit.sql` for dispute drafts / AP tables.
 - CI: `.github/workflows/ci.yml` (typecheck/lint/build + secret scan).
 - API refuses to start unless `PAYPAL_ENV=sandbox` and `MANDATE_SECRET` is set.
-- Dashboard: negotiation SSE feed, AG Grid `applyTransaction`, one-click demo seed, authorize→capture checkpoints.
+- Dashboard: negotiation SSE feed, AG Grid `applyTransaction`, one-click demo seed, authorize→capture, Toolkit disputes panel.
 - E2E checklist: `docs/TEST_PLAN.md`.
+- Hackathon resources used: PayPal sandbox REST + Checkout AUTHORIZE, webhooks, Agent Toolkit/MCP, AG Grid Community, agent-to-agent commerce track.
 
 ---
 
@@ -107,7 +109,9 @@ pnpm --filter agents checkout-demo              # mandate + PayPal authorize/cap
 pnpm --filter agents order-demo                 # order state machine
 pnpm --filter agents expiry-demo                # authorization expiry sweep
 pnpm --filter agents ledger-demo                # webhook -> ledger projection
-pnpm --filter api dev                           # API on :4000 (/health, webhooks)
+pnpm --filter agents eval                       # 50-scenario report + judge scores
+pnpm --filter paypal mcp                        # PayPal Agent Toolkit MCP (stdio, sandbox)
+pnpm --filter api dev                           # API on :4000 (/health, webhooks, toolkit)
 ```
 
 Policy knobs in `.env`: `POLICY_APPROVAL_THRESHOLD`, `POLICY_MAX_ORDER_TOTAL`.

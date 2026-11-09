@@ -1,7 +1,7 @@
 import { chat } from "ai";
 import { MAX_ROUNDS, type CounterMessage, type NegotiationMessage, type OfferMessage, type RfqMessage } from "./protocol";
 import { sellerRespond } from "./seller-agent";
-import { scoreOffers, batna, DEFAULT_WEIGHTS, type ScoredOffer, type Weights } from "./scoring";
+import { scoreOffers, batna, DEFAULT_WEIGHTS, type ReputationLookup, type ScoredOffer, type Weights } from "./scoring";
 import { inferIntent, type Intent } from "./intent";
 import type { SellerConfig } from "./seller";
 
@@ -88,7 +88,8 @@ export async function negotiate(
   rfq: RfqMessage,
   sellers: SellerConfig[],
   onEvent: (event: NegotiationEvent) => void = () => {},
-  learnedWeights: Weights = DEFAULT_WEIGHTS
+  learnedWeights: Weights = DEFAULT_WEIGHTS,
+  reputation: ReputationLookup = {},
 ): Promise<NegotiationResult> {
   const intent = await inferIntent(rfq, learnedWeights);
   const events: NegotiationEvent[] = [];
@@ -114,7 +115,7 @@ export async function negotiate(
   await collect(sellers);
 
   for (let round = 1; round <= MAX_ROUNDS; round++) {
-    const ranking = scoreOffers(rfq, [...latest.values()], intent.weights);
+    const ranking = scoreOffers(rfq, [...latest.values()], intent.weights, reputation);
     const best = batna(ranking);
     const ceiling = best ? best.offer.unitPrice : rfq.maxUnitPrice;
     const target = roundCents(ceiling * 0.95);
@@ -147,7 +148,7 @@ export async function negotiate(
     await collect(sellers.filter((s) => toCounter.some((c) => c.offer.from === s.id)));
   }
 
-  const ranking = scoreOffers(rfq, [...latest.values()], intent.weights);
+  const ranking = scoreOffers(rfq, [...latest.values()], intent.weights, reputation);
   const winner = batna(ranking);
   const rationale = await explain(rfq, ranking, sellers, intent, winner);
 

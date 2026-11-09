@@ -232,6 +232,20 @@ async function applyDispute(event: PayPalWebhookEvent): Promise<LedgerEntry> {
 async function project(event: PayPalWebhookEvent): Promise<LedgerEntry> {
   if (event.event_type.startsWith("CUSTOMER.DISPUTE.")) return applyDispute(event);
 
+  if (event.event_type === "INVOICING.INVOICE.PAID" || event.event_type === "INVOICING.INVOICE.CANCELLED") {
+    return record(event, {
+      outcome: "APPLIED",
+      reason: `client invoice webhook ${event.event_type} ${event.resource?.id ?? ""}`.trim(),
+    });
+  }
+
+  if (event.event_type.startsWith("PAYMENT.PAYOUTSBATCH.")) {
+    return record(event, {
+      outcome: "APPLIED",
+      reason: `payout batch webhook ${event.event_type} ${event.resource?.id ?? ""}`.trim(),
+    });
+  }
+
   const rule = RULES[event.event_type];
   if (!rule) return record(event, { outcome: "IGNORED", reason: "event type not projected" });
 

@@ -75,6 +75,15 @@ Negative case:
 
 ---
 
+## 5b. PayPal Agent Toolkit surfaces
+
+- [ ] Assistant can create/send a sandbox client invoice when asked (Toolkit tools in reply metadata)
+- [ ] Payments → **Simulate CUSTOMER.DISPUTE.CREATED** → dispute appears
+- [ ] **Draft response** stores agent draft; **Approve accept_dispute_claim** requires draft + `{approved:true}`
+- [ ] `pnpm --filter paypal mcp` starts MCP server (stdio) with sandbox token
+
+---
+
 ## 6. Hosted production smoke (issue #43)
 
 Repeat the full path on the Render web URL **3 times** (fresh negotiation each run):

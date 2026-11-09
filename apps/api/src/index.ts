@@ -7,6 +7,8 @@ import { auditRouter } from "./audit";
 import { negotiationsRouter } from "./negotiations";
 import { checkoutRouter } from "./checkout";
 import { assistantRouter } from "./assistant";
+import { disputesRouter } from "./disputes";
+import { invoicesRouter } from "./invoices";
 import { assertMandateSecret, assertSandboxOnly } from "./security";
 
 assertSandboxOnly();
@@ -18,7 +20,7 @@ const port = Number(process.env.PORT ?? process.env.API_PORT ?? 4000);
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
 app.use(helmet());
-app.use(express.json({ limit: "100kb" }));
+app.use(express.json({ limit: "250kb" }));
 
 const webhookLimiter = rateLimit({
   windowMs: 60_000,
@@ -50,7 +52,9 @@ app.use("/api", apiLimiter);
 app.use("/api/audit", auditRouter);
 app.use("/api/negotiations", negotiationLimiter, negotiationsRouter);
 app.use("/api/assistant", assistantRouter);
+app.use("/api/disputes", disputesRouter);
+app.use("/api/invoices", invoicesRouter);
 app.use("/api", checkoutRouter);
 app.listen(port, "0.0.0.0", () => {
-  console.log(`[api] listening on http://0.0.0.0:${port} (sandbox-only)`);
+  console.log(`[api] listening on http://0.0.0.0:${port} (sandbox-only, paypal-agent-toolkit)`);
 });
