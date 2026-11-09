@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import {
-  ArrowRight, ArrowUpRight, Bot, Check, ChevronRight,
+  ArrowRight, ArrowUpRight, Bot, Check, ChevronDown, ChevronRight,
   CreditCard, FileText, Layers3, LayoutDashboard,
   Maximize2, Menu, Minimize2, Package, PackageSearch, Plus,
   RefreshCw, Search, Send, ShieldCheck, Sparkles, Wallet, X,
@@ -373,6 +373,21 @@ export default function Dashboard() {
   const [offerSearch, setOfferSearch] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [notice, setNotice] = useState(paypalBoot.notice);
+  const [needsAttentionOpen, setNeedsAttentionOpen] = useState(true);
+  const [recentCapturedOpen, setRecentCapturedOpen] = useState(true);
+  const [expandedCapturedId, setExpandedCapturedId] = useState<string | null>(null);
+  const [capturedPreview, setCapturedPreview] = useState<{
+    id: string;
+    brief: string;
+    orderId?: string;
+    amount?: string;
+    supplierId?: string;
+    status?: string;
+    authorizationId?: string;
+    captureId?: string;
+    tracking?: { carrier: string; number: string };
+  } | null>(null);
+  const [capturedPreviewBusy, setCapturedPreviewBusy] = useState(false);
   const [channel3Busy, setChannel3Busy] = useState(false);
   const [channel3Query, setChannel3Query] = useState("office sticky notes pack");
   const [channel3Products, setChannel3Products] = useState<Array<{
@@ -457,6 +472,58 @@ export default function Dashboard() {
     if (payment === "SHIPPED") return "Needs Confirm delivery & capture";
     if (payment === "CAPTURED") return "Complete";
     return payment;
+  }
+
+  async function toggleCapturedPreview(row: { id: string; brief: string; payment: string; maxUnitPrice: number }) {
+    if (expandedCapturedId === row.id) {
+      setExpandedCapturedId(null);
+      setCapturedPreview(null);
+      return;
+    }
+    setExpandedCapturedId(row.id);
+    setCapturedPreviewBusy(true);
+    setCapturedPreview({
+      id: row.id,
+      brief: row.brief,
+      amount: money.format(row.maxUnitPrice),
+      status: "CAPTURED",
+    });
+    try {
+      const detail = await loadNegotiationDetail(row.id);
+      const saved = detail ? checkoutFromResult(detail.result) : null;
+      if (!saved?.orderId) {
+        setCapturedPreview({
+          id: row.id,
+          brief: row.brief,
+          status: "CAPTURED",
+          amount: money.format(row.maxUnitPrice),
+        });
+        return;
+      }
+      const response = await fetch(`/api/orders/${encodeURIComponent(saved.orderId)}`, { cache: "no-store" });
+      const payload = await response.json().catch(() => ({})) as {
+        id?: string;
+        status?: string;
+        amount?: number | string;
+        supplierId?: string;
+        authorizationId?: string;
+        captureId?: string;
+        tracking?: { carrier: string; number: string };
+      };
+      setCapturedPreview({
+        id: row.id,
+        brief: detail?.brief ?? row.brief,
+        orderId: payload.id ?? saved.orderId,
+        status: payload.status ?? "CAPTURED",
+        amount: payload.amount != null ? String(payload.amount) : saved.amount,
+        supplierId: payload.supplierId ?? saved.supplierId,
+        authorizationId: payload.authorizationId,
+        captureId: payload.captureId,
+        tracking: payload.tracking,
+      });
+    } finally {
+      setCapturedPreviewBusy(false);
+    }
   }
 
   async function openNegotiationOffers(id: string) {
@@ -1992,65 +2059,131 @@ export default function Dashboard() {
               <div className={s.paymentInbox}>
                 <div className={s.sectionHeader}>
                   <div>
-                    <h3>Needs attention</h3>
+                    <h3>Payment queues</h3>
                     <p className={s.description}>
-                      Shared queue for every checkout still open — APPROVED (buyer), Authorize hold / HELD (ops ships), SHIPPED (owner captures).
+                      Nested worklists — open a section, then act. Captured View expands in place (does not replace the active order panel).
                     </p>
                   </div>
                   <button type="button" className={s.secondary} onClick={() => void loadNegotiations()}>Refresh</button>
                 </div>
-                {paymentNeedsAttention.length > 0 ? (
-                  <ul className={s.paymentQueue}>
-                    {paymentNeedsAttention.map((row) => {
-                      const payLabel = paymentActionLabel(row.payment) ?? "Open";
-                      const selected = activeNegotiationId === row.id;
-                      return (
-                        <li key={row.id} className={selected ? s.paymentQueueSelected : undefined}>
-                          <div>
-                            <strong>{row.brief.slice(0, 88)}{row.brief.length > 88 ? "…" : ""}</strong>
-                            <p>{row.payment} · {nextPaymentStepLabel(row.payment)} · max {money.format(row.maxUnitPrice)}</p>
-                          </div>
-                          <div className={s.gridActions}>
-                            <span className={s.draftBadge}>{row.payment}</span>
-                            <button
-                              type="button"
-                              className={s.primary}
-                              disabled={orderBusy}
-                              onClick={() => void resumePayment(row.id, row.payment)}
-                            >
-                              {payLabel}
-                            </button>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : (
-                  <p className={s.tableNote}>Nothing pending — no APPROVED / HELD / SHIPPED checkouts right now.</p>
-                )}
 
-                {paymentRecentCaptured.length > 0 && (
-                  <>
-                    <h3 className={s.paymentInboxSub}>Recently captured</h3>
-                    <ul className={s.paymentQueue}>
-                      {paymentRecentCaptured.map((row) => (
-                        <li key={row.id}>
-                          <div>
-                            <strong>{row.brief.slice(0, 88)}{row.brief.length > 88 ? "…" : ""}</strong>
-                            <p>CAPTURED · max {money.format(row.maxUnitPrice)}</p>
-                          </div>
-                          <button
-                            type="button"
-                            className={s.textButton}
-                            onClick={() => void resumePayment(row.id, row.payment)}
-                          >
-                            View
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
+                <div className={s.paymentNest}>
+                  <button
+                    type="button"
+                    className={s.paymentNestToggle}
+                    aria-expanded={needsAttentionOpen}
+                    onClick={() => setNeedsAttentionOpen((open) => !open)}
+                  >
+                    {needsAttentionOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <span>Needs attention</span>
+                    <em>{paymentNeedsAttention.length}</em>
+                  </button>
+                  {needsAttentionOpen && (
+                    <div className={s.paymentNestBody}>
+                      <p className={s.description}>
+                        APPROVED → PayPal / Authorize hold · HELD → ship · SHIPPED → capture
+                      </p>
+                      {paymentNeedsAttention.length > 0 ? (
+                        <ul className={s.paymentQueue}>
+                          {paymentNeedsAttention.map((row) => {
+                            const payLabel = paymentActionLabel(row.payment) ?? "Open";
+                            const selected = activeNegotiationId === row.id;
+                            return (
+                              <li key={row.id} className={selected ? s.paymentQueueSelected : undefined}>
+                                <div>
+                                  <strong>{row.brief.slice(0, 88)}{row.brief.length > 88 ? "…" : ""}</strong>
+                                  <p>{row.payment} · {nextPaymentStepLabel(row.payment)} · max {money.format(row.maxUnitPrice)}</p>
+                                </div>
+                                <div className={s.gridActions}>
+                                  <span className={s.draftBadge}>{row.payment}</span>
+                                  <button
+                                    type="button"
+                                    className={s.primary}
+                                    disabled={orderBusy}
+                                    onClick={() => void resumePayment(row.id, row.payment)}
+                                  >
+                                    {payLabel}
+                                  </button>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : (
+                        <p className={s.tableNote}>Nothing pending — no APPROVED / HELD / SHIPPED checkouts right now.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className={s.paymentNest}>
+                  <button
+                    type="button"
+                    className={s.paymentNestToggle}
+                    aria-expanded={recentCapturedOpen}
+                    onClick={() => setRecentCapturedOpen((open) => !open)}
+                  >
+                    {recentCapturedOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <span>Recently captured</span>
+                    <em>{paymentRecentCaptured.length}</em>
+                  </button>
+                  {recentCapturedOpen && (
+                    <div className={s.paymentNestBody}>
+                      {paymentRecentCaptured.length > 0 ? (
+                        <ul className={s.paymentQueue}>
+                          {paymentRecentCaptured.map((row) => {
+                            const expanded = expandedCapturedId === row.id;
+                            return (
+                              <li key={row.id} className={`${s.paymentQueueStack} ${expanded ? s.paymentQueueSelected : ""}`}>
+                                <div className={s.paymentQueueRow}>
+                                  <div>
+                                    <strong>{row.brief.slice(0, 88)}{row.brief.length > 88 ? "…" : ""}</strong>
+                                    <p>CAPTURED · max {money.format(row.maxUnitPrice)}</p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className={s.textButton}
+                                    aria-expanded={expanded}
+                                    onClick={() => void toggleCapturedPreview(row)}
+                                  >
+                                    {expanded ? "Collapse" : "View"}
+                                    {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                  </button>
+                                </div>
+                                {expanded && (
+                                  <div className={s.paymentInlineDetail}>
+                                    {capturedPreviewBusy && capturedPreview?.id === row.id && (
+                                      <p className={s.description}>Loading capture details…</p>
+                                    )}
+                                    {capturedPreview?.id === row.id && (
+                                      <dl className={s.summaryList}>
+                                        <div><dt>Brief</dt><dd>{capturedPreview.brief}</dd></div>
+                                        <div><dt>Status</dt><dd>{capturedPreview.status ?? "CAPTURED"}</dd></div>
+                                        {capturedPreview.orderId && <div><dt>Order</dt><dd>{capturedPreview.orderId}</dd></div>}
+                                        {capturedPreview.amount && <div><dt>Amount</dt><dd>${capturedPreview.amount} USD</dd></div>}
+                                        {capturedPreview.supplierId && <div><dt>Supplier</dt><dd>{capturedPreview.supplierId}</dd></div>}
+                                        {capturedPreview.authorizationId && <div><dt>Authorization</dt><dd>{capturedPreview.authorizationId}</dd></div>}
+                                        {capturedPreview.tracking && (
+                                          <div>
+                                            <dt>Tracking</dt>
+                                            <dd>{capturedPreview.tracking.carrier} {capturedPreview.tracking.number}</dd>
+                                          </div>
+                                        )}
+                                        {capturedPreview.captureId && <div><dt>Capture</dt><dd>{capturedPreview.captureId}</dd></div>}
+                                      </dl>
+                                    )}
+                                  </div>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : (
+                        <p className={s.tableNote}>No captured orders yet.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

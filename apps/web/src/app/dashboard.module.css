@@ -153,10 +153,17 @@
   .paypalButtons { display: grid; gap: 8px; max-width: 360px; }
   .paymentInbox { margin-top: 18px; display: grid; gap: 12px; }
   .paymentInboxSub { margin: 8px 0 0; font-size: 14px; font-weight: 600; color: #16375f; }
-  .paymentQueue { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; max-height: 280px; overflow: auto; }
+  .paymentNest { border: 1px solid #e4ebf5; border-radius: 14px; background: #f8fbff; overflow: hidden; }
+  .paymentNestToggle { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent; padding: 12px 14px; text-align: left; color: #16375f; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .paymentNestToggle em { margin-left: auto; font-style: normal; font-size: 11px; font-weight: 650; color: #0070e0; background: #e8f2ff; border-radius: 999px; padding: 3px 8px; }
+  .paymentNestBody { padding: 0 14px 14px; display: grid; gap: 10px; border-top: 1px solid #e4ebf5; }
+  .paymentQueue { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; max-height: 320px; overflow: auto; }
   .paymentQueue li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid #e4ebf5; border-radius: 12px; background: #fbfcfe; }
   .paymentQueue li strong { display: block; font-size: 12px; color: #16375f; line-height: 1.45; }
   .paymentQueue li p { margin: 4px 0 0; font-size: 10px; color: #6f819a; line-height: 1.5; }
+  .paymentQueueStack { flex-direction: column; align-items: stretch !important; }
+  .paymentQueueRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; }
+  .paymentInlineDetail { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e4ebf5; }
   .paymentQueueSelected { border-color: #9ec2ef !important; background: #f0f6ff !important; }
   .reviewActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 18px; }
   .secondary { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 43px; background: #fff; color: #005bb8; border: 1px solid #c9dbf2; border-radius: 9px; padding: 11px 17px; font-size: 12px !important; font-weight: 550 !important; white-space: nowrap; }
