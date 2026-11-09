@@ -449,6 +449,38 @@ export default function Dashboard() {
     }
   }
 
+  /** Resume PayPal lifecycle for a negotiation that already has checkout (APPROVED → HELD → SHIPPED → CAPTURED). */
+  async function resumePayment(id: string, payment: string) {
+    setActiveNegotiationId(id);
+    activeIdRef.current = id;
+    setNotice("Loading payment checkpoint…");
+    const detail = await loadNegotiationDetail(id);
+    if (!detail) {
+      setNotice("Could not load that negotiation.");
+      return;
+    }
+    applyNegotiationResult(detail);
+    const saved = checkoutFromResult(detail.result);
+    if (!saved) {
+      setNotice("No checkout on this request yet — open Offers and use Checkout winning offer first.");
+      setView("Supplier offers");
+      return;
+    }
+    await hydrateOrder(saved.orderId, saved);
+    setView("Payments & orders");
+    if (payment === "APPROVED") {
+      setNotice("Resumed checkout — approve in the PayPal popup (or link), then Authorize hold.");
+    } else if (payment === "HELD") {
+      setNotice("Funds already held — next step: Mark shipped.");
+    } else if (payment === "SHIPPED") {
+      setNotice("Shipped — next step: Confirm delivery & capture.");
+    } else if (payment === "CAPTURED") {
+      setNotice("This order is already captured.");
+    } else {
+      setNotice("Opened Payments for this request.");
+    }
+  }
+
   async function startOrRetryNegotiation(id: string) {
     const response = await fetch(`/api/negotiations/${encodeURIComponent(id)}/start`, { method: "POST" });
     if (!response.ok) {
@@ -460,6 +492,14 @@ export default function Dashboard() {
     activeIdRef.current = id;
     setNotice("Negotiation start accepted.");
     await loadNegotiations();
+  }
+
+  function paymentActionLabel(payment: string): string | null {
+    if (payment === "APPROVED") return "Pay";
+    if (payment === "HELD") return "Ship";
+    if (payment === "SHIPPED") return "Capture";
+    if (payment === "CAPTURED") return "View";
+    return null;
   }
 
   const negotiationColumns: ColDef<FeedRow>[] = [
@@ -479,13 +519,14 @@ export default function Dashboard() {
     {
       headerName: "Actions",
       colId: "actions",
-      minWidth: 170,
-      maxWidth: 200,
+      minWidth: 210,
+      maxWidth: 260,
       sortable: false,
       filter: false,
       cellRenderer: (params: ICellRendererParams<FeedRow>) => {
         const row = params.data;
         if (!row) return null;
+        const payLabel = paymentActionLabel(row.payment);
         return (
           <div className={s.gridActions}>
             <button
@@ -495,6 +536,16 @@ export default function Dashboard() {
             >
               Offers
             </button>
+            {payLabel && (
+              <button
+                type="button"
+                className={s.textButton}
+                title="Open Payments & orders at the next checkpoint for this request"
+                onClick={() => void resumePayment(row.id, row.payment)}
+              >
+                {payLabel}
+              </button>
+            )}
             {(row.status === "QUEUED" || row.status === "FAILED") && (
               <button
                 type="button"
@@ -1673,7 +1724,7 @@ export default function Dashboard() {
                 <div>
                   <h2>Negotiations</h2>
                   <p className={s.description}>
-                    AG Grid from Postgres — about 4 rows visible, scroll for more. Offers opens the supplier table.
+                    ~4 rows visible, scroll for more. Offers → suppliers. Pay / Ship / Capture resumes that order’s next payment step.
                   </p>
                 </div>
                 <div className={s.tableActions}>
@@ -1886,7 +1937,7 @@ export default function Dashboard() {
             </ol>
             {view === "Payments & orders" && !activeOrder && <div className={s.empty}>
               <span className={s.emptyIcon}><Package size={26} /></span><h3>No order yet</h3>
-              <p>Finish a negotiation, open Supplier offers, then Checkout winning offer.</p>
+              <p>Checkout a winning offer, or from Negotiations click Pay / Ship / Capture on an APPROVED row to resume.</p>
             </div>}
             {view === "Payments & orders" && activeOrder && (
               <div className={s.reviewPanel}>
