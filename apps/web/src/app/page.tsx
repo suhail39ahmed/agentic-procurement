@@ -480,6 +480,9 @@ export default function Dashboard() {
       setCapturedPreview(null);
       return;
     }
+    // Captured details live only in the nested View panel — drop the duplicate order box below.
+    setActiveOrder(null);
+    setRecentCapturedOpen(true);
     setExpandedCapturedId(row.id);
     setCapturedPreviewBusy(true);
     setCapturedPreview({
@@ -553,6 +556,17 @@ export default function Dashboard() {
       setView("Supplier offers");
       return;
     }
+    if (payment === "CAPTURED") {
+      setView("Payments & orders");
+      await toggleCapturedPreview({
+        id: detail.id,
+        brief: detail.brief,
+        payment: "CAPTURED",
+        maxUnitPrice: detail.maxUnitPrice,
+      });
+      setNotice("Opened capture details in Recently captured.");
+      return;
+    }
     await hydrateOrder(saved.orderId, saved);
     setView("Payments & orders");
     if (payment === "APPROVED") {
@@ -561,8 +575,6 @@ export default function Dashboard() {
       setNotice("Funds already held — next step: Mark shipped.");
     } else if (payment === "SHIPPED") {
       setNotice("Shipped — next step: Confirm delivery & capture.");
-    } else if (payment === "CAPTURED") {
-      setNotice("This order is already captured.");
     } else {
       setNotice("Opened Payments for this request.");
     }
@@ -1337,13 +1349,23 @@ export default function Dashboard() {
         setNotice(payload.error ?? `Capture failed (${response.status}).`);
         return;
       }
-      setActiveOrder(current => current ? {
-        ...current,
-        status: payload.status ?? "CAPTURED",
-        captureId: payload.captureId,
-        amount: payload.amount ?? current.amount,
-      } : current);
-      setNotice("Delivery confirmed. Payment captured in sandbox.");
+      const capturedId = activeNegotiationId;
+      const capturedBrief = negotiations.find((n) => n.id === capturedId)?.brief
+        ?? activeOrder.supplierId
+        ?? "Captured order";
+      const capturedMax = negotiations.find((n) => n.id === capturedId)?.maxUnitPrice ?? Number(payload.amount ?? activeOrder.amount ?? 0);
+      setActiveOrder(null);
+      setNotice("Delivery confirmed. Payment captured — details under Recently captured.");
+      await loadNegotiations();
+      if (capturedId) {
+        setRecentCapturedOpen(true);
+        await toggleCapturedPreview({
+          id: capturedId,
+          brief: capturedBrief,
+          payment: "CAPTURED",
+          maxUnitPrice: Number.isFinite(capturedMax) && capturedMax > 0 ? capturedMax : 1,
+        });
+      }
     } catch {
       setNotice("Capture failed.");
     } finally {
@@ -2061,7 +2083,7 @@ export default function Dashboard() {
                   <div>
                     <h3>Payment queues</h3>
                     <p className={s.description}>
-                      Nested worklists — open a section, then act. Captured View expands in place (does not replace the active order panel).
+                      Needs attention opens the action panel. Recently captured View expands under the row (no duplicate box below).
                     </p>
                   </div>
                   <button type="button" className={s.secondary} onClick={() => void loadNegotiations()}>Refresh</button>
@@ -2130,7 +2152,7 @@ export default function Dashboard() {
                   {recentCapturedOpen && (
                     <div className={s.paymentNestBody}>
                       {paymentRecentCaptured.length > 0 ? (
-                        <ul className={s.paymentQueue}>
+                        <ul className={s.paymentQueueOpen}>
                           {paymentRecentCaptured.map((row) => {
                             const expanded = expandedCapturedId === row.id;
                             return (
@@ -2151,7 +2173,20 @@ export default function Dashboard() {
                                   </button>
                                 </div>
                                 {expanded && (
-                                  <div className={s.paymentInlineDetail}>
+                                  <div className={s.paymentInlineWindow}>
+                                    <div className={s.paymentInlineWindowHead}>
+                                      <strong>Capture details</strong>
+                                      <button
+                                        type="button"
+                                        className={s.textButton}
+                                        onClick={() => {
+                                          setExpandedCapturedId(null);
+                                          setCapturedPreview(null);
+                                        }}
+                                      >
+                                        Close
+                                      </button>
+                                    </div>
                                     {capturedPreviewBusy && capturedPreview?.id === row.id && (
                                       <p className={s.description}>Loading capture details…</p>
                                     )}
@@ -2191,7 +2226,7 @@ export default function Dashboard() {
               <span className={s.emptyIcon}><Package size={26} /></span><h3>No open payment work</h3>
               <p>Checkout a winning offer from Supplier offers, or resume an APPROVED row from Negotiations.</p>
             </div>}
-            {view === "Payments & orders" && activeOrder && (
+            {view === "Payments & orders" && activeOrder && activeOrder.status !== "CAPTURED" && (
               <div className={s.reviewPanel}>
                 <dl className={s.summaryList}>
                   <div><dt>Order</dt><dd>{activeOrder.orderId}</dd></div>
