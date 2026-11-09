@@ -5,7 +5,7 @@ import {
   ArrowRight, ArrowUpRight, Bot, Check, ChevronRight,
   CreditCard, FileText, Layers3, LayoutDashboard,
   Maximize2, Menu, Minimize2, Package, Plus,
-  Search, Send, ShieldCheck, Sparkles, X,
+  RefreshCw, Search, Send, ShieldCheck, Sparkles, X,
 } from "lucide-react";
 import { AgGridReact } from "ag-grid-react";
 import {
@@ -15,12 +15,13 @@ import {
 } from "ag-grid-community";
 import s from "./dashboard.module.css";
 import Link from "next/link";
+import { StretchPanel } from "./StretchPanel";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-type View = "Overview" | "Requests" | "Supplier offers" | "Payments & orders";
+type View = "Overview" | "Requests" | "Supplier offers" | "Payments & orders" | "Automation";
 type Priority = "price" | "speed" | "balanced";
-type Currency = "USD";
+type Currency = "USD" | "SGD" | "INR";
 type ComposerMode = "compose" | "review";
 
 type RequestFields = {
@@ -137,6 +138,7 @@ const navigation = [
   { name: "Requests" as const, icon: FileText },
   { name: "Supplier offers" as const, icon: Layers3 },
   { name: "Payments & orders" as const, icon: CreditCard },
+  { name: "Automation" as const, icon: RefreshCw },
 ];
 
 const priorities: { value: Priority; label: string; detail: string }[] = [
@@ -282,7 +284,9 @@ function validateFields(fields: RequestFields): { errors: FieldErrors; draft?: O
     errors.maxUnitPrice = "Use up to two decimal places for the unit budget.";
   }
 
-  if (fields.currency !== "USD") errors.currency = "Only USD is supported in this preview.";
+  if (fields.currency !== "USD" && fields.currency !== "SGD" && fields.currency !== "INR") {
+    errors.currency = "Choose USD, SGD, or INR.";
+  }
 
   const neededByDays = Number(fields.neededByDays);
   if (!fields.neededByDays.trim()) errors.neededByDays = "Enter a delivery deadline in days.";
@@ -303,7 +307,7 @@ function validateFields(fields: RequestFields): { errors: FieldErrors; draft?: O
       priority: fields.priority,
       quantity,
       maxUnitPrice: Math.round(maxUnitPrice * 100) / 100,
-      currency: "USD",
+      currency: fields.currency,
       neededByDays,
     },
   };
@@ -1215,26 +1219,70 @@ export default function Dashboard() {
         <div className={s.content}>
           <section className={s.heading}>
             <div>
-              <p className={s.eyebrow}>PROCUREMENT, WITH YOU IN CONTROL</p>
+              <p className={s.eyebrow}>PROCUREAI · AGENTIC BUYING WORKSPACE</p>
               <h1 ref={headingRef} tabIndex={-1}>
-                {view === "Overview" ? <>Better buying.<br /><span>Clearer decisions.</span></> : view}
+                {view === "Overview" ? <>Better buying.<br /><span>Clearer decisions.</span></>
+                  : view === "Automation" ? <>Automation that<br /><span>stays under control.</span></>
+                  : view === "Supplier offers" ? <>Live offers.<br /><span>Ranked in AG Grid.</span></>
+                  : view === "Payments & orders" ? <>PayPal holds.<br /><span>You capture.</span></>
+                  : view === "Requests" ? <>Every request.<br /><span>One trail.</span></>
+                  : view}
               </h1>
-              <p className={s.subtitle}>From your first request to the final payment. One clear workspace.</p>
+              <p className={s.subtitle}>
+                {view === "Automation"
+                  ? "Replenishment, FX compare, Slack approvals, and spend forecasts — stretch features in one place."
+                  : "From your first request to the final payment. AI negotiates; you approve and capture."}
+              </p>
             </div>
             <div className={s.reviewActions}>
-              <button type="button" className={s.secondary} onClick={loadDemoRequest}>Load demo request</button>
-              <button type="button" className={s.secondary} onClick={() => void seedDemoWorkspace()} disabled={queueBusy}>
+              <button
+                type="button"
+                className={s.secondary}
+                title="Fill the composer with the chairs demo brief"
+                onClick={loadDemoRequest}
+              >
+                Load demo request
+              </button>
+              <button
+                type="button"
+                className={s.secondary}
+                title="Queue a live negotiation with the chairs example in one click"
+                onClick={() => void seedDemoWorkspace()}
+                disabled={queueBusy}
+              >
                 {queueBusy ? "Seeding…" : "Seed demo (1 click)"}
               </button>
-              <button className={s.primary} onClick={newRequest}><Plus size={18} /> New request</button>
+              <button
+                className={s.primary}
+                title="Start a new sourcing brief on the Overview composer"
+                onClick={newRequest}
+              >
+                <Plus size={18} /> New request
+              </button>
             </div>
           </section>
+
+          <div className={s.stackStrip} aria-label="Built with">
+            <span className={s.stackLabel}>Built with</span>
+            <span className={s.stackLogo} title="PayPal Agent Toolkit + Orders API (sandbox)">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden><path fill="#003087" d="M7.1 21.2h2.4l.5-3.1c.1-.5.5-.9 1-.9h1.7c3.5 0 5.9-1.5 6.5-4.7.3-1.4.1-2.6-.6-3.5-.7-.9-1.9-1.4-3.4-1.4H10c-.6 0-1.1.4-1.2 1L7.1 21.2z"/><path fill="#009CDE" d="M20.5 8.1c.1.7.1 1.4-.1 2.2-.8 4-3.6 5.5-7.4 5.5H11l-.7 4.4H7.9L9.6 9.3c.1-.6.7-1.1 1.3-1.1h4.4c1.7 0 3 .4 3.8 1.2.6.6.9 1.4 1.4 2.7z"/><path fill="#012169" d="M9.3 3.1h5.1c1.2 0 2.1.2 2.8.6.2.1.4.3.6.4-.7-.9-1.9-1.4-3.5-1.4H9c-.6 0-1.1.4-1.2 1L6.1 14.6H3.7l1.8-11.3c.1-.6.7-1.1 1.3-1.1h2.5z"/></svg>
+              PayPal
+            </span>
+            <span className={s.stackLogo} title="Hosted on Render · Workflows SDK for long-running agent tasks">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden><path fill="#46E3B7" d="M12 2 2.5 20.5h5.2L12 9.8l4.3 10.7h5.2L12 2z"/></svg>
+              Render
+            </span>
+            <span className={s.stackLogo} title="AG Grid Community · live applyTransaction + SSE feed">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="#1F6B43" strokeWidth="2"/><path stroke="#1F6B43" strokeWidth="2" d="M3 9h18M3 14h18M9 4v16M15 4v16"/></svg>
+              AG Grid
+            </span>
+          </div>
 
           <div className={s.previewNotice}>
             <ShieldCheck size={17} />
             <p>
               Queue negotiation persists to Postgres and runs live buyer/seller AI. PayPal authorize → ship →
-              owner confirm → capture is available in Payments &amp; orders. Local drafts stay session-only.
+              owner confirm → capture is available in Payments &amp; orders. Automation covers replenishment, FX, Slack, and forecasts.
             </p>
           </div>
 
@@ -1339,6 +1387,8 @@ export default function Dashboard() {
                             aria-invalid={Boolean(fieldErrors.currency)}
                           >
                             <option value="USD">USD</option>
+                            <option value="SGD">SGD</option>
+                            <option value="INR">INR</option>
                           </select>
                         </label>
                       </div>
@@ -1394,7 +1444,13 @@ export default function Dashboard() {
                     <button type="button" className={s.secondary} onClick={saveDraft} disabled={queueBusy}>
                       Save draft
                     </button>
-                    <button type="button" className={s.primary} onClick={() => void queueNegotiation()} disabled={queueBusy}>
+                    <button
+                      type="button"
+                      className={s.primary}
+                      title="Persist to Postgres and start buyer/seller agents (does not approve or pay)"
+                      onClick={() => void queueNegotiation()}
+                      disabled={queueBusy}
+                    >
                       {queueBusy ? "Queueing…" : "Queue negotiation"} <ArrowRight size={16} />
                     </button>
                   </div>
@@ -1686,13 +1742,17 @@ export default function Dashboard() {
                   className={s.primary}
                   disabled={orderBusy || eligibleOffers.length === 0}
                   onClick={() => void startCheckout()}
-                  title={eligibleOffers.length === 0 ? "No offer meets budget and deadline" : "Checkout the winning eligible offer"}
+                  title={eligibleOffers.length === 0 ? "No offer meets budget and deadline — adjust the brief or wait for better quotes" : "Create a PayPal AUTHORIZE order for the winning eligible offer"}
                 >
                   {orderBusy ? "Working…" : eligibleOffers.length === 0 ? "No eligible winner" : "Checkout winning offer"} <ArrowRight size={16} />
                 </button>
               </div>
             )}
           </section>}
+
+          {view === "Automation" && (
+            <StretchPanel setNotice={setNotice} />
+          )}
 
           {(view === "Overview" || view === "Payments & orders") && <section className={`${s.card} ${s.paymentCard}`}>
             <div className={s.sectionHeader}>
@@ -1759,8 +1819,8 @@ export default function Dashboard() {
           </section>}
 
           <footer className={s.footer}>
-            <span>ProcureAI · Independent hackathon project</span>
-            <span>PayPal integration planned · Not an official PayPal product</span>
+            <span>ProcureAI · Independent hackathon project · PayPal · Render · AG Grid</span>
+            <span>Sandbox only · Not an official PayPal product</span>
           </footer>
         </div>
       </main>
