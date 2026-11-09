@@ -3,7 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   ArrowRight, ArrowUpRight, Bot, Check, ChevronDown, ChevronRight,
-  CircleHelp, CreditCard, FileText, Layers3, LayoutDashboard, LogOut,
+  CreditCard, FileText, Layers3, LayoutDashboard, LogOut,
   Maximize2, Menu, Minimize2, Package, PackageSearch, Plus,
   RefreshCw, Search, Send, ShieldCheck, Sparkles, UserRound, Wallet, X,
 } from "lucide-react";
@@ -414,7 +414,6 @@ export default function Dashboard() {
   const [loginUser, setLoginUser] = useState("buyer");
   const [loginPass, setLoginPass] = useState("buyer");
   const [loginError, setLoginError] = useState("");
-  const [processHelpOpen, setProcessHelpOpen] = useState(false);
   const [needsAttentionOpen, setNeedsAttentionOpen] = useState(true);
   const [recentCapturedOpen, setRecentCapturedOpen] = useState(true);
   const [expandedNeedsId, setExpandedNeedsId] = useState<string | null>(null);
@@ -1942,7 +1941,6 @@ export default function Dashboard() {
               onClick={() => setMobileOpen(true)}><Menu size={22} /></button>
             <span>Workspace</span><ChevronRight size={14} /><strong>{view}</strong>
           </div>
-          <span className={s.previewPill}><span /> UI preview</span>
         </header>
 
         <div className={s.content}>
@@ -1967,67 +1965,17 @@ export default function Dashboard() {
               </p>
             </div>
             <div className={s.headingActions}>
-              <div className={s.processHelp}>
-                <button
-                  type="button"
-                  className={s.processHelpToggle}
-                  aria-expanded={processHelpOpen}
-                  onClick={() => setProcessHelpOpen((open) => !open)}
-                >
-                  <CircleHelp size={16} />
-                  Help · how it works
-                  {processHelpOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </button>
-                {processHelpOpen && (
-                  <div className={s.processHelpPanel} role="region" aria-label="How to use ProcureAI">
-                    <strong>What this product is</strong>
-                    <p>
-                      Dual-track sandbox demo. <em>Marketplace</em> = buyer AI negotiates with seller AIs, then PayPal
-                      authorize→capture. <em>Payables</em> = extract supplier invoices, three-way match, payout.
-                      LLMs write messages; <em>code + policy + PayPal</em> move money.
-                    </p>
-
-                    <strong>Market norms (what “good” looks like)</strong>
-                    <ul>
-                      <li>Channel3 = live catalog prices (not Postgres). Postgres stores the RFQ only after Queue.</li>
-                      <li>Sellers scale offers to your max unit price — sticky-note ceilings and chair budgets both work.</li>
-                      <li><em>Eligible = Yes</em> means within budget and needed-by days. Checkout uses the best eligible winner.</li>
-                      <li>Order total ≤ <em>$20</em> → auto ALLOW (no Supervisor click). Above <em>$20</em> → Payments shows <em>Approve as Supervisor</em> before PayPal.</li>
-                      <li>Authorize holds funds; capture only after ship + Supervisor confirm. AI never captures alone.</li>
-                      <li>Old Supplier offers rows are frozen snapshots — always open a <em>new</em> SUCCEEDED negotiation after deploys.</li>
-                    </ul>
-
-                    <strong>What to click — marketplace</strong>
-                    <ol>
-                      <li><em>Overview</em> → Channel3 search (e.g. sticky notes) → pick product → <em>Use market price → Review</em> → <em>Queue negotiation</em>. Or <em>Load demo request</em> / track card <em>Start negotiation demo</em> for chairs.</li>
-                      <li>Wait until status <em>SUCCEEDED</em> (Requests / Negotiations grid). Click <em>Offers</em> on that row.</li>
-                      <li>Check AG Grid: unit price, delivery days, match score, Eligible. Live SSE shows buyer/seller counters.</li>
-                      <li><em>Checkout</em> → PayPal → <em>HELD</em> → seller email (~2s) auto-reads → <em>SHIPPED</em> → Confirm capture.</li>
-                      <li>Switch to <em>Supervisor</em> → <em>Confirm delivery &amp; capture</em>. Capture is never automatic.</li>
-                      <li>Overview Bryntum Gantt: one bar per live checkout; hover status dots (green done / orange action / blue hold).</li>
-                    </ol>
-
-                    <strong>What to click — payables &amp; automation</strong>
-                    <ol>
-                      <li><em>Payables</em> → sample text → <em>Extract</em> → set PO/receipt = invoice amount → <em>Match</em> → optional <em>Payout</em>.</li>
-                      <li><em>Automation</em> → KERNEL URL → <em>Fetch page text</em> (opens Payables). Stretch tools are optional.</li>
-                      <li>Buying assistant (Overview): ask “how does authorize then capture work?” — advice only, no silent pay.</li>
-                    </ol>
-
-                    <strong>What to check before recording</strong>
-                    <ul>
-                      <li>Hard-refresh after deploy. Free Render may need 30–60s cold start.</li>
-                      <li>API health shows <em>ok</em> + <em>paypalEnv: sandbox</em>. Assistant badge <em>Ready</em>.</li>
-                      <li>PayPal: use a sandbox personal buyer for approve. Never live credentials.</li>
-                      <li>Do not capture before approve. Do not expect old Authorize-hold demo rows to re-price.</li>
-                    </ul>
-
-                    <p className={s.processHelpFoot}>
-                      Sidebar map: Overview · Requests · Supplier offers · Payments · Payables · Automation.
-                    </p>
-                  </div>
-                )}
-              </div>
+              <label className={s.previewPill}>
+                <input
+                  type="radio"
+                  name="ui-preview"
+                  value="preview"
+                  checked
+                  onChange={() => undefined}
+                  aria-label="UI preview"
+                />
+                UI preview
+              </label>
               <div className={s.reviewActions}>
                 <button
                   type="button"
