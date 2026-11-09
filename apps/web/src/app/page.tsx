@@ -3,7 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   ArrowRight, ArrowUpRight, Bot, Check, ChevronDown, ChevronRight,
-  CreditCard, FileText, Layers3, LayoutDashboard, LogOut,
+  CircleHelp, CreditCard, FileText, Layers3, LayoutDashboard, LogOut,
   Maximize2, Menu, Minimize2, Package, PackageSearch, Plus,
   RefreshCw, Search, Send, ShieldCheck, Sparkles, UserRound, Wallet, X,
 } from "lucide-react";
@@ -446,6 +446,8 @@ export default function Dashboard() {
   const shipDemoTokenRef = useRef(0);
   const [disputeInbound, setDisputeInbound] = useState<DisputeInboundSeed | null>(null);
   const disputePanelRef = useRef<HTMLDivElement | null>(null);
+  const [headerTab, setHeaderTab] = useState<"preview" | "help">("preview");
+  const processHelpOpen = headerTab === "help";
   const [channel3Busy, setChannel3Busy] = useState(false);
   const [channel3Query, setChannel3Query] = useState("office sticky notes pack");
   const [channel3Products, setChannel3Products] = useState<Array<{
@@ -1989,17 +1991,69 @@ export default function Dashboard() {
               </p>
             </div>
             <div className={s.headingActions}>
-              <label className={s.previewPill}>
-                <input
-                  type="radio"
-                  name="ui-preview"
-                  value="preview"
-                  checked
-                  onChange={() => undefined}
-                  aria-label="UI preview"
-                />
-                UI preview
-              </label>
+              <div className={s.processHelp}>
+                <div className={s.previewTabGroup} role="radiogroup" aria-label="Header view">
+                  <label className={`${s.previewPill} ${headerTab === "preview" ? s.previewPillActive : ""}`}>
+                    <input
+                      type="radio"
+                      name="header-tab"
+                      value="preview"
+                      checked={headerTab === "preview"}
+                      onChange={() => setHeaderTab("preview")}
+                    />
+                    UI preview
+                  </label>
+                  <label className={`${s.previewPill} ${headerTab === "help" ? s.previewPillActive : ""}`}>
+                    <input
+                      type="radio"
+                      name="header-tab"
+                      value="help"
+                      checked={headerTab === "help"}
+                      onChange={() => setHeaderTab("help")}
+                    />
+                    <CircleHelp size={12} aria-hidden />
+                    Help
+                  </label>
+                </div>
+                {processHelpOpen && (
+                  <div className={s.processHelpPanel} role="region" aria-label="How to use ProcureAI">
+                    <strong>What this product is</strong>
+                    <p>
+                      Dual-track sandbox demo. <em>Marketplace</em> = buyer AI negotiates with seller AIs, then PayPal
+                      authorize→capture. <em>Payables</em> = extract supplier invoices, three-way match, payout.
+                      LLMs write messages; <em>code + policy + PayPal</em> move money.
+                    </p>
+
+                    <strong>Market norms (what “good” looks like)</strong>
+                    <ul>
+                      <li>Channel3 = live catalog prices (not Postgres). Postgres stores the RFQ only after Queue.</li>
+                      <li>Sellers scale offers to your max unit price — sticky-note ceilings and chair budgets both work.</li>
+                      <li><em>Eligible = Yes</em> means within budget and needed-by days. Checkout uses the best eligible winner.</li>
+                      <li>Order total ≤ <em>$20</em> → auto ALLOW. Above <em>$20</em> → Supervisor approve before PayPal.</li>
+                      <li>Authorize holds funds; seller email (~4s) → agent captures tracking → SHIPPED; Buyer or Supervisor can capture. AI never captures alone.</li>
+                      <li>After capture, buyer dispute email (~4s) → draft → Supervisor accept_dispute_claim only.</li>
+                    </ul>
+
+                    <strong>What to click — marketplace</strong>
+                    <ol>
+                      <li><em>Overview</em> → Channel3 search → <em>Use market price → Review</em> → <em>Queue negotiation</em>. Or <em>Load demo request</em>.</li>
+                      <li>Wait until <em>SUCCEEDED</em> → <em>Offers</em> on that row → <em>Checkout winning offer</em>.</li>
+                      <li>PayPal approve → <em>HELD</em> → Inbox email → agent captures tracking → <em>SHIPPED</em> → <em>Confirm delivery &amp; capture</em>.</li>
+                      <li>Disputes inbox auto-receives buyer claim after capture (or <em>Replay buyer claim</em>) → Draft → Supervisor accept.</li>
+                    </ol>
+
+                    <strong>What to click — payables &amp; automation</strong>
+                    <ol>
+                      <li><em>Payables</em> → Extract → Match → optional Payout.</li>
+                      <li><em>Automation</em> → KERNEL URL → Fetch page text. Stretch tools optional.</li>
+                    </ol>
+
+                    <p className={s.processHelpFoot}>
+                      Sidebar: Overview · Requests · Supplier offers · Payments · Payables · Automation.
+                    </p>
+                  </div>
+                )}
+              </div>
               <div className={s.reviewActions}>
                 <button
                   type="button"

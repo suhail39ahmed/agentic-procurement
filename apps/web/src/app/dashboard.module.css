@@ -50,10 +50,23 @@
   .topbar { height: 74px; padding: 0 40px; display: flex; align-items: center; justify-content: space-between; gap: 15px; border-bottom: 1px solid var(--line); background: #fff; }
   .breadcrumb { display: flex; align-items: center; gap: 12px; color: #8190a5; font-size: 11px; }
   .breadcrumb strong { color: #3f5572; font-weight: 500; }
-  .previewPill { display: inline-flex; align-items: center; gap: 7px; border: 1px solid #dee7f3; border-radius: 30px; background: #f5f8fd; color: #607794; padding: 6px 10px; font-size: 10px; white-space: nowrap; cursor: default; user-select: none; }
+  .previewTabGroup { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .previewPill { display: inline-flex; align-items: center; gap: 7px; border: 1px solid #dee7f3; border-radius: 30px; background: #f5f8fd; color: #607794; padding: 6px 10px; font-size: 10px; white-space: nowrap; cursor: pointer; user-select: none; }
+  .previewPillActive { border-color: #9dbce0; background: #eef5fd; color: #16375f; }
   .previewPill > span { width: 6px; height: 6px; border-radius: 50%; background: #6c93c3; }
   .previewPill input[type="radio"] { appearance: none; width: 12px; height: 12px; margin: 0; border: 1.5px solid #8aa4c4; border-radius: 50%; background: #fff; box-shadow: inset 0 0 0 3px #f5f8fd; position: relative; flex: 0 0 auto; }
   .previewPill input[type="radio"]:checked { border-color: #6c93c3; background: #6c93c3; box-shadow: inset 0 0 0 2px #f5f8fd; }
+  .processHelp { position: relative; max-width: 420px; }
+  .processHelpPanel { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: min(420px, 88vw); max-height: min(70vh, 560px); overflow: auto; border: 1px solid #d5e3f4; border-radius: 14px; background: #fff; padding: 14px 16px; box-shadow: 0 14px 36px rgba(22, 55, 95, 0.12); }
+  .processHelpPanel strong { display: block; font-size: 12px; color: #16375f; margin: 12px 0 6px; }
+  .processHelpPanel strong:first-child { margin-top: 0; }
+  .processHelpPanel ol,
+  .processHelpPanel ul { margin: 0 0 4px; padding-left: 18px; display: grid; gap: 5px; }
+  .processHelpPanel li { font-size: 11px; line-height: 1.5; color: #5b7190; }
+  .processHelpPanel li em,
+  .processHelpPanel p em { font-style: normal; font-weight: 650; color: #16375f; }
+  .processHelpPanel p { margin: 0 0 4px; font-size: 11px; line-height: 1.55; color: #6f819a; }
+  .processHelpFoot { margin-top: 10px !important; padding-top: 10px; border-top: 1px solid #e4ebf5; color: #8090a5 !important; }
   .content { max-width: 1580px; padding: 40px 40px 24px; margin: auto; }
   .loginShell { min-height: 100vh; display: grid; place-items: center; padding: 32px 20px; }
   .loginCard { width: min(920px, 100%); border: 1px solid var(--line); border-radius: 20px; background: #fff; padding: 28px; box-shadow: 0 18px 40px rgba(22, 55, 95, 0.08); display: grid; gap: 22px; }
