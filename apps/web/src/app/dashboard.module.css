@@ -75,9 +75,12 @@
   .trackCard:hover { transform: translateY(-3px) scale(1.01); border-color: #b8d2f3; box-shadow: 0 12px 28px #163c6b12; }
   .trackCard h3 { font-size: 16px; font-weight: 600; color: #16375f; letter-spacing: -.3px; margin: 10px 0 6px; }
   .trackCard p { margin: 0; font-size: 12px; line-height: 1.7; color: var(--muted); }
-  .trackCard .trackSteps { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
-  .trackCard .trackSteps li { font-size: 11px; color: #5b7190; }
-  .trackCard .trackCta { margin-top: 14px; display: inline-flex; align-items: center; gap: 6px; color: #0070d6; font-size: 12px; font-weight: 600; }
+  .trackCard .trackSteps { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+  .trackCard .trackSteps li { display: flex; align-items: flex-start; gap: 6px; font-size: 11px; color: #5b7190; line-height: 1.45; }
+  .trackCard .trackSteps li svg { flex-shrink: 0; margin-top: 1px; color: #0070d6; }
+  .trackCard .trackCta { margin-top: 14px; display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px 8px 10px; border: 1px solid #c5daf5; border-radius: 999px; background: #f3f8ff; color: #0070d6; font-size: 12px; font-weight: 600; }
+  .trackCard .trackRadio { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #0070d6; background: radial-gradient(circle at center, #0070d6 0 45%, transparent 48%); flex-shrink: 0; }
+  .trackCard:hover .trackCta { border-color: #9ec2ef; background: #eaf3ff; }
   .stackLogoCore { border-color: #9fc2ea; background: #edf5ff; }
   .overviewGrid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 22px; margin-bottom: 24px; align-items: stretch; }
   @media (max-width: 800px) { .trackLaunch { grid-template-columns: minmax(0, 1fr); } }

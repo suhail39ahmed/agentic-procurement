@@ -1518,11 +1518,15 @@ export default function Dashboard() {
                 <h3>1 · Agent marketplace</h3>
                 <p>Buyer AI negotiates with seller AIs, ranks offers in AG Grid, then PayPal authorize → capture.</p>
                 <ul className={s.trackSteps}>
-                  <li>Seed or compose a request</li>
-                  <li>Watch live SSE + Supplier offers</li>
-                  <li>Checkout → approve → authorize → ship → capture</li>
+                  <li><ArrowRight size={12} aria-hidden /> Seed or compose a request</li>
+                  <li><ArrowRight size={12} aria-hidden /> Watch live SSE + Supplier offers</li>
+                  <li><ArrowRight size={12} aria-hidden /> Checkout → approve → authorize → ship → capture</li>
                 </ul>
-                <span className={s.trackCta}>{queueBusy ? "Seeding…" : "Start negotiation demo"} <ArrowRight size={14} /></span>
+                <span className={s.trackCta}>
+                  <span className={s.trackRadio} aria-hidden />
+                  <ArrowRight size={14} aria-hidden />
+                  {queueBusy ? "Seeding…" : "Start negotiation demo"}
+                </span>
               </button>
               <button
                 type="button"
@@ -1534,11 +1538,15 @@ export default function Dashboard() {
                 <h3>2 · Payables agent</h3>
                 <p>Read supplier invoices, three-way match, payout suppliers, invoice clients, handle disputes.</p>
                 <ul className={s.trackSteps}>
-                  <li>Extract the $1.50 sample invoice</li>
-                  <li>Match PO + receipt → payout</li>
-                  <li>Create client invoice + simulate dispute</li>
+                  <li><ArrowRight size={12} aria-hidden /> Extract the $1.50 sample invoice</li>
+                  <li><ArrowRight size={12} aria-hidden /> Match PO + receipt → payout</li>
+                  <li><ArrowRight size={12} aria-hidden /> Create client invoice + simulate dispute</li>
                 </ul>
-                <span className={s.trackCta}>Open Payables <ArrowRight size={14} /></span>
+                <span className={s.trackCta}>
+                  <span className={s.trackRadio} aria-hidden />
+                  <ArrowRight size={14} aria-hidden />
+                  Open Payables
+                </span>
               </button>
             </section>
           )}
