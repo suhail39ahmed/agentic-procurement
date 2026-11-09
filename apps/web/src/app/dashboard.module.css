@@ -188,6 +188,8 @@
   .shipInboxHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .shipInboxHead strong { font-size: 13px; color: #16375f; }
   .shipInboxBody { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; line-height: 1.45; color: #16375f; background: #fff; border: 1px solid #e4ebf5; border-radius: 10px; padding: 10px 12px; max-height: 220px; overflow: auto; }
+  .agentCaptureBanner { margin: 0; padding: 8px 10px; border-radius: 8px; background: #e8f4ff; border: 1px solid #c5ddf5; color: #16375f; font-size: 12px; font-weight: 650; }
+  .agentCaptureCard { display: grid; gap: 8px; padding: 10px; border-radius: 10px; border: 1px solid #c5ddf5; background: #f7fbff; }
   .paymentInlineWindow { margin-top: 12px; border: 1px solid #cfe0f5; border-radius: 12px; background: #fff; padding: 14px; box-shadow: 0 8px 24px rgba(22, 55, 95, 0.06); }
   .paymentInlineWindowHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
   .paymentInlineWindowHead strong { font-size: 13px; color: #16375f; }

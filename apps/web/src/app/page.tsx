@@ -18,7 +18,7 @@ import s from "./dashboard.module.css";
 import Link from "next/link";
 import { StretchPanel } from "./StretchPanel";
 import { PayablesPanel } from "./PayablesPanel";
-import { DisputePanel } from "./DisputePanel";
+import { DisputePanel, type DisputeInboundSeed } from "./DisputePanel";
 import { SponsorsPanel } from "./SponsorsPanel";
 import { OverviewSchedulePanel } from "./OverviewSchedulePanel";
 import { PayPalApproveButtons, paypalOrderIdFromApproveUrl } from "./PayPalApproveButtons";
@@ -442,8 +442,10 @@ export default function Dashboard() {
   } | null>(null);
   const [shipEmailBusy, setShipEmailBusy] = useState(false);
   /** Demo inbox after PayPal hold: waiting → seller email → auto-parse → SHIPPED */
-  const [shipDemoPhase, setShipDemoPhase] = useState<"idle" | "waiting" | "received" | "applying" | "done">("idle");
+  const [shipDemoPhase, setShipDemoPhase] = useState<"idle" | "waiting" | "received" | "reading" | "applying" | "done">("idle");
   const shipDemoTokenRef = useRef(0);
+  const [disputeInbound, setDisputeInbound] = useState<DisputeInboundSeed | null>(null);
+  const disputePanelRef = useRef<HTMLDivElement | null>(null);
   const [channel3Busy, setChannel3Busy] = useState(false);
   const [channel3Query, setChannel3Query] = useState("office sticky notes pack");
   const [channel3Products, setChannel3Products] = useState<Array<{
@@ -703,7 +705,7 @@ export default function Dashboard() {
       if (payment === "APPROVED") {
         setNotice("Pay opened — use Pay with PayPal (Buyer or Supervisor), then Authorize hold if needed.");
       } else if (payment === "HELD") {
-        setNotice("Hold opened — seller shipment email arrives in ~2s, then auto-moves to SHIPPED.");
+        setNotice("Hold opened — seller shipment email arrives in ~4s; agent reads tracking → SHIPPED.");
         void runSellerShipEmailDemo({
           orderId: saved.orderId,
           supplierId: saved.supplierId,
@@ -1681,9 +1683,9 @@ export default function Dashboard() {
     setShipDemoPhase("waiting");
     setShipmentEmailText("");
     setShipmentParsed(null);
-    setNotice("Funds on hold — waiting for seller shipment email…");
+    setNotice("Funds on hold — waiting for seller shipment email (~4s)…");
     try {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 3800));
       if (token !== shipDemoTokenRef.current) return;
 
       const supplierId = (opts.supplierId ?? "seller").trim() || "seller";
@@ -1698,7 +1700,12 @@ export default function Dashboard() {
       if (token !== shipDemoTokenRef.current) return;
       setShipmentEmailText(sample.text);
       setShipDemoPhase("received");
-      setNotice(`Email received from ${supplierId} — reading tracking…`);
+      setNotice(`Email received from ${supplierId}. AI agent is reading the message…`);
+
+      await new Promise((resolve) => setTimeout(resolve, 1400));
+      if (token !== shipDemoTokenRef.current) return;
+      setShipDemoPhase("reading");
+      setNotice("AI agent capturing carrier + tracking from the email…");
 
       const parseRes = await fetch("/api/shipment-email/parse", {
         method: "POST",
@@ -1717,7 +1724,12 @@ export default function Dashboard() {
       if (token !== shipDemoTokenRef.current) return;
       setShipmentParsed(parsedPayload.parsed);
       setShipDemoPhase("applying");
-      setNotice(`Tracking ${parsedPayload.parsed.carrier} ${parsedPayload.parsed.number} — marking SHIPPED…`);
+      setNotice(
+        `Captured from email — ${parsedPayload.parsed.carrier} ${parsedPayload.parsed.number}. Marking SHIPPED…`,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      if (token !== shipDemoTokenRef.current) return;
 
       const shipRes = await fetch(`/api/orders/${encodeURIComponent(orderId)}/seller-shipped`, {
         method: "POST",
@@ -1748,8 +1760,7 @@ export default function Dashboard() {
       setShipDemoPhase("done");
       await loadNegotiations();
       setNotice(
-        shipPayload.note
-        ?? "Seller email applied — SHIPPED. Confirm delivery & capture when ready (Buyer or Supervisor).",
+        `Email received ✓ · Agent captured ${parsedPayload.parsed.carrier} ${parsedPayload.parsed.number} → SHIPPED. Confirm delivery when ready.`,
       );
     } catch {
       if (token === shipDemoTokenRef.current) {
@@ -1785,8 +1796,11 @@ export default function Dashboard() {
         ?? activeOrder.supplierId
         ?? "Captured order";
       const capturedMax = negotiations.find((n) => n.id === capturedId)?.maxUnitPrice ?? Number(payload.amount ?? activeOrder.amount ?? 0);
+      const capturedOrderId = activeOrder.orderId;
+      const capturedAmount = payload.amount ?? activeOrder.amount;
+      const capturedSupplierId = activeOrder.supplierId;
       setActiveOrder(null);
-      setNotice("Delivery confirmed. Payment captured — details under Recently captured.");
+      setNotice("Delivery confirmed. Payment captured — watching for a buyer dispute webhook…");
       await loadNegotiations();
       if (capturedId) {
         setRecentCapturedOpen(true);
@@ -1797,6 +1811,16 @@ export default function Dashboard() {
           maxUnitPrice: Number.isFinite(capturedMax) && capturedMax > 0 ? capturedMax : 1,
         });
       }
+      setDisputeInbound({
+        token: Date.now(),
+        orderId: capturedOrderId,
+        amount: capturedAmount,
+        supplierId: capturedSupplierId,
+        brief: capturedBrief,
+      });
+      requestAnimationFrame(() => {
+        disputePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     } catch {
       setNotice("Capture failed.");
     } finally {
@@ -2068,7 +2092,7 @@ export default function Dashboard() {
                 <ul className={s.trackSteps}>
                   <li><ArrowRight size={12} aria-hidden /> Extract the $1.50 sample invoice</li>
                   <li><ArrowRight size={12} aria-hidden /> Match PO + receipt → payout</li>
-                  <li><ArrowRight size={12} aria-hidden /> Create client invoice + simulate dispute</li>
+                  <li><ArrowRight size={12} aria-hidden /> Capture → buyer dispute inbox → Supervisor accept</li>
                 </ul>
                 <span className={s.trackCta}>
                   <span className={s.trackRadio} aria-hidden />
@@ -2795,7 +2819,7 @@ export default function Dashboard() {
                                           {activeOrder.status === "HELD" && (
                                             <div className={s.shipmentEmailBlock}>
                                               <p className={s.summaryNote}>
-                                                <strong>HELD</strong> — winning seller sends a shipment email (~2s), we read tracking, then move to <strong>SHIPPED</strong>.
+                                                <strong>HELD</strong> — winning seller emails in ~4s → AI agent reads &amp; captures tracking → <strong>SHIPPED</strong>.
                                               </p>
                                               <div className={s.shipInbox}>
                                                 <div className={s.shipInboxHead}>
@@ -2803,13 +2827,21 @@ export default function Dashboard() {
                                                   <span className={s.pending}>
                                                     {shipDemoPhase === "waiting" && "Waiting for email…"}
                                                     {shipDemoPhase === "received" && "Email received"}
-                                                    {shipDemoPhase === "applying" && "Applying tracking…"}
-                                                    {shipDemoPhase === "done" && "Applied"}
+                                                    {shipDemoPhase === "reading" && "AI reading…"}
+                                                    {shipDemoPhase === "applying" && "Capturing details…"}
+                                                    {shipDemoPhase === "done" && "Details captured"}
                                                     {(shipDemoPhase === "idle" || !shipDemoPhase) && (shipEmailBusy ? "Working…" : "Ready")}
                                                   </span>
                                                 </div>
                                                 {shipDemoPhase === "waiting" && (
-                                                  <p className={s.description}>Listening for fulfillment mail from {activeOrder.supplierId ?? "winning seller"}…</p>
+                                                  <p className={s.description}>Listening for fulfillment mail from {activeOrder.supplierId ?? "winning seller"} (~4s)…</p>
+                                                )}
+                                                {(shipDemoPhase === "received" || shipDemoPhase === "reading") && shipmentEmailText && (
+                                                  <p className={s.agentCaptureBanner} role="status">
+                                                    {shipDemoPhase === "received"
+                                                      ? "Email received — AI agent opening the message…"
+                                                      : "AI agent extracting carrier + tracking from the email…"}
+                                                  </p>
                                                 )}
                                                 {shipmentEmailText ? (
                                                   <pre className={s.shipInboxBody} aria-live="polite">{shipmentEmailText}</pre>
@@ -2817,11 +2849,16 @@ export default function Dashboard() {
                                                   <p className={s.tableNote}>No seller email yet.</p>
                                                 )}
                                                 {shipmentParsed && (
-                                                  <dl className={s.summaryList}>
-                                                    <div><dt>Carrier</dt><dd>{shipmentParsed.carrier}</dd></div>
-                                                    <div><dt>Tracking</dt><dd>{shipmentParsed.number}</dd></div>
-                                                    <div><dt>Match</dt><dd>{shipmentParsed.matchedBy} · {shipmentParsed.confidence}</dd></div>
-                                                  </dl>
+                                                  <div className={s.agentCaptureCard}>
+                                                    <p className={s.agentCaptureBanner} role="status">
+                                                      Details captured from email
+                                                    </p>
+                                                    <dl className={s.summaryList}>
+                                                      <div><dt>Carrier</dt><dd>{shipmentParsed.carrier}</dd></div>
+                                                      <div><dt>Tracking</dt><dd>{shipmentParsed.number}</dd></div>
+                                                      <div><dt>Match</dt><dd>{shipmentParsed.matchedBy} · {shipmentParsed.confidence}</dd></div>
+                                                    </dl>
+                                                  </div>
                                                 )}
                                               </div>
                                               <div className={s.reviewActions} style={{ flexWrap: "wrap" }}>
@@ -2958,7 +2995,9 @@ export default function Dashboard() {
               <p>Checkout a winning offer from Supplier offers, or open an APPROVED / HELD row under Needs attention.</p>
             </div>}
             {view === "Payments & orders" && (
-              <DisputePanel setNotice={setNotice} demoRole={demoRole} />
+              <div ref={disputePanelRef}>
+                <DisputePanel setNotice={setNotice} demoRole={demoRole} inboundSeed={disputeInbound} />
+              </div>
             )}
             <div className={s.paymentFoot}><ShieldCheck size={16} /><span>AI recommendations do not authorize or capture payments.</span></div>
           </section>}

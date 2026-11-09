@@ -79,18 +79,58 @@ disputesRouter.get("/:id", async (req, res) => {
   }
 });
 
+function buildBuyerDisputeEmail(opts: {
+  disputeId: string;
+  reason: string;
+  amount: string;
+  orderId?: string;
+  supplierId: string;
+  brief?: string;
+}): string {
+  const reasonLabel = opts.reason.replace(/_/g, " ").toLowerCase();
+  const orderLine = opts.orderId ? `Order: ${opts.orderId}` : "Order: (sandbox capture)";
+  const itemLine = opts.brief?.trim()
+    ? `Item: ${opts.brief.trim().slice(0, 120)}`
+    : `Supplier: ${opts.supplierId}`;
+  return `Subject: PayPal dispute opened — ${opts.disputeId}
+From: disputes-noreply@paypal.com
+Event: CUSTOMER.DISPUTE.CREATED
+
+A buyer opened a dispute on a recent ProcureAI capture.
+
+${orderLine}
+${itemLine}
+Amount: $${opts.amount} USD
+Reason: ${opts.reason} (${reasonLabel})
+Dispute ID: ${opts.disputeId}
+
+Buyer message:
+"The order arrived but does not match what was negotiated. Please review and respond."
+
+Next in ProcureAI: Draft a seller response, then Supervisor can approve accept_dispute_claim.
+`;
+}
+
+/** Demo inbound: PayPal-style CUSTOMER.DISPUTE.CREATED for a captured order (local ledger). */
 disputesRouter.post("/simulate", async (req, res) => {
   const ownerId = requireOwner(req);
   if (!ownerId) return res.sendStatus(404);
   if (!process.env.DATABASE_URL) return res.status(503).json({ error: "Database unavailable" });
 
-  const disputeId = `PP-D-SIM-${randomUUID().slice(0, 8).toUpperCase()}`;
-  const amount = typeof req.body?.amount === "string" ? req.body.amount : "25.00";
-  const reason = typeof req.body?.reason === "string"
-    ? req.body.reason
-    : "MERCHANDISE_OR_SERVICE_NOT_RECEIVED";
-  const orderId = typeof req.body?.orderId === "string" ? req.body.orderId : undefined;
-  const supplierId = typeof req.body?.supplierId === "string" ? req.body.supplierId : "seller-a";
+  const disputeId = `PP-D-${randomUUID().slice(0, 8).toUpperCase()}`;
+  const amount = typeof req.body?.amount === "string" && req.body.amount.trim()
+    ? req.body.amount.trim()
+    : "25.00";
+  const reason = typeof req.body?.reason === "string" && req.body.reason.trim()
+    ? req.body.reason.trim()
+    : "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED";
+  const orderId = typeof req.body?.orderId === "string" && req.body.orderId.trim()
+    ? req.body.orderId.trim()
+    : undefined;
+  const supplierId = typeof req.body?.supplierId === "string" && req.body.supplierId.trim()
+    ? req.body.supplierId.trim()
+    : "seller-a";
+  const brief = typeof req.body?.brief === "string" ? req.body.brief : undefined;
 
   try {
     await upsertLocalDispute({
@@ -112,13 +152,25 @@ disputesRouter.post("/simulate", async (req, res) => {
       disputesCounted: (existing?.disputesCounted ?? 0) + 1,
     });
 
+    const emailText = buildBuyerDisputeEmail({
+      disputeId,
+      reason,
+      amount,
+      orderId,
+      supplierId,
+      brief,
+    });
+
     return res.status(201).json({
       eventType: "CUSTOMER.DISPUTE.CREATED",
       disputeId,
       status: "OPEN",
       reason,
       amount,
-      note: "Sandbox simulation persisted locally so the dashboard can demo draft/accept flows.",
+      orderId: orderId ?? null,
+      supplierId,
+      emailText,
+      note: "Buyer dispute webhook received — draft a response, then Supervisor approves accept.",
     });
   } catch (err) {
     console.error("[disputes] simulate failed", err);

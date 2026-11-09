@@ -27,7 +27,7 @@ You run a small business buying supplies.
 - Orders **$20 or under** can proceed without an extra Supervisor approval step.  
 - Orders **over $20** need **Supervisor approval** before payment.  
 - After the buyer approves in PayPal, funds go **on hold** (not taken yet).  
-- ~2s later the **winning seller** sends a shipment email in the Payments inbox; ProcureAI reads tracking and moves to **SHIPPED**.  
+- ~4s later the **winning seller** sends a shipment email in the Payments inbox; the AI agent reads it, captures carrier/tracking, and moves to **SHIPPED**.  
 - Money is only **captured** when Buyer or Supervisor clicks **Confirm delivery & capture**.  
 - AI can negotiate and advise — it cannot capture money by itself.
 
@@ -59,7 +59,7 @@ You run a small business buying supplies.
 8. Check the table: prices, delivery days, **Eligible**.  
 9. Click **Checkout winning offer**.  
 10. On **Payments**, approve as the PayPal sandbox buyer in the popup.  
-11. Status becomes **HELD** — Inbox shows **Waiting for email…**, then the winning seller’s shipment email appears, tracking is read, status becomes **SHIPPED**.  
+11. Status becomes **HELD** — Inbox waits ~4s → **Email received** → AI agent captures carrier/tracking (shown under the email) → **SHIPPED**.  
 12. Optional stop: leave it **SHIPPED** without capturing if you only want hold + ship for the video.
 
 **You should see:** Funds on hold, then an in-window seller email from the winning supplier, then **SHIPPED**.
@@ -71,7 +71,7 @@ You run a small business buying supplies.
 **Goal:** Full happy path to paid/captured.
 
 1. Repeat a small buy like Story A (another sticky-note or low-budget request).  
-2. Checkout → PayPal approve → **HELD** → seller email (~2s) → **SHIPPED**.  
+2. Checkout → PayPal approve → **HELD** → seller email (~4s) → agent captures tracking → **SHIPPED**.  
 3. Stay as **Buyer** (or Supervisor) → **Confirm delivery & capture**.  
 4. Under **Recently captured**, click **View**.
 
@@ -101,14 +101,15 @@ You run a small business buying supplies.
 
 ## Story D — “A dispute showed up”
 
-**Goal:** Supervisor stays in control of dispute acceptance.
+**Goal:** After capture, a buyer claim arrives in the Dispute inbox; Supervisor still gates accept.
 
-1. Go to **Payments & orders**.  
-2. In **Disputes**, click **Simulate CUSTOMER.DISPUTE.CREATED** (demo stand-in for a real PayPal dispute).  
+1. Finish Story B through **Confirm delivery & capture** (or use an already-captured order).  
+2. Payments scrolls to **Disputes** — Inbox waits ~4s → **Email received** → AI agent captures dispute id / reason / amount (card under the email).  
 3. Open the dispute → **Draft response** (assistant prepares wording).  
-4. Only when you’re ready, **Approve accept_dispute_claim**.
+4. Switch to **Supervisor** → **Approve accept_dispute_claim**.
 
-**You should see:** Draft first; accept only after you approve — not automatic.
+**Alternate:** click **Replay buyer claim** if you need the inbound without capturing again.  
+**You should see:** No Simulate button; webhook-style inbox → draft → Supervisor accept only.
 
 ---
 
