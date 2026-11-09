@@ -1389,13 +1389,31 @@ export default function Dashboard() {
             <span className={s.stackLogo} title="KERNEL page fetch for invoices">KERNEL</span>
           </div>
 
-          <div className={s.previewNotice}>
-            <ShieldCheck size={17} />
-            <p>
-              Dual track: <strong>Negotiate</strong> (marketplace) and <strong>Payables</strong> (invoices/payouts).
-              Sandbox PayPal only. Use Seed demo or open Payables for the judge path.
-            </p>
-          </div>
+          {view === "Overview" && (
+            <div className={s.previewNotice}>
+              <ShieldCheck size={17} />
+              <p>
+                Dual track on Overview only: <strong>Negotiate</strong> (marketplace RFQs) and <strong>Payables</strong> (AP invoices).
+                They are separate flows — Requests stays marketplace-only; open the Payables tab for extract → match → payout.
+              </p>
+            </div>
+          )}
+          {(view === "Requests" || view === "Supplier offers" || view === "Payments & orders") && (
+            <div className={s.previewNotice}>
+              <ShieldCheck size={17} />
+              <p>
+                Marketplace track — negotiate → approve → authorize → capture. Payables (invoices/payouts) live under the Payables tab, not here.
+              </p>
+            </div>
+          )}
+          {view === "Payables" && (
+            <div className={s.previewNotice}>
+              <ShieldCheck size={17} />
+              <p>
+                Payables track — extract supplier invoices, three-way match, payout, client invoice. Separate from marketplace Requests.
+              </p>
+            </div>
+          )}
 
           {view === "Overview" && (
             <section className={s.trackLaunch} aria-label="Choose a demo track">
@@ -1435,19 +1453,29 @@ export default function Dashboard() {
             </section>
           )}
 
-          <section className={s.metrics} aria-label="Workspace summary">
-            {[
-              { label: "Negotiations", value: String(negotiations.length), detail: negotiationsError ? "API unreachable" : "Marketplace track", icon: Sparkles, target: "Requests" as View },
-              { label: "Funds on hold", value: String(heldCount), detail: heldCount ? "Authorized, not captured" : "After PayPal approve", icon: ShieldCheck, target: "Payments & orders" as View },
-              { label: "Captured", value: String(capturedCount), detail: capturedCount ? "Owner confirmed delivery" : "Confirm after ship", icon: CreditCard, target: "Payments & orders" as View },
-              { label: "Payables", value: "AP", detail: "Extract · match · payout", icon: Wallet, target: "Payables" as View },
-            ].map(({ label, value, detail, icon: Icon, target }) => (
-              <button className={s.metric} key={label} onClick={() => navigate(target)}>
-                <span className={s.metricTop}><span>{label}</span><Icon size={18} /></span>
-                <strong>{value}</strong><span className={s.metricBottom}>{detail}<ArrowUpRight size={14} /></span>
-              </button>
-            ))}
-          </section>
+          {view !== "Payables" && view !== "Automation" && (
+            <section className={s.metrics} aria-label="Workspace summary">
+              {(
+                view === "Overview"
+                  ? [
+                      { label: "Negotiations", value: String(negotiations.length), detail: negotiationsError ? "API unreachable" : "Marketplace track", icon: Sparkles, target: "Requests" as View },
+                      { label: "Funds on hold", value: String(heldCount), detail: heldCount ? "Authorized, not captured" : "After PayPal approve", icon: ShieldCheck, target: "Payments & orders" as View },
+                      { label: "Captured", value: String(capturedCount), detail: capturedCount ? "Owner confirmed delivery" : "Confirm after ship", icon: CreditCard, target: "Payments & orders" as View },
+                      { label: "Payables", value: "AP", detail: "Open AP tab · extract · match · payout", icon: Wallet, target: "Payables" as View },
+                    ]
+                  : [
+                      { label: "Negotiations", value: String(negotiations.length), detail: negotiationsError ? "API unreachable" : "Marketplace track", icon: Sparkles, target: "Requests" as View },
+                      { label: "Funds on hold", value: String(heldCount), detail: heldCount ? "Authorized, not captured" : "After PayPal approve", icon: ShieldCheck, target: "Payments & orders" as View },
+                      { label: "Captured", value: String(capturedCount), detail: capturedCount ? "Owner confirmed delivery" : "Confirm after ship", icon: CreditCard, target: "Payments & orders" as View },
+                    ]
+              ).map(({ label, value, detail, icon: Icon, target }) => (
+                <button className={s.metric} key={label} onClick={() => navigate(target)}>
+                  <span className={s.metricTop}><span>{label}</span><Icon size={18} /></span>
+                  <strong>{value}</strong><span className={s.metricBottom}>{detail}<ArrowUpRight size={14} /></span>
+                </button>
+              ))}
+            </section>
+          )}
 
           {view === "Overview" && <div className={s.overviewGrid}>
             <section className={`${s.card} ${s.composer}`} aria-labelledby="brief-title">
