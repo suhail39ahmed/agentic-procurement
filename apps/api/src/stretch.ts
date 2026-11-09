@@ -1,8 +1,26 @@
 import { randomUUID } from "node:crypto";
 import { Router } from "express";
-import { createNegotiation, listNegotiationsForOwner, type NegotiationPriority } from "db";
+import {
+  createNegotiation,
+  createReplenishmentRule,
+  createSlackApproval,
+  decideSlackApproval,
+  listNegotiationsForOwner,
+  listReplenishmentRules,
+  listSlackApprovals,
+  markReplenishmentTriggered,
+  setReplenishmentOnHand,
+  type NegotiationPriority,
+} from "db";
 import { scheduleNegotiationRun } from "./run-negotiation";
-import { fxTable, isQuoteCurrency, normalizeQuotes, toUsd, type QuoteCurrency } from "./fx";
+import {
+  fxTable,
+  isQuoteCurrency,
+  normalizeQuotes,
+  toUsd,
+  type FxQuoteInput,
+  type QuoteCurrency,
+} from "./fx";
 
 export const stretchRouter = Router();
 
@@ -14,44 +32,12 @@ function requireOwner(req: { header: (name: string) => string | undefined }): st
   return ownerId;
 }
 
-type ReplenishmentRule = {
-  id: string;
-  ownerId: string;
-  sku: string;
-  label: string;
-  thresholdQty: number;
-  reorderQty: number;
-  maxUnitPrice: number;
-  currency: QuoteCurrency;
-  neededByDays: number;
-  priority: NegotiationPriority;
-  enabled: boolean;
-  lastTriggeredAt?: string;
-  lastNegotiationId?: string;
-  createdAt: string;
-};
-
-type SlackApproval = {
-  id: string;
-  ownerId: string;
-  negotiationId?: string;
-  orderTotal: number;
-  currency: QuoteCurrency;
-  supplierId?: string;
-  status: "PENDING" | "APPROVED" | "DENIED";
-  slackTs?: string;
-  slackChannel?: string;
-  decidedBy?: string;
-  decidedAt?: string;
-  createdAt: string;
-};
-
-const rules = new Map<string, ReplenishmentRule>();
-const slackApprovals = new Map<string, SlackApproval>();
-const stockLevels = new Map<string, number>(); // key ownerId:sku
-
-function stockKey(ownerId: string, sku: string) {
-  return `${ownerId}:${sku}`;
+function requireDb(res: { status: (code: number) => { json: (body: unknown) => unknown } }) {
+  if (!process.env.DATABASE_URL) {
+    res.status(503).json({ error: "Database unavailable" });
+    return false;
+  }
+  return true;
 }
 
 /** GET /api/stretch/fx */
@@ -59,18 +45,29 @@ stretchRouter.get("/fx", (_req, res) => {
   res.json(fxTable());
 });
 
-/** POST /api/stretch/fx/normalize — compare multi-currency quotes in base currency */
+/**
+ * POST /api/stretch/fx/normalize
+ * Compare USD/SGD/INR supplier quotes in a selected base currency (#38).
+ */
 stretchRouter.post("/fx/normalize", (req, res) => {
   const ownerId = requireOwner(req);
   if (!ownerId) return res.sendStatus(404);
 
   const base = isQuoteCurrency(req.body?.base) ? req.body.base : "USD";
+  const maxUnitPriceBase = Number(req.body?.maxUnitPrice);
+  const neededByDays = Number(req.body?.neededByDays ?? 30);
   const quotes = Array.isArray(req.body?.quotes) ? req.body.quotes : [];
-  const cleaned = quotes.flatMap((q: unknown) => {
-    if (!q || typeof q !== "object") return [];
-    const row = q as { supplier?: unknown; unitPrice?: unknown; currency?: unknown; leadTimeDays?: unknown };
+
+  const cleaned: FxQuoteInput[] = quotes.flatMap((q: unknown) => {
+    if (!q || typeof q !== "object") return [] as FxQuoteInput[];
+    const row = q as {
+      supplier?: unknown;
+      unitPrice?: unknown;
+      currency?: unknown;
+      leadTimeDays?: unknown;
+    };
     const unitPrice = Number(row.unitPrice);
-    if (!Number.isFinite(unitPrice) || unitPrice <= 0) return [];
+    if (!Number.isFinite(unitPrice) || unitPrice <= 0) return [] as FxQuoteInput[];
     return [{
       supplier: typeof row.supplier === "string" ? row.supplier : "unknown",
       unitPrice,
@@ -79,31 +76,70 @@ stretchRouter.post("/fx/normalize", (req, res) => {
     }];
   });
 
-  const normalized = normalizeQuotes(cleaned, base).sort((a, b) => a.unitPriceBase - b.unitPriceBase);
+  if (cleaned.length === 0) {
+    return res.status(400).json({
+      error: "Provide at least one quote with unitPrice and currency (USD|SGD|INR)",
+    });
+  }
+
+  const normalized = normalizeQuotes(cleaned, base)
+    .map((q) => ({
+      ...q,
+      withinBudget: Number.isFinite(maxUnitPriceBase) && maxUnitPriceBase > 0
+        ? q.unitPriceBase <= maxUnitPriceBase
+        : true,
+      meetsDeadline: q.leadTimeDays <= (Number.isFinite(neededByDays) ? neededByDays : 365),
+    }))
+    .sort((a, b) => {
+      const aOk = a.withinBudget && a.meetsDeadline ? 1 : 0;
+      const bOk = b.withinBudget && b.meetsDeadline ? 1 : 0;
+      return bOk - aOk || a.unitPriceBase - b.unitPriceBase || a.leadTimeDays - b.leadTimeDays;
+    });
+
+  const winner = normalized.find((q) => q.withinBudget && q.meetsDeadline) ?? normalized[0] ?? null;
+
   return res.json({
     base,
     fx: fxTable(),
+    maxUnitPriceBase: Number.isFinite(maxUnitPriceBase) && maxUnitPriceBase > 0 ? maxUnitPriceBase : null,
+    neededByDays: Number.isFinite(neededByDays) ? neededByDays : 30,
     quotes: normalized,
-    winner: normalized[0] ?? null,
-    note: "Quotes compared after FX normalisation into the selected base currency.",
+    winner,
+    comparison: normalized.map((q, index) => ({
+      rank: index + 1,
+      supplier: q.supplier,
+      original: `${q.currency} ${q.unitPrice.toFixed(2)}`,
+      normalised: `${base} ${q.unitPriceBase.toFixed(2)}`,
+      usd: `USD ${q.unitPriceUsd.toFixed(2)}`,
+      leadTimeDays: q.leadTimeDays,
+      withinBudget: q.withinBudget,
+      meetsDeadline: q.meetsDeadline,
+    })),
+    note: "Quotes compared after FX normalisation into the selected base currency (USD/SGD/INR).",
   });
 });
 
-/** GET/POST replenishment rules */
-stretchRouter.get("/replenishment", (req, res) => {
+/** GET replenishment rules (#37) */
+stretchRouter.get("/replenishment", async (req, res) => {
   const ownerId = requireOwner(req);
   if (!ownerId) return res.sendStatus(404);
-  const items = [...rules.values()].filter((r) => r.ownerId === ownerId);
-  const stock = items.map((r) => ({
-    sku: r.sku,
-    onHand: stockLevels.get(stockKey(ownerId, r.sku)) ?? r.thresholdQty + 5,
-  }));
-  return res.json({ items, stock });
+  if (!requireDb(res)) return;
+
+  try {
+    const items = await listReplenishmentRules(ownerId);
+    const stock = items.map((r) => ({ sku: r.sku, onHand: r.onHand }));
+    return res.json({ items, stock });
+  } catch (err) {
+    console.error("[stretch] list replenishment failed", err);
+    return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
 });
 
-stretchRouter.post("/replenishment", (req, res) => {
+/** POST create/upsert replenishment rule (#37) */
+stretchRouter.post("/replenishment", async (req, res) => {
   const ownerId = requireOwner(req);
   if (!ownerId) return res.sendStatus(404);
+  if (!requireDb(res)) return;
 
   const sku = typeof req.body?.sku === "string" ? req.body.sku.trim().slice(0, 64) : "";
   const label = typeof req.body?.label === "string" ? req.body.label.trim().slice(0, 200) : "";
@@ -111,113 +147,166 @@ stretchRouter.post("/replenishment", (req, res) => {
   const reorderQty = Number(req.body?.reorderQty);
   const maxUnitPrice = Number(req.body?.maxUnitPrice);
   const neededByDays = Number(req.body?.neededByDays ?? 30);
+  const onHand = Number(req.body?.onHand ?? thresholdQty + 5);
   const currency = isQuoteCurrency(req.body?.currency) ? req.body.currency : "USD";
-  const priority = req.body?.priority;
+  const priority = req.body?.priority as NegotiationPriority | undefined;
+
   if (!sku || !label) return res.status(400).json({ error: "sku and label required" });
   if (![thresholdQty, reorderQty, maxUnitPrice, neededByDays].every((n) => Number.isFinite(n) && n > 0)) {
     return res.status(400).json({ error: "thresholdQty, reorderQty, maxUnitPrice, neededByDays must be > 0" });
+  }
+  if (!Number.isFinite(onHand) || onHand < 0) {
+    return res.status(400).json({ error: "onHand must be >= 0" });
   }
   if (priority !== "price" && priority !== "speed" && priority !== "balanced") {
     return res.status(400).json({ error: "priority must be price|speed|balanced" });
   }
 
-  const rule: ReplenishmentRule = {
-    id: randomUUID(),
-    ownerId,
-    sku,
-    label,
-    thresholdQty: Math.floor(thresholdQty),
-    reorderQty: Math.floor(reorderQty),
-    maxUnitPrice: Math.round(maxUnitPrice * 100) / 100,
-    currency,
-    neededByDays: Math.floor(neededByDays),
-    priority,
-    enabled: true,
-    createdAt: new Date().toISOString(),
-  };
-  rules.set(rule.id, rule);
-  if (!stockLevels.has(stockKey(ownerId, sku))) {
-    stockLevels.set(stockKey(ownerId, sku), thresholdQty + 5);
+  try {
+    const rule = await createReplenishmentRule({
+      id: randomUUID(),
+      ownerId,
+      sku,
+      label,
+      thresholdQty: Math.floor(thresholdQty),
+      reorderQty: Math.floor(reorderQty),
+      onHand: Math.floor(onHand),
+      maxUnitPriceDollars: Math.round(maxUnitPrice * 100) / 100,
+      currency,
+      neededByDays: Math.floor(neededByDays),
+      priority,
+    });
+    return res.status(201).json({
+      rule,
+      note: rule.onHand <= rule.thresholdQty
+        ? "Rule saved and already below threshold — call evaluate to queue sourcing."
+        : "Rule saved. Drop on-hand to/below threshold, then evaluate to queue sourcing.",
+    });
+  } catch (err) {
+    console.error("[stretch] create replenishment failed", err);
+    return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
-  return res.status(201).json({ rule });
 });
 
-stretchRouter.post("/replenishment/stock", (req, res) => {
+stretchRouter.post("/replenishment/stock", async (req, res) => {
   const ownerId = requireOwner(req);
   if (!ownerId) return res.sendStatus(404);
+  if (!requireDb(res)) return;
+
   const sku = typeof req.body?.sku === "string" ? req.body.sku.trim() : "";
   const onHand = Number(req.body?.onHand);
   if (!sku || !Number.isFinite(onHand) || onHand < 0) {
     return res.status(400).json({ error: "sku and onHand (>=0) required" });
   }
-  stockLevels.set(stockKey(ownerId, sku), Math.floor(onHand));
-  return res.json({ sku, onHand: Math.floor(onHand) });
+
+  try {
+    const rule = await setReplenishmentOnHand(ownerId, sku, Math.floor(onHand));
+    if (!rule) return res.status(404).json({ error: "No rule for that SKU — save a rule first" });
+    return res.json({
+      sku: rule.sku,
+      onHand: rule.onHand,
+      thresholdQty: rule.thresholdQty,
+      lowStock: rule.onHand <= rule.thresholdQty,
+    });
+  } catch (err) {
+    console.error("[stretch] set stock failed", err);
+    return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
 });
 
-/** Evaluate low-stock rules → optionally queue negotiation */
+/**
+ * Evaluate low-stock rules → queue negotiation (#37 acceptance:
+ * Low-stock rule triggers new sourcing request)
+ */
 stretchRouter.post("/replenishment/evaluate", async (req, res) => {
   const ownerId = requireOwner(req);
   if (!ownerId) return res.sendStatus(404);
-  if (!process.env.DATABASE_URL) return res.status(503).json({ error: "Database unavailable" });
+  if (!requireDb(res)) return;
 
   const autoQueue = req.body?.autoQueue !== false;
-  const owned = [...rules.values()].filter((r) => r.ownerId === ownerId && r.enabled);
-  const triggered: Array<{ ruleId: string; sku: string; onHand: number; negotiationId?: string }> = [];
 
-  for (const rule of owned) {
-    const onHand = stockLevels.get(stockKey(ownerId, rule.sku)) ?? rule.thresholdQty + 5;
-    if (onHand > rule.thresholdQty) continue;
+  try {
+    const owned = (await listReplenishmentRules(ownerId)).filter((r) => r.enabled);
+    const triggered: Array<{
+      ruleId: string;
+      sku: string;
+      onHand: number;
+      thresholdQty: number;
+      negotiationId?: string;
+    }> = [];
 
-    let negotiationId: string | undefined;
-    if (autoQueue) {
-      const usdMax = toUsd(rule.maxUnitPrice, rule.currency);
-      const row = await createNegotiation({
-        id: randomUUID(),
-        ownerId,
-        idempotencyKey: `replenish-${rule.id}-${Date.now()}`,
-        brief: `Auto-replenish ${rule.label} (${rule.sku}): stock ${onHand} ≤ threshold ${rule.thresholdQty}. Reorder ${rule.reorderQty}. Budget was ${rule.currency} ${rule.maxUnitPrice.toFixed(2)} (≈ $${usdMax.toFixed(2)} USD).`,
-        priority: rule.priority,
-        quantity: rule.reorderQty,
-        maxUnitPriceDollars: usdMax,
-        currency: "USD",
-        neededByDays: rule.neededByDays,
+    for (const rule of owned) {
+      if (rule.onHand > rule.thresholdQty) continue;
+
+      let negotiationId: string | undefined;
+      if (autoQueue) {
+        const currency = isQuoteCurrency(rule.currency) ? rule.currency : "USD";
+        const usdMax = toUsd(rule.maxUnitPrice, currency);
+        const row = await createNegotiation({
+          id: randomUUID(),
+          ownerId,
+          idempotencyKey: `replenish-${rule.id}-${Date.now()}`,
+          brief: `Auto-replenish ${rule.label} (${rule.sku}): stock ${rule.onHand} ≤ threshold ${rule.thresholdQty}. Reorder ${rule.reorderQty}. Budget ${currency} ${rule.maxUnitPrice.toFixed(2)} (≈ $${usdMax.toFixed(2)} USD).`,
+          priority: rule.priority,
+          quantity: rule.reorderQty,
+          maxUnitPriceDollars: usdMax,
+          currency: "USD",
+          neededByDays: rule.neededByDays,
+        });
+        negotiationId = row.id;
+        scheduleNegotiationRun(ownerId, row.id);
+        await markReplenishmentTriggered({
+          id: rule.id,
+          ownerId,
+          negotiationId: row.id,
+        });
+      }
+
+      triggered.push({
+        ruleId: rule.id,
+        sku: rule.sku,
+        onHand: rule.onHand,
+        thresholdQty: rule.thresholdQty,
+        negotiationId,
       });
-      negotiationId = row.id;
-      scheduleNegotiationRun(ownerId, row.id);
-      rule.lastTriggeredAt = new Date().toISOString();
-      rule.lastNegotiationId = row.id;
-      rules.set(rule.id, rule);
     }
 
-    triggered.push({ ruleId: rule.id, sku: rule.sku, onHand, negotiationId });
+    return res.json({
+      evaluated: owned.length,
+      triggered,
+      note: triggered.length
+        ? "Low-stock rule(s) fired and queued sourcing negotiations."
+        : "No SKUs at or below threshold.",
+    });
+  } catch (err) {
+    console.error("[stretch] evaluate replenishment failed", err);
+    return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
-
-  return res.json({
-    evaluated: owned.length,
-    triggered,
-    note: triggered.length
-      ? "Low-stock rule(s) fired and queued sourcing negotiations."
-      : "No SKUs at or below threshold.",
-  });
 });
 
-/** Slack approval card */
-stretchRouter.get("/slack/approvals", (req, res) => {
+/** Slack approvals (persisted) */
+stretchRouter.get("/slack/approvals", async (req, res) => {
   const ownerId = requireOwner(req);
   if (!ownerId) return res.sendStatus(404);
-  const items = [...slackApprovals.values()]
-    .filter((a) => a.ownerId === ownerId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  return res.json({
-    items,
-    configured: Boolean(process.env.SLACK_WEBHOOK_URL),
-    channel: process.env.SLACK_CHANNEL ?? null,
-  });
+  if (!requireDb(res)) return;
+
+  try {
+    const items = await listSlackApprovals(ownerId);
+    return res.json({
+      items,
+      configured: Boolean(process.env.SLACK_WEBHOOK_URL),
+      channel: process.env.SLACK_CHANNEL ?? null,
+    });
+  } catch (err) {
+    console.error("[stretch] list slack failed", err);
+    return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
 });
 
 stretchRouter.post("/slack/approvals", async (req, res) => {
   const ownerId = requireOwner(req);
   if (!ownerId) return res.sendStatus(404);
+  if (!requireDb(res)) return;
 
   const orderTotal = Number(req.body?.orderTotal);
   const currency = isQuoteCurrency(req.body?.currency) ? req.body.currency : "USD";
@@ -227,51 +316,44 @@ stretchRouter.post("/slack/approvals", async (req, res) => {
     return res.status(400).json({ error: "orderTotal must be > 0" });
   }
 
-  const approval: SlackApproval = {
-    id: randomUUID(),
-    ownerId,
-    negotiationId,
-    orderTotal: Math.round(orderTotal * 100) / 100,
-    currency,
-    supplierId,
-    status: "PENDING",
-    createdAt: new Date().toISOString(),
-  };
-
+  const id = randomUUID();
+  let slackTs: string | undefined;
+  let slackChannel: string | undefined;
   const webhook = process.env.SLACK_WEBHOOK_URL;
+
   if (webhook) {
     try {
       const response = await fetch(webhook, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          text: `ProcureAI approval needed: ${approval.currency} ${approval.orderTotal.toFixed(2)}`
+          text: `ProcureAI approval needed: ${currency} ${orderTotal.toFixed(2)}`
             + (supplierId ? ` · ${supplierId}` : ""),
           blocks: [
             {
               type: "section",
               text: {
                 type: "mrkdwn",
-                text: `*ProcureAI · approval required*\n*Amount:* ${approval.currency} ${approval.orderTotal.toFixed(2)}\n*Supplier:* ${supplierId ?? "n/a"}\n*Negotiation:* ${negotiationId ?? "n/a"}\n*Approval id:* \`${approval.id}\``,
+                text: `*ProcureAI · approval required*\n*Amount:* ${currency} ${orderTotal.toFixed(2)}\n*Supplier:* ${supplierId ?? "n/a"}\n*Negotiation:* ${negotiationId ?? "n/a"}\n*Approval id:* \`${id}\``,
               },
             },
             {
               type: "actions",
-              block_id: `procureai_approval_${approval.id}`,
+              block_id: `procureai_approval_${id}`,
               elements: [
                 {
                   type: "button",
                   action_id: "approve",
                   text: { type: "plain_text", text: "Approve" },
                   style: "primary",
-                  value: JSON.stringify({ id: approval.id, decision: "APPROVED" }),
+                  value: JSON.stringify({ id, decision: "APPROVED" }),
                 },
                 {
                   type: "button",
                   action_id: "deny",
                   text: { type: "plain_text", text: "Deny" },
                   style: "danger",
-                  value: JSON.stringify({ id: approval.id, decision: "DENIED" }),
+                  value: JSON.stringify({ id, decision: "DENIED" }),
                 },
               ],
             },
@@ -280,29 +362,43 @@ stretchRouter.post("/slack/approvals", async (req, res) => {
         signal: AbortSignal.timeout(10_000),
       });
       if (response.ok) {
-        approval.slackChannel = process.env.SLACK_CHANNEL ?? "webhook";
-        approval.slackTs = new Date().toISOString();
+        slackChannel = process.env.SLACK_CHANNEL ?? "webhook";
+        slackTs = new Date().toISOString();
       }
     } catch (err) {
       console.warn("[slack] webhook post failed", err);
     }
   }
 
-  slackApprovals.set(approval.id, approval);
-  return res.status(201).json({
-    approval,
-    posted: Boolean(approval.slackTs),
-    note: webhook
-      ? "Approval card posted to Slack webhook (button clicks via /api/stretch/slack/decision)."
-      : "SLACK_WEBHOOK_URL not set — card stored locally; decide via API.",
-  });
+  try {
+    const approval = await createSlackApproval({
+      id,
+      ownerId,
+      negotiationId,
+      orderTotalDollars: Math.round(orderTotal * 100) / 100,
+      currency,
+      supplierId,
+      slackTs,
+      slackChannel,
+    });
+    return res.status(201).json({
+      approval,
+      posted: Boolean(slackTs),
+      note: webhook
+        ? "Approval card posted to Slack webhook (button clicks via /api/stretch/slack/decision)."
+        : "SLACK_WEBHOOK_URL not set — card stored; decide via API.",
+    });
+  } catch (err) {
+    console.error("[stretch] create slack approval failed", err);
+    return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
 });
 
-stretchRouter.post("/slack/decision", (req, res) => {
+stretchRouter.post("/slack/decision", async (req, res) => {
   const ownerId = requireOwner(req);
   if (!ownerId) return res.sendStatus(404);
+  if (!requireDb(res)) return;
 
-  // Support both our API body and Slack interactive payload (url-encoded payload=)
   let id = typeof req.body?.id === "string" ? req.body.id : "";
   let decision = req.body?.decision;
   if (!id && typeof req.body?.payload === "string") {
@@ -324,20 +420,26 @@ stretchRouter.post("/slack/decision", (req, res) => {
   if (decision !== "APPROVED" && decision !== "DENIED") {
     return res.status(400).json({ error: "decision must be APPROVED or DENIED" });
   }
-  const approval = slackApprovals.get(id);
-  if (!approval || approval.ownerId !== ownerId) return res.sendStatus(404);
-  if (approval.status !== "PENDING") {
-    return res.status(409).json({ error: `Already ${approval.status}` });
-  }
 
-  approval.status = decision;
-  approval.decidedBy = `owner:${ownerId}`;
-  approval.decidedAt = new Date().toISOString();
-  slackApprovals.set(id, approval);
-  return res.json({ approval, persisted: true });
+  try {
+    const approval = await decideSlackApproval({
+      id,
+      ownerId,
+      decision,
+      decidedBy: `owner:${ownerId}`,
+    });
+    if (!approval) return res.sendStatus(404);
+    if (approval.status !== decision) {
+      return res.status(409).json({ error: `Already ${approval.status}`, approval });
+    }
+    return res.json({ approval, persisted: true });
+  } catch (err) {
+    console.error("[stretch] slack decision failed", err);
+    return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
 });
 
-/** Spend forecast from negotiations + synthetic ledger trend */
+/** Spend forecast */
 stretchRouter.get("/forecast", async (req, res) => {
   const ownerId = requireOwner(req);
   if (!ownerId) return res.sendStatus(404);
@@ -355,7 +457,6 @@ stretchRouter.get("/forecast", async (req, res) => {
       monthly.set(month, (monthly.get(month) ?? 0) + spend);
     }
 
-    // Ensure at least a short demo series for the chart
     if (monthly.size < 3) {
       const now = new Date();
       for (let i = 5; i >= 0; i -= 1) {

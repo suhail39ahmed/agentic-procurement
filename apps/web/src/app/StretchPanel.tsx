@@ -104,6 +104,8 @@ export function StretchPanel({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           base: fxBase,
+          maxUnitPrice: fxBase === "USD" ? 200 : fxBase === "SGD" ? 270 : 17000,
+          neededByDays: 21,
           quotes: [
             { supplier: "Anchor SG", unitPrice: 268, currency: "SGD", leadTimeDays: 12 },
             { supplier: "BundleWorks US", unitPrice: 185, currency: "USD", leadTimeDays: 18 },
@@ -114,6 +116,7 @@ export function StretchPanel({
       const payload = await response.json().catch(() => ({})) as {
         quotes?: FxQuote[];
         winner?: FxQuote | null;
+        comparison?: Array<{ rank: number; supplier: string; original: string; normalised: string }>;
         error?: string;
       };
       if (!response.ok) {
@@ -122,7 +125,10 @@ export function StretchPanel({
       }
       setFxQuotes(Array.isArray(payload.quotes) ? payload.quotes : []);
       setFxWinner(payload.winner ?? null);
-      setNotice(`FX normalised into ${fxBase}. Winner: ${payload.winner?.supplier ?? "n/a"}.`);
+      const lines = (payload.comparison ?? [])
+        .map((c) => `#${c.rank} ${c.supplier}: ${c.original} → ${c.normalised}`)
+        .join(" · ");
+      setNotice(`FX into ${fxBase}. Winner: ${payload.winner?.supplier ?? "n/a"}. ${lines}`);
     } finally {
       setBusy(false);
     }
@@ -139,23 +145,19 @@ export function StretchPanel({
           label,
           thresholdQty: Number(threshold),
           reorderQty: Number(reorder),
+          onHand: Number(onHand),
           maxUnitPrice: 200,
           currency: "USD",
           neededByDays: 21,
           priority: "balanced",
         }),
       });
-      const payload = await response.json().catch(() => ({})) as { error?: string };
+      const payload = await response.json().catch(() => ({})) as { error?: string; note?: string };
       if (!response.ok) {
         setNotice(payload.error ?? "Could not save replenishment rule.");
         return;
       }
-      await fetch("/api/stretch/replenishment/stock", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sku, onHand: Number(onHand) }),
-      });
-      setNotice("Replenishment rule saved. Evaluate to queue sourcing when stock is low.");
+      setNotice(payload.note ?? "Replenishment rule saved.");
       await refreshAll();
     } finally {
       setBusy(false);
@@ -165,18 +167,23 @@ export function StretchPanel({
   async function evaluateRules() {
     setBusy(true);
     try {
-      await fetch("/api/stretch/replenishment/stock", {
+      const stockRes = await fetch("/api/stretch/replenishment/stock", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ sku, onHand: Number(onHand) }),
       });
+      if (!stockRes.ok) {
+        const stockPayload = await stockRes.json().catch(() => ({})) as { error?: string };
+        setNotice(stockPayload.error ?? "Set stock failed — save the rule first.");
+        return;
+      }
       const response = await fetch("/api/stretch/replenishment/evaluate", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ autoQueue: true }),
       });
       const payload = await response.json().catch(() => ({})) as {
-        triggered?: Array<{ sku: string; negotiationId?: string }>;
+        triggered?: Array<{ sku: string; negotiationId?: string; onHand: number; thresholdQty: number }>;
         note?: string;
         error?: string;
       };
@@ -184,7 +191,12 @@ export function StretchPanel({
         setNotice(payload.error ?? "Evaluate failed.");
         return;
       }
-      setNotice(payload.note ?? `Triggered ${payload.triggered?.length ?? 0} rule(s).`);
+      const queued = (payload.triggered ?? []).filter((t) => t.negotiationId);
+      setNotice(
+        queued.length
+          ? `Low-stock fired → queued ${queued.map((t) => `${t.sku} (${t.negotiationId!.slice(0, 8)}…)`).join(", ")}`
+          : (payload.note ?? "No SKUs at or below threshold."),
+      );
       await refreshAll();
     } finally {
       setBusy(false);

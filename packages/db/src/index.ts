@@ -9,6 +9,7 @@ export * from "./repositories/webhooks";
 export * from "./repositories/preferences";
 export * from "./repositories/negotiations";
 export * from "./repositories/ap";
+export * from "./repositories/stretch";
 
 export {
     listAuditRecords,

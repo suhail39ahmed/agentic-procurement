@@ -27,7 +27,13 @@ async function main() {
     applied_at timestamptz NOT NULL DEFAULT now()
   )`;
 
-  for (const id of ["0000_initial", "0001_audit_records", "0002_negotiations"]) {
+  for (const id of [
+    "0000_initial",
+    "0001_audit_records",
+    "0002_negotiations",
+    "0003_ap_toolkit",
+    "0004_stretch",
+  ]) {
     const changed = await sql.begin(async (tx) => {
       await tx`LOCK TABLE schema_migrations IN EXCLUSIVE MODE`;
       const applied = await tx<{ id: string }[]>`

@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS "replenishment_rules" (
   "label" text NOT NULL,
   "threshold_qty" integer NOT NULL,
   "reorder_qty" integer NOT NULL,
+  "on_hand" integer NOT NULL DEFAULT 0,
   "max_unit_price" integer NOT NULL,
   "currency" text NOT NULL DEFAULT 'USD',
   "needed_by_days" integer NOT NULL DEFAULT 30,
@@ -21,6 +22,9 @@ CREATE TABLE IF NOT EXISTS "replenishment_rules" (
 
 CREATE INDEX IF NOT EXISTS "replenishment_rules_owner_idx"
   ON "replenishment_rules" USING btree ("owner_id");
+
+CREATE UNIQUE INDEX IF NOT EXISTS "replenishment_rules_owner_sku_idx"
+  ON "replenishment_rules" USING btree ("owner_id", "sku");
 
 CREATE TABLE IF NOT EXISTS "slack_approvals" (
   "id" text PRIMARY KEY NOT NULL,

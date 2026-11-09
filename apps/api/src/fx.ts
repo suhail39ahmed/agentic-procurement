@@ -20,15 +20,29 @@ export function fromUsd(amountUsd: number, currency: QuoteCurrency): number {
   return Math.round((amountUsd / rate) * 100) / 100;
 }
 
-export function normalizeQuotes<T extends { unitPrice: number; currency?: string }>(
-  quotes: T[],
+export type FxQuoteInput = {
+  supplier: string;
+  unitPrice: number;
+  currency: QuoteCurrency;
+  leadTimeDays: number;
+};
+
+export type FxNormalizedQuote = FxQuoteInput & {
+  unitPriceUsd: number;
+  unitPriceBase: number;
+  fxRateToUsd: number;
+};
+
+export function normalizeQuotes(
+  quotes: FxQuoteInput[],
   base: QuoteCurrency = "USD",
-): Array<T & { unitPriceUsd: number; unitPriceBase: number; fxRateToUsd: number }> {
+): FxNormalizedQuote[] {
   return quotes.map((quote) => {
     const currency = isQuoteCurrency(quote.currency) ? quote.currency : "USD";
     const unitPriceUsd = toUsd(quote.unitPrice, currency);
     return {
       ...quote,
+      currency,
       unitPriceUsd,
       unitPriceBase: base === "USD" ? unitPriceUsd : fromUsd(unitPriceUsd, base),
       fxRateToUsd: TO_USD[currency],
