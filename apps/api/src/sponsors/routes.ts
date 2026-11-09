@@ -64,7 +64,7 @@ sponsorsRouter.post("/channel3/search", async (req, res) => {
           quantity: 1,
           maxUnitPrice: unit.toFixed(2),
           currency: suggestion.currency || "USD",
-          neededByDays: 14,
+          neededByDays: 30,
           priority: "balanced" as const,
           productTitle: suggestion.title,
           retailer: suggestion.retailer ?? null,

@@ -124,7 +124,8 @@ export async function negotiate(
       (s) =>
         s.meetsDeadline &&
         s.offer.unitPrice > target &&
-        s.offer.unitPrice <= rfq.maxUnitPrice * 1.15
+        // 1.25× keeps scaled Channel3 opens (near list) inside the counter band.
+        s.offer.unitPrice <= rfq.maxUnitPrice * 1.25
     );
     if (toCounter.length === 0) break;
 

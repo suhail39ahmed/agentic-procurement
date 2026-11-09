@@ -818,12 +818,12 @@ export default function Dashboard() {
       : 25;
     const retailer = product.retailer ? ` from ${product.retailer}` : "";
     const next = {
-      brief: `Supply 1× "${product.title}"${retailer}. Match or beat Channel3 market unit price ≤ $${unit.toFixed(2)} USD. Prefer in-stock; ship within 14 days.`.slice(0, 500),
+      brief: `Supply 1× "${product.title}"${retailer}. Match or beat Channel3 market unit price ≤ $${unit.toFixed(2)} USD. Prefer in-stock; ship within 30 days.`.slice(0, 500),
       priority: "balanced" as const,
       quantity: "1",
       maxUnitPrice: unit.toFixed(2),
       currency: "USD" as const,
-      neededByDays: "14",
+      neededByDays: "30",
     };
     setFields(next);
     const result = validateFields(next);

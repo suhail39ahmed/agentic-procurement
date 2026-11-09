@@ -87,8 +87,33 @@ export type SellerConfig = {
     },
   ];
 
+  /** Chair-tier templates were authored against ~$180 unit budgets. */
+  const REFERENCE_BUDGET_USD = 180;
+
+  function roundCents(value: number): number {
+    return Math.round(value * 100) / 100;
+  }
+
+  /**
+   * Scale seller floors/lists to the RFQ ceiling so Channel3 sticky-note budgets
+   * (~$10–$25) and chair budgets (~$150–$250) both produce competitive offers.
+   * Micro sellers stay for tiny sandbox caps (≤ $2).
+   */
   export function sellersForBudget(maxUnitPriceUsd: number): SellerConfig[] {
-    return maxUnitPriceUsd <= 2 ? microSellers : sellers;
+    if (!Number.isFinite(maxUnitPriceUsd) || maxUnitPriceUsd <= 0) return sellers;
+    if (maxUnitPriceUsd <= 2) return microSellers;
+
+    const scale = maxUnitPriceUsd / REFERENCE_BUDGET_USD;
+    // Near the reference band, keep authored prices so chair demos stay familiar.
+    if (scale >= 0.85 && scale <= 1.25) return sellers;
+
+    return sellers.map((seller) => {
+      const floorPrice = roundCents(Math.max(0.01, seller.floorPrice * scale));
+      const listPrice = roundCents(Math.max(floorPrice + 0.01, seller.listPrice * scale));
+      // Compress slow tails so Channel3 / low-budget RFQs (often ≤30d) still get a value option.
+      const leadTimeDays = seller.leadTimeDays > 21 ? 21 : seller.leadTimeDays;
+      return { ...seller, floorPrice, listPrice, leadTimeDays };
+    });
   }
 
   export function getSeller(id: string): SellerConfig {
