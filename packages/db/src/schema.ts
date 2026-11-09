@@ -238,3 +238,44 @@ export const negotiations = pgTable("negotiations", {
   statusIdx: index("negotiations_status_idx").on(table.status),
   workflowRunIdIdx: index("negotiations_workflow_run_id_idx").on(table.workflowRunId),
 }));
+
+export const replenishmentRules = pgTable("replenishment_rules", {
+  id: text("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  sku: text("sku").notNull(),
+  label: text("label").notNull(),
+  thresholdQty: integer("threshold_qty").notNull(),
+  reorderQty: integer("reorder_qty").notNull(),
+  onHand: integer("on_hand").notNull().default(0),
+  maxUnitPrice: integer("max_unit_price").notNull(),
+  currency: text("currency").notNull().default("USD"),
+  neededByDays: integer("needed_by_days").notNull().default(30),
+  priority: text("priority").notNull().default("balanced"),
+  enabled: integer("enabled").notNull().default(1),
+  lastTriggeredAt: ts("last_triggered_at"),
+  lastNegotiationId: text("last_negotiation_id"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  ownerIdx: index("replenishment_rules_owner_idx").on(table.ownerId),
+  ownerSkuIdx: uniqueIndex("replenishment_rules_owner_sku_idx").on(table.ownerId, table.sku),
+}));
+
+export const slackApprovals = pgTable("slack_approvals", {
+  id: text("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  negotiationId: text("negotiation_id"),
+  orderTotal: integer("order_total").notNull(),
+  currency: text("currency").notNull().default("USD"),
+  supplierId: text("supplier_id"),
+  status: text("status").notNull().default("PENDING"),
+  slackTs: text("slack_ts"),
+  slackChannel: text("slack_channel"),
+  decidedBy: text("decided_by"),
+  decidedAt: ts("decided_at"),
+  payload: jsonb("payload"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  ownerStatusIdx: index("slack_approvals_owner_status_idx").on(table.ownerId, table.status),
+}));
