@@ -61,7 +61,8 @@ export async function searchChannel3(query: string, maxPrice = 2): Promise<{
   const rows = Array.isArray(payload.products) ? payload.products : [];
   const products: Channel3Offer[] = rows.flatMap((p) => {
     const offer = p.offers?.[0];
-    const price = offer?.price != null ? Number(offer.price) : undefined;
+    const priceNum = offer?.price != null ? Number(offer.price) : NaN;
+    const price = Number.isFinite(priceNum) ? priceNum : undefined;
     if (price != null && price > maxPrice) return [];
     return [{
       title: p.title ?? "Product",

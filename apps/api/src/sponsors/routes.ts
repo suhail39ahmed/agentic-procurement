@@ -51,17 +51,19 @@ sponsorsRouter.post("/channel3/search", async (req, res) => {
   try {
     const result = await searchChannel3(query, Math.min(maxPrice, cap));
     const suggestion = result.products[0];
-    const unit = suggestion?.price != null
-      ? Math.min(suggestion.price, cap)
-      : Math.min(2, cap);
-    const retailer = suggestion?.retailer ? ` (retailer: ${suggestion.retailer})` : "";
-    const productRef = suggestion?.productId ? ` Channel3 id ${suggestion.productId}.` : "";
+    const parsedPrice = suggestion?.price != null && Number.isFinite(Number(suggestion.price))
+      ? Number(suggestion.price)
+      : null;
+    const unit = parsedPrice != null
+      ? Math.min(parsedPrice, cap)
+      : Math.min(25, cap);
+    const retailer = suggestion?.retailer ? ` from ${suggestion.retailer}` : "";
     return res.json({
       ...result,
       suggestion: suggestion
         ? {
-          // This brief is what buyer/seller agents negotiate against after Queue negotiation.
-          brief: `RFQ: supply 1× "${suggestion.title}"${retailer}. Match or beat unit price ≤ $${unit.toFixed(2)} USD. Prefer in-stock, ship within 14 days.${productRef}`.slice(0, 500),
+          // Plain RFQ text for sellers — no internal catalog IDs in the brief.
+          brief: `Supply 1× "${suggestion.title}"${retailer}. Match or beat unit price ≤ $${unit.toFixed(2)} USD. Prefer in-stock; ship within 14 days.`.slice(0, 500),
           quantity: 1,
           maxUnitPrice: unit.toFixed(2),
           currency: "USD",
