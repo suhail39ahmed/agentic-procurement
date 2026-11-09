@@ -4,9 +4,9 @@
 
 **AI agents that negotiate, buy and pay on PayPal: agentic procurement and payables for small businesses.**
 
-A buyer agent sends a request for quote (RFQ) to several seller agents, negotiates over a few rounds, picks the best offer for the owner's priorities, and pays through PayPal, but only inside a policy the owner sets, with a human approval for anything above the threshold.
+**Two tracks in one product:** (1) **Agent-to-agent marketplace** — buyer AI negotiates with seller AIs, scores offers, then PayPal authorize→capture. (2) **AI procurement & payables** — extract supplier invoices, three-way match, payouts, client invoicing, disputes.
 
-> **Status:** PayPal AI Hackathon 2026 (sandbox only). Core agent-to-agent marketplace loop is live: negotiate → policy/mandate → authorize → ship → owner confirm → capture. Hosted on Render.
+> **Status:** PayPal AI Hackathon 2026 (sandbox only). Demo spend guard `DEMO_MAX_USD=2` by default. Hosted on Render.
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=nodedotjs&logoColor=white)
@@ -84,9 +84,22 @@ flowchart LR
 - Postgres migrations live in `packages/db/migrations/` (including `0000_rollback.sql` for disposable DBs only — never run against Render prod). Run `0003_ap_toolkit.sql` for dispute drafts / AP tables.
 - CI: `.github/workflows/ci.yml` (typecheck/lint/build + secret scan).
 - API refuses to start unless `PAYPAL_ENV=sandbox` and `MANDATE_SECRET` is set.
-- Dashboard: negotiation SSE feed, AG Grid `applyTransaction`, one-click demo seed, authorize→capture, Toolkit disputes panel.
-- E2E checklist: `docs/TEST_PLAN.md`.
-- Hackathon resources used: PayPal sandbox REST + Checkout AUTHORIZE, webhooks, Agent Toolkit/MCP, AG Grid Community, agent-to-agent commerce track.
+- Dashboard: negotiation SSE feed, AG Grid `applyTransaction`, Payables panel (extract/match/payout/client invoice), Automation (FX/replenish/Slack/forecast) + sponsor panels.
+- OpenAPI for APIMatic DX: `docs/openapi.yaml`.
+- E2E checklist: `docs/TEST_PLAN.md` (use qty 1, max unit ≤ $2).
+- Hackathon / sponsor tools used:
+  - **PayPal** sandbox REST + Checkout AUTHORIZE, webhooks, Agent Toolkit/MCP
+  - **AG Grid** Community (live grids)
+  - **Render** web + API + Workflows package
+  - **Channel3** catalog enrich (`CHANNEL3_API_KEY`, env-gated)
+  - **Bryntum**-category schedule timeline (delivery / replenish / payout dues)
+  - **KERNEL** invoice page fetch bridge (`KERNEL_API_KEY`, env-gated)
+  - **APIMatic**-ready OpenAPI source of truth
+  - **Astropods**-style agent registry (scopes, human gates, spend caps)
+  - **Postman** collection: `docs/postman/ProcureAI.postman_collection.json`
+  - Slack approvals stretch (`SLACK_WEBHOOK_URL`)
+
+**Judge path (≤ $2):** Overview → track cards → Seed negotiation **or** Open Payables.
 
 ---
 

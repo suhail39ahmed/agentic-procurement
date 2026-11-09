@@ -70,7 +70,17 @@
   .metric > strong { display: block; font-size: 32px; line-height: 1; font-weight: 550; letter-spacing: -1px; color: #16375f; margin: 18px 0 12px; }
   .metricBottom { display: flex; align-items: center; justify-content: space-between; gap: 7px; font-size: 9px; line-height: 1.7; color: #8996a8; }
   .metricBottom > svg { flex-shrink: 0; color: #9bacc1; }
+  .trackLaunch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 22px; }
+  .trackCard { text-align: left; border: 1px solid var(--line); border-radius: 16px; padding: 20px; background: #fff; color: var(--ink); transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease; }
+  .trackCard:hover { transform: translateY(-3px) scale(1.01); border-color: #b8d2f3; box-shadow: 0 12px 28px #163c6b12; }
+  .trackCard h3 { font-size: 16px; font-weight: 600; color: #16375f; letter-spacing: -.3px; margin: 10px 0 6px; }
+  .trackCard p { margin: 0; font-size: 12px; line-height: 1.7; color: var(--muted); }
+  .trackCard .trackSteps { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+  .trackCard .trackSteps li { font-size: 11px; color: #5b7190; }
+  .trackCard .trackCta { margin-top: 14px; display: inline-flex; align-items: center; gap: 6px; color: #0070d6; font-size: 12px; font-weight: 600; }
+  .stackLogoCore { border-color: #9fc2ea; background: #edf5ff; }
   .overviewGrid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 22px; margin-bottom: 24px; }
+  @media (max-width: 800px) { .trackLaunch { grid-template-columns: minmax(0, 1fr); } }
   .card { min-width: 0; background: #fff; border: 1px solid var(--line); border-radius: 17px; padding: 25px; box-shadow: 0 3px 12px #15376103; animation: appear .32s ease-out both; transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease; }
   .card:hover { border-color: #d5e4f7; box-shadow: 0 10px 28px #1537610a; }
   .card + .card { margin-top: 24px; }
@@ -83,6 +93,17 @@
   .stretchCard { margin-top: 0 !important; }
   .stretchCard .field :is(input, select) { width: 100%; min-height: 40px; border: 1px solid #dce6f3; border-radius: 9px; padding: 9px 11px; background: #fff; color: #24476f; font-size: 13px; transition: border-color .18s, box-shadow .18s; }
   .stretchCard .field :is(input, select):focus { outline: none; border-color: #8dbdf2; box-shadow: 0 0 0 4px #0070e009; }
+  .payablesTextarea { width: 100%; min-height: 140px; margin: 10px 0 14px; border: 1px solid #dce6f3; border-radius: 10px; padding: 12px; background: #fff; color: #24476f; font-size: 12px; line-height: 1.7; resize: vertical; }
+  .payablesTextarea:focus { outline: none; border-color: #8dbdf2; box-shadow: 0 0 0 4px #0070e009; }
+  .timeline { display: grid; gap: 10px; margin-top: 8px; }
+  .timelineRow { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px; align-items: center; }
+  .timelineRow strong { font-size: 11px; color: #5b7190; }
+  .timelineBar { height: 28px; border-radius: 8px; background: linear-gradient(90deg, #dcebff, #7eb6f5); border: 1px solid #c5daf5; display: flex; align-items: center; padding: 0 10px; font-size: 11px; color: #16375f; transition: transform .18s ease; }
+  .timelineBar:hover { transform: scaleX(1.01); transform-origin: left; }
+  .agentRegistry { display: grid; gap: 10px; }
+  .agentRegistry article { border: 1px solid #e3ebf6; border-radius: 10px; padding: 12px; background: #f9fbff; }
+  .agentRegistry strong { display: block; color: #16375f; font-size: 12px; }
+  .agentRegistry p { margin: 6px 0 0; color: #6f819a; font-size: 11px; line-height: 1.6; }
   .forecastChart { display: flex; align-items: flex-end; gap: 10px; height: 160px; padding: 8px 4px 0; border-top: 1px solid #edf2f8; }
   .forecastBarWrap { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8px; }
   .forecastBar { width: 100%; max-width: 36px; border-radius: 8px 8px 4px 4px; background: linear-gradient(180deg, #5aa8ff, #0070e0); transition: height .35s ease, transform .2s ease; }

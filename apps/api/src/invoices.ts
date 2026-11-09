@@ -14,6 +14,7 @@ import {
 } from "db";
 import { paypalRequest } from "paypal";
 import { parseToolJson, runPayPalTool } from "./paypal-toolkit";
+import { assertDemoAmount } from "./demo-cap";
 
 export const invoicesRouter = Router();
 
@@ -44,13 +45,16 @@ invoicesRouter.post("/paypal", async (req, res) => {
   const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
   const givenName = typeof req.body?.givenName === "string" ? req.body.givenName.trim() : "Sandbox";
   const surname = typeof req.body?.surname === "string" ? req.body.surname.trim() : "Client";
-  const amount = typeof req.body?.amount === "string" ? req.body.amount : "50.00";
+  const amount = typeof req.body?.amount === "string" ? req.body.amount : "1.50";
   const note = typeof req.body?.note === "string" ? req.body.note : "ProcureAI client invoice";
   const send = req.body?.send !== false;
 
   if (!email || !email.includes("@")) {
     return res.status(400).json({ error: "email is required for create_invoice/send_invoice" });
   }
+  const amountNum = Number(amount);
+  const capped = assertDemoAmount(amountNum, "client invoice amount");
+  if (!capped.ok) return res.status(400).json({ error: capped.error });
 
   try {
     const createRaw = await runPayPalTool("create_invoice", {
@@ -139,6 +143,10 @@ invoicesRouter.post("/extract", async (req, res) => {
     if (!Number.isFinite(amount) || amount <= 0) {
       return res.status(422).json({ error: "Could not extract a positive amount", raw: parsed });
     }
+    const capped = assertDemoAmount(amount, "extracted invoice amount");
+    if (!capped.ok) {
+      return res.status(400).json({ error: capped.error, hint: "Paste a sample invoice totaling ≤ DEMO_MAX_USD." });
+    }
 
     const invoice = await saveSupplierInvoice({
       id: randomUUID(),
@@ -218,6 +226,8 @@ invoicesRouter.post("/:id/payout", async (req, res) => {
   if (!receiver || !receiver.includes("@")) {
     return res.status(400).json({ error: "receiver PayPal email is required" });
   }
+  const payoutCap = assertDemoAmount(invoice.amount, "payout amount");
+  if (!payoutCap.ok) return res.status(400).json({ error: payoutCap.error });
 
   const batchId = `payout-${randomUUID()}`;
   try {
