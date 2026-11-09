@@ -83,18 +83,21 @@ You run a small business buying supplies.
 
 ## Story C — “Buying chairs — needs Supervisor approval”
 
-**Goal:** Show the over-$20 control.
+**Goal:** Show the over-$20 control. **Do not look for the message under Disputes** — approval is a panel at the top of Payments.
 
-1. On Overview, start a new request (or **Load demo request** — opens Review ready to Queue).  
-2. Use a chair-style brief, for example:  
+1. Sign in as **Buyer**.  
+2. On Overview, start a new request (or **Load demo request** — opens Review ready to Queue).  
+3. Use a chair-style brief, for example:  
    - *12 ergonomic desk chairs. Prefer durable mesh backs and 5-year warranty.*  
    - Quantity `1` (or more), max unit about `$180`, needed within `30` days.  
-3. **Review** → **Queue negotiation** (wait until status **SUCCEEDED** — AI can take ~20–40s).  
-4. When offers are ready, open **Supplier offers** → **Checkout**.  
-5. On **Payments**, you should see **Supervisor approval required** (not PayPal yet) because the total is over **$20**.  
-6. Switch to **Supervisor** → **Approve as Supervisor**, then PayPal approve → hold.
+4. **Review** → **Queue negotiation** (wait until status **SUCCEEDED** — AI can take ~20–40s).  
+5. Open **Supplier offers** for **this** request → **Checkout winning offer**.  
+6. App jumps to **Payments & orders**. Right under the checkpoints you must see a highlighted panel: **Supervisor approval required** with total, Deny, **Switch to Supervisor**, and **Approve as Supervisor**.  
+7. In **Needs attention**, the same request appears as **PENDING_APPROVAL** · Needs Supervisor approval before PayPal. **Review approval** re-opens the panel (works after refresh too).  
+8. Click **Switch to Supervisor** (or sidebar) → **Approve as Supervisor** → PayPal approve → hold.
 
-**You should see:** No PayPal buttons until Supervisor approves. A ~$90–$100 order must stop at Supervisor approval first.
+**You should see:** Checkout does **not** create PayPal until Supervisor approves. The request stays in Needs attention as PENDING_APPROVAL until Approve. The approval card is above Needs attention — not buried in Disputes.  
+**Fail if:** Headphones/chairs over $20 vanish from Payments, or you only see a toast under Disputes with no approval panel / Approve button.
 
 ---
 
@@ -148,4 +151,6 @@ Add **Story C** if you have ~20 more seconds.
 | Want Funds on hold on screen | Finish Story A and **don’t** apply a ship notice yet |
 | Order stuck on HELD / nothing in SHIPPED | Expected until you paste email → **Extract tracking** → **Apply ship notice** |
 | No real Gmail handy | Use **Load sample email** on Payments, then Extract → Apply |
+| Checkout winning → only a toast under Disputes | Hard refresh; look for **Supervisor approval required** panel under checkpoints (above Needs attention). Switch to Supervisor → Approve |
+| Headphones / over-$20 order missing from Payments | Refresh; open **Needs attention** — status should be **PENDING_APPROVAL**. Click **Review approval**, switch to Supervisor, Approve |
 | Page empty / slow | Wait, refresh once; confirm you’re on the hosted demo URL |

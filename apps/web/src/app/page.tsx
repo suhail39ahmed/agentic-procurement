@@ -60,6 +60,16 @@ type Draft = {
   at: string;
 };
 
+type PendingApprovalSummary = {
+  approvalId: string;
+  orderTotal: number;
+  unitPrice: number;
+  supplierId: string;
+  reasons: string[];
+  threshold: number;
+  status: "PENDING";
+};
+
 type NegotiationRecord = {
   id: string;
   status: string;
@@ -76,6 +86,7 @@ type NegotiationRecord = {
   error?: unknown;
   hasCheckout?: boolean;
   paymentStatus?: string | null;
+  pendingApproval?: PendingApprovalSummary | null;
 };
 
 type StreamLine = {
@@ -409,6 +420,7 @@ export default function Dashboard() {
   const [expandedNeedsId, setExpandedNeedsId] = useState<string | null>(null);
   const [resumeBusyId, setResumeBusyId] = useState<string | null>(null);
   const paymentActionRef = useRef<HTMLDivElement | null>(null);
+  const supervisorApprovalRef = useRef<HTMLDivElement | null>(null);
   const [expandedCapturedId, setExpandedCapturedId] = useState<string | null>(null);
   const [capturedPreview, setCapturedPreview] = useState<{
     id: string;
@@ -470,7 +482,11 @@ export default function Dashboard() {
     return negotiations.map((item) => {
       const payment = item.id === activeNegotiationId && activeOrder?.status
         ? activeOrder.status
-        : item.paymentStatus ?? (item.hasCheckout ? "APPROVED" : "—");
+        : item.id === pendingOwnerApproval?.negotiationId
+          ? "PENDING_APPROVAL"
+          : item.paymentStatus
+            ?? (item.pendingApproval ? "PENDING_APPROVAL" : null)
+            ?? (item.hasCheckout ? "APPROVED" : "—");
       return {
         id: item.id,
         brief: item.brief,
@@ -481,7 +497,7 @@ export default function Dashboard() {
         payment,
       };
     });
-  }, [negotiations, activeNegotiationId, activeOrder]);
+  }, [negotiations, activeNegotiationId, activeOrder, pendingOwnerApproval]);
 
   const feedRows = useMemo<FeedRow[]>(() => {
     const q = search.trim().toLowerCase();
@@ -497,10 +513,13 @@ export default function Dashboard() {
   const heldCount = allFeedRows.filter((row) => row.payment === "HELD" || row.payment === "SHIPPED").length;
   const capturedCount = allFeedRows.filter((row) => row.payment === "CAPTURED").length;
 
-  /** Multi-user payment inbox: anything past checkout that is not finished yet. */
+  /** Multi-user payment inbox: pending Supervisor approval + anything past checkout not finished. */
   const paymentNeedsAttention = useMemo(
     () => allFeedRows.filter((row) =>
-      row.payment === "APPROVED" || row.payment === "HELD" || row.payment === "SHIPPED"),
+      row.payment === "PENDING_APPROVAL"
+      || row.payment === "APPROVED"
+      || row.payment === "HELD"
+      || row.payment === "SHIPPED"),
     [allFeedRows],
   );
   const paymentRecentCaptured = useMemo(
@@ -509,11 +528,36 @@ export default function Dashboard() {
   );
 
   function nextPaymentStepLabel(payment: string): string {
+    if (payment === "PENDING_APPROVAL") return "Needs Supervisor approval before PayPal";
     if (payment === "APPROVED") return "Needs PayPal approve → Authorize hold";
     if (payment === "HELD") return "Paste shipment email → Apply";
     if (payment === "SHIPPED") return "Needs Supervisor Confirm delivery & capture";
     if (payment === "CAPTURED") return "Complete";
     return payment;
+  }
+
+  function openPendingSupervisorApproval(negotiationId: string, pending: PendingApprovalSummary) {
+    setView("Payments & orders");
+    setNeedsAttentionOpen(true);
+    setExpandedNeedsId(negotiationId);
+    setActiveNegotiationId(negotiationId);
+    activeIdRef.current = negotiationId;
+    setActiveOrder(null);
+    setPendingOwnerApproval({
+      negotiationId,
+      approvalId: pending.approvalId,
+      orderTotal: pending.orderTotal,
+      unitPrice: pending.unitPrice,
+      supplierId: pending.supplierId,
+      reasons: pending.reasons ?? ["Above approval threshold"],
+      threshold: pending.threshold ?? 20,
+    });
+    setNotice(
+      `Supervisor approval required — $${pending.orderTotal.toFixed(2)} is above $${pending.threshold}. Switch to Supervisor, then Approve.`,
+    );
+    requestAnimationFrame(() => {
+      supervisorApprovalRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   async function toggleCapturedPreview(row: { id: string; brief: string; payment: string; maxUnitPrice: number }) {
@@ -583,6 +627,13 @@ export default function Dashboard() {
 
   /** Resume PayPal lifecycle for a negotiation that already has checkout (APPROVED → HELD → SHIPPED → CAPTURED). */
   async function resumePayment(id: string, payment: string) {
+    if (payment === "PENDING_APPROVAL") {
+      const listed = negotiations.find((item) => item.id === id)?.pendingApproval;
+      if (listed) {
+        openPendingSupervisorApproval(id, listed);
+        return;
+      }
+    }
     setView("Payments & orders");
     setNeedsAttentionOpen(true);
     setExpandedCapturedId(null);
@@ -601,6 +652,26 @@ export default function Dashboard() {
         return;
       }
       applyNegotiationResult(detail, { hydrateCheckout: false });
+      const resultObj = detail.result && typeof detail.result === "object"
+        ? detail.result as Record<string, unknown>
+        : null;
+      const pendingRaw = resultObj?.pendingOwnerApproval && typeof resultObj.pendingOwnerApproval === "object"
+        ? resultObj.pendingOwnerApproval as PendingApprovalSummary & { status?: string }
+        : null;
+      if (payment === "PENDING_APPROVAL" || pendingRaw?.status === "PENDING") {
+        if (pendingRaw?.approvalId) {
+          openPendingSupervisorApproval(id, {
+            approvalId: pendingRaw.approvalId,
+            orderTotal: Number(pendingRaw.orderTotal),
+            unitPrice: Number(pendingRaw.unitPrice),
+            supplierId: pendingRaw.supplierId,
+            reasons: Array.isArray(pendingRaw.reasons) ? pendingRaw.reasons : ["Above approval threshold"],
+            threshold: Number(pendingRaw.threshold ?? 20),
+            status: "PENDING",
+          });
+          return;
+        }
+      }
       const saved = checkoutFromResult(detail.result);
       if (!saved) {
         setNotice("No checkout on this request yet — open Offers and use Checkout winning offer first.");
@@ -655,6 +726,7 @@ export default function Dashboard() {
   }
 
   function paymentActionLabel(payment: string): string | null {
+    if (payment === "PENDING_APPROVAL") return "Review approval";
     if (payment === "APPROVED") return "Pay";
     if (payment === "HELD") return "Open hold";
     if (payment === "SHIPPED") return "Confirm";
@@ -1408,17 +1480,34 @@ export default function Dashboard() {
         return;
       }
       if (payload.needsOwnerApproval && payload.approval) {
+        const approvalId = payload.approval.approvalId;
+        const orderTotal = Number(payload.approval.orderTotal);
+        const threshold = Number(payload.approval.threshold ?? 20);
         setPendingOwnerApproval({
           negotiationId: activeNegotiationId,
-          approvalId: payload.approval.approvalId,
-          orderTotal: payload.approval.orderTotal,
-          unitPrice: payload.approval.unitPrice,
+          approvalId,
+          orderTotal,
+          unitPrice: Number(payload.approval.unitPrice),
           supplierId: payload.approval.supplierId,
-          reasons: payload.approval.reasons,
-          threshold: payload.approval.threshold,
+          reasons: Array.isArray(payload.approval.reasons) ? payload.approval.reasons : ["Above approval threshold"],
+          threshold,
         });
         setActiveOrder(null);
-        setNotice(payload.note ?? `Supervisor approval required — total above $${payload.approval.threshold}.`);
+        setNeedsAttentionOpen(true);
+        setExpandedNeedsId(activeNegotiationId);
+        setNotice(
+          payload.note
+            ?? `Supervisor approval required — $${orderTotal.toFixed(2)} is above $${threshold}. Switch to Supervisor, then Approve.`,
+        );
+        setView("Payments & orders");
+        void loadNegotiations();
+        requestAnimationFrame(() => {
+          supervisorApprovalRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+        return;
+      }
+      if (payload.needsOwnerApproval) {
+        setNotice("Supervisor approval required, but approval details were missing — try Checkout again.");
         setView("Payments & orders");
         return;
       }
@@ -1478,7 +1567,9 @@ export default function Dashboard() {
       }
       if (payload.denied) {
         setPendingOwnerApproval(null);
+        setExpandedNeedsId(null);
         setNotice(payload.note ?? "Supervisor denied — no PayPal checkout.");
+        void loadNegotiations();
         return;
       }
       setPendingOwnerApproval(null);
@@ -1490,8 +1581,11 @@ export default function Dashboard() {
         amount: payload.amount,
         supplierId: payload.supplierId,
       });
+      setNeedsAttentionOpen(true);
+      setExpandedNeedsId(pendingOwnerApproval.negotiationId);
       setNotice("Supervisor approved. Use Pay with PayPal as the sandbox buyer — hold follows approve.");
       setView("Payments & orders");
+      void loadNegotiations();
     } catch {
       setNotice("Supervisor decision failed.");
     } finally {
@@ -2559,29 +2653,35 @@ export default function Dashboard() {
             </ol>
 
             {view === "Payments & orders" && pendingOwnerApproval && (
-              <div className={s.reviewPanel}>
+              <div className={`${s.reviewPanel} ${s.paymentQueueSelected}`} ref={supervisorApprovalRef}>
                 <div className={s.sectionHeader}>
                   <div>
                     <h3>Supervisor approval required</h3>
                     <p className={s.description}>
-                      Order total ${pendingOwnerApproval.orderTotal.toFixed(2)} is above the ${pendingOwnerApproval.threshold} auto-allow threshold.
-                      Approve to create the PayPal hold order, or deny to stop.
+                      Checkout paused. Order total ${pendingOwnerApproval.orderTotal.toFixed(2)} is above the ${pendingOwnerApproval.threshold} auto-allow threshold.
+                      Switch to Supervisor, then Approve — PayPal is not created until then.
                     </p>
                   </div>
                   <span className={s.pending}>PENDING</span>
                 </div>
+                <p className={s.status} role="status">{notice}</p>
                 <dl className={s.summaryList}>
                   <div><dt>Supplier</dt><dd>{pendingOwnerApproval.supplierId}</dd></div>
                   <div><dt>Unit price</dt><dd>${pendingOwnerApproval.unitPrice.toFixed(2)}</dd></div>
                   <div><dt>Order total</dt><dd>${pendingOwnerApproval.orderTotal.toFixed(2)} USD</dd></div>
-                  <div><dt>Policy</dt><dd>{pendingOwnerApproval.reasons.join("; ") || "Above approval threshold"}</dd></div>
+                  <div><dt>Policy</dt><dd>{(pendingOwnerApproval.reasons ?? []).join("; ") || "Above approval threshold"}</dd></div>
                 </dl>
                 {!isOwner && (
                   <p className={s.summaryNote}>
-                    You are signed in as <strong>Buyer</strong>. Switch to <strong>Supervisor</strong> (sidebar or supervisor/supervisor) to approve this spend.
+                    You are signed in as <strong>Buyer</strong>. Use the sidebar <strong>Supervisor</strong> switch (or supervisor / supervisor), then Approve.
                   </p>
                 )}
                 <div className={s.reviewActions}>
+                  {!isOwner && (
+                    <button type="button" className={s.secondary} onClick={() => signInAs("owner")}>
+                      Switch to Supervisor
+                    </button>
+                  )}
                   <button type="button" className={s.secondary} disabled={orderBusy || !isOwner} onClick={() => void decideOwnerCheckout(false)}>
                     Deny
                   </button>
@@ -2618,7 +2718,7 @@ export default function Dashboard() {
                   {needsAttentionOpen && (
                     <div className={s.paymentNestBody}>
                       <p className={s.description}>
-                        APPROVED → PayPal / Authorize hold · HELD → ship · SHIPPED → capture
+                        PENDING_APPROVAL → Supervisor Approve · APPROVED → PayPal · HELD → ship · SHIPPED → capture
                       </p>
                       {paymentNeedsAttention.length > 0 ? (
                         <ul className={s.paymentQueueOpen}>
@@ -2656,6 +2756,7 @@ export default function Dashboard() {
                                   <div className={s.paymentInlineWindow} ref={activeNegotiationId === row.id ? paymentActionRef : undefined}>
                                     <div className={s.paymentInlineWindowHead}>
                                       <strong>
+                                        {row.payment === "PENDING_APPROVAL" && "Pending Supervisor approval"}
                                         {row.payment === "APPROVED" && "PayPal approve → Authorize hold"}
                                         {row.payment === "HELD" && "Shipment email → Apply ship notice"}
                                         {row.payment === "SHIPPED" && "Supervisor Confirm delivery & capture"}
@@ -2664,7 +2765,25 @@ export default function Dashboard() {
                                         Close
                                       </button>
                                     </div>
-                                    {activeNegotiationId === row.id && activeOrder && activeOrder.status !== "CAPTURED" ? (
+                                    {row.payment === "PENDING_APPROVAL" && activeNegotiationId === row.id && pendingOwnerApproval?.negotiationId === row.id ? (
+                                      <div className={s.paymentInlineDetail}>
+                                        <p className={s.description}>
+                                          Order total ${pendingOwnerApproval.orderTotal.toFixed(2)} is above the ${pendingOwnerApproval.threshold} threshold.
+                                          Switch role to Supervisor, then use <strong>Approve</strong> in the panel above to create the PayPal order.
+                                        </p>
+                                        <div className={s.gridActions}>
+                                          <button
+                                            type="button"
+                                            className={s.secondary}
+                                            onClick={() => {
+                                              supervisorApprovalRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                            }}
+                                          >
+                                            Jump to approval panel
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : activeNegotiationId === row.id && activeOrder && activeOrder.status !== "CAPTURED" ? (
                                       <>
                                         <dl className={s.summaryList}>
                                           <div><dt>Order</dt><dd>{activeOrder.orderId}</dd></div>
@@ -2880,7 +2999,7 @@ export default function Dashboard() {
               <p>Checkout a winning offer from Supplier offers, or open an APPROVED / HELD row under Needs attention.</p>
             </div>}
             {view === "Payments & orders" && (
-              <DisputePanel notice={notice} setNotice={setNotice} demoRole={demoRole} />
+              <DisputePanel setNotice={setNotice} demoRole={demoRole} />
             )}
             <div className={s.paymentFoot}><ShieldCheck size={16} /><span>AI recommendations do not authorize or capture payments.</span></div>
           </section>}

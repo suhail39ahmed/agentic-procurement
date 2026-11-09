@@ -161,7 +161,7 @@ async function completeCheckoutWithApproval(
   }
   if (decision.outcome === "REQUIRE_APPROVAL") {
     if (!approval || approval.status !== "APPROVED") {
-      throw new Error("Owner approval required before PayPal checkout");
+      throw new Error("Supervisor approval required before PayPal checkout");
     }
   }
 
@@ -219,7 +219,7 @@ async function completeCheckoutWithApproval(
     },
     policy: decision.outcome,
     reuse: false,
-    note: "Owner approved (or auto-allowed). Use Pay with PayPal, then funds go on hold.",
+    note: "Supervisor approved (or auto-allowed). Use Pay with PayPal, then funds go on hold.",
   };
 }
 
@@ -257,7 +257,7 @@ checkoutRouter.post("/negotiations/:id/checkout", async (req, res) => {
         needsOwnerApproval: true,
         policy: "REQUIRE_APPROVAL",
         approval: existingPending,
-        note: `Order total $${existingPending.orderTotal.toFixed(2)} is above $${existingPending.threshold} — owner must approve before PayPal.`,
+        note: `Order total $${existingPending.orderTotal.toFixed(2)} is above $${existingPending.threshold} — Supervisor must approve before PayPal.`,
       });
     }
 
@@ -288,7 +288,7 @@ checkoutRouter.post("/negotiations/:id/checkout", async (req, res) => {
         needsOwnerApproval: true,
         policy: "REQUIRE_APPROVAL",
         approval: pending,
-        note: `Order total $${decision.orderTotal.toFixed(2)} exceeds $${pending.threshold} — approve as owner before PayPal checkout.`,
+        note: `Order total $${decision.orderTotal.toFixed(2)} exceeds $${pending.threshold} — switch to Supervisor and Approve before PayPal checkout.`,
       });
     }
 
@@ -308,8 +308,8 @@ checkoutRouter.post("/negotiations/:id/checkout/owner-decide", async (req, res) 
   const demoRole = String(req.header("x-demo-role") ?? "").toLowerCase();
   if (demoRole && demoRole !== "owner") {
     return res.status(403).json({
-      error: "Owner login required to approve or deny this spend.",
-      requiredRole: "owner",
+      error: "Supervisor login required to approve or deny this spend.",
+      requiredRole: "supervisor",
       currentRole: demoRole,
     });
   }

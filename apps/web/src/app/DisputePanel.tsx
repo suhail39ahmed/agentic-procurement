@@ -15,11 +15,9 @@ type LocalDispute = {
 };
 
 export function DisputePanel({
-  notice,
   setNotice,
   demoRole = null,
 }: {
-  notice: string;
   setNotice: (value: string) => void;
   demoRole?: "buyer" | "owner" | null;
 }) {
@@ -168,7 +166,6 @@ export function DisputePanel({
           ))}
         </ul>
       )}
-      {notice ? <p className={s.status} role="status">{notice}</p> : null}
     </div>
   );
 }

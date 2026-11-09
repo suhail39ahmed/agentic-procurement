@@ -181,6 +181,28 @@ negotiationsRouter.get("/", async (req, res) => {
         const checkout = result?.checkout && typeof result.checkout === "object"
           ? result.checkout as { orderId?: string; lastStatus?: string }
           : null;
+        const pendingRaw = result?.pendingOwnerApproval && typeof result.pendingOwnerApproval === "object"
+          ? result.pendingOwnerApproval as {
+              approvalId?: string;
+              orderTotal?: number;
+              unitPrice?: number;
+              supplierId?: string;
+              reasons?: string[];
+              status?: string;
+              threshold?: number;
+            }
+          : null;
+        const pendingApproval = pendingRaw?.status === "PENDING" && pendingRaw.approvalId
+          ? {
+              approvalId: pendingRaw.approvalId,
+              orderTotal: Number(pendingRaw.orderTotal ?? 0),
+              unitPrice: Number(pendingRaw.unitPrice ?? 0),
+              supplierId: pendingRaw.supplierId ?? "unknown",
+              reasons: Array.isArray(pendingRaw.reasons) ? pendingRaw.reasons : ["Above approval threshold"],
+              threshold: Number(pendingRaw.threshold ?? 20),
+              status: "PENDING" as const,
+            }
+          : null;
         return {
           id: row.id,
           status: row.status,
@@ -194,7 +216,10 @@ negotiationsRouter.get("/", async (req, res) => {
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
           hasCheckout: Boolean(checkout?.orderId),
-          paymentStatus: checkout?.lastStatus ?? (checkout?.orderId ? "APPROVED" : null),
+          paymentStatus: checkout?.lastStatus
+            ?? (checkout?.orderId ? "APPROVED" : null)
+            ?? (pendingApproval ? "PENDING_APPROVAL" : null),
+          pendingApproval,
         };
       }),
     });
