@@ -24,6 +24,7 @@ import {
   type PaymentIntent,
   type ApprovalRequest,
 } from "agents";
+import { parseShipmentEmail, sampleShipmentEmail } from "./shipment-email";
 
 export const checkoutRouter = Router();
 
@@ -469,9 +470,28 @@ checkoutRouter.post("/orders/:id/ship", async (req, res) => {
   }
 });
 
+checkoutRouter.get("/shipment-email/sample", (_req, res) => {
+  return res.json({
+    text: sampleShipmentEmail(),
+    note: "Demo shipment email — paste from Gmail the same way, then Extract → Apply.",
+  });
+});
+
+checkoutRouter.post("/shipment-email/parse", (req, res) => {
+  const text = typeof req.body?.text === "string" ? req.body.text : "";
+  const parsed = parseShipmentEmail(text);
+  if (!parsed) {
+    return res.status(422).json({
+      error: "Could not find carrier tracking in that email. Include a UPS 1Z… number or a Tracking number: line.",
+    });
+  }
+  return res.json({ parsed, note: "Ready to apply — this does not change order status until you confirm Apply ship notice." });
+});
+
 /**
  * Seller agent / shipment-email bridge: moves HELD → SHIPPED.
  * Capture still requires an explicit owner Confirm delivery click.
+ * Not automatic after HELD — caller must paste/parse email (or force) then POST here.
  */
 checkoutRouter.post("/orders/:id/seller-shipped", async (req, res) => {
   const ownerId = requireOwner(req);

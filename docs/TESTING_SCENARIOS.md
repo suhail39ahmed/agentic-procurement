@@ -8,7 +8,7 @@ If the first load is slow, wait about a minute and refresh once (hosted demo can
 
 | Role | Username / password | Can do |
 |---|---|---|
-| **Buyer** | `buyer` / `buyer` | RFQ, negotiate, checkout, PayPal approve; seller ship notice is automatic |
+| **Buyer** | `buyer` / `buyer` | RFQ, negotiate, checkout, PayPal approve; paste shipment email → Apply ship |
 | **Owner** | `owner` / `owner` | Approve spends **over $20**, **Confirm delivery & capture**, accept disputes |
 
 Use the login screen (or sidebar Buyer/Owner switch). Over-$20 checkout stops until an **Owner** approves.
@@ -71,12 +71,13 @@ You run a small business buying supplies.
 **Goal:** Full happy path to paid/captured.
 
 1. Repeat a small buy like Story A (another sticky-note or low-budget request).  
-2. Checkout → PayPal approve → wait for **on hold**.  
-3. **Seller ship is automated** — after hold, the seller agent (demo) posts a shipment notice (~2s) → status **SHIPPED**. (Optional: **Force seller ship notice** if you don’t want to wait.)  
-4. Switch to **Owner** → click **Confirm delivery & capture** (you still confirm; money is not taken automatically).  
-5. Under **Recently captured**, click **View** to see order / capture details.
+2. Checkout → PayPal approve → status **HELD** (funds stay here until you apply a ship notice).  
+3. On Payments, paste the seller shipment email from **Gmail** (or **Load sample email**) → **Extract tracking** → **Apply ship notice → SHIPPED**.  
+4. Switch to **Owner** → **Confirm delivery & capture** (money is not taken until this click).  
+5. Under **Recently captured**, click **View**.
 
-**You should see:** HELD → SHIPPED without you typing tracking; **CAPTURED** only after Owner confirm.
+**You should see:** Order remains **HELD** until email apply; then **SHIPPED**; **CAPTURED** only after Owner confirm.  
+**Gmail:** copy/paste from Gmail is the sandbox path (no OAuth inbox yet). Full Gmail API can be added later.
 
 ---
 

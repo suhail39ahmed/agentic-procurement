@@ -192,6 +192,8 @@
   .paymentQueueStack { flex-direction: column; align-items: stretch !important; }
   .paymentQueueRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; }
   .paymentInlineDetail { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e4ebf5; }
+  .shipmentEmailBlock { display: grid; gap: 10px; width: 100%; margin-top: 4px; }
+  .shipmentEmailBlock textarea { width: 100%; min-height: 140px; resize: vertical; border: 1px solid #d5e3f4; border-radius: 10px; padding: 10px 12px; background: #fbfcfe; color: #16375f; font-size: 12px; line-height: 1.45; }
   .paymentInlineWindow { margin-top: 12px; border: 1px solid #cfe0f5; border-radius: 12px; background: #fff; padding: 14px; box-shadow: 0 8px 24px rgba(22, 55, 95, 0.06); }
   .paymentInlineWindowHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
   .paymentInlineWindowHead strong { font-size: 13px; color: #16375f; }
