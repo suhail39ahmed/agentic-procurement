@@ -47,6 +47,13 @@ export function SponsorsPanel({
 }) {
   const [status, setStatus] = useState<Record<string, boolean | number | null>>({});
   const [query, setQuery] = useState("office sticky notes pack");
+  const [products, setProducts] = useState<Array<{
+    title: string;
+    price?: number;
+    currency?: string;
+    retailer?: string;
+    productId?: string;
+  }>>([]);
   const [kernelUrl, setKernelUrl] = useState("https://example.com");
   const [schedule, setSchedule] = useState<SchedulePayload | null>(null);
   const [busy, setBusy] = useState(false);
@@ -70,6 +77,7 @@ export function SponsorsPanel({
 
   async function searchChannel3() {
     setBusy(true);
+    setProducts([]);
     try {
       const response = await fetch("/api/sponsors/channel3/search", {
         method: "POST",
@@ -80,6 +88,13 @@ export function SponsorsPanel({
         error?: string;
         note?: string;
         configured?: boolean;
+        products?: Array<{
+          title: string;
+          price?: number;
+          currency?: string;
+          retailer?: string;
+          productId?: string;
+        }>;
         suggestion?: {
           brief: string;
           quantity: number;
@@ -91,20 +106,37 @@ export function SponsorsPanel({
         setNotice(payload.error ?? "Channel3 search failed.");
         return;
       }
-      setNotice(payload.note ?? (payload.configured ? "Channel3 ok" : "Channel3 not configured"));
-      if (payload.suggestion && onChannel3Suggestion) {
-        onChannel3Suggestion({
-          brief: payload.suggestion.brief,
-          quantity: String(payload.suggestion.quantity),
-          maxUnitPrice: payload.suggestion.maxUnitPrice,
-          currency: "USD",
-          neededByDays: String(payload.suggestion.neededByDays),
-          priority: "balanced",
-        });
-      }
+      const rows = Array.isArray(payload.products) ? payload.products : [];
+      setProducts(rows);
+      setNotice(
+        rows.length
+          ? `${payload.note ?? "Channel3 results"} · pick a product to fill the RFQ.`
+          : (payload.note ?? (payload.configured ? "No products" : "Channel3 not configured")),
+      );
     } finally {
       setBusy(false);
     }
+  }
+
+  function useProduct(product: {
+    title: string;
+    price?: number;
+    retailer?: string;
+  }) {
+    if (!onChannel3Suggestion) return;
+    const unit = product.price != null && Number.isFinite(product.price)
+      ? Math.min(product.price, 250)
+      : 25;
+    const retailer = product.retailer ? ` from ${product.retailer}` : "";
+    onChannel3Suggestion({
+      brief: `Supply 1× "${product.title}"${retailer}. Match or beat unit price ≤ $${unit.toFixed(2)} USD. Prefer in-stock; ship within 14 days.`.slice(0, 500),
+      quantity: "1",
+      maxUnitPrice: unit.toFixed(2),
+      currency: "USD",
+      neededByDays: "14",
+      priority: "balanced",
+    });
+    setNotice(`Selected “${product.title}” — Overview RFQ filled. Review → Queue.`);
   }
 
   async function kernelFetch() {
@@ -183,9 +215,9 @@ export function SponsorsPanel({
           <div className={s.inlineTitle}>
             <span className={s.iconTile}><PackageSearch size={20} /></span>
             <div>
-              <h2>Channel3 → RFQ for sellers</h2>
+              <h2>Channel3 product catalog</h2>
               <p className={s.description}>
-                Search catalog, load Overview RFQ, then Queue negotiation so sellers quote that product.{" "}
+                Search real products and prices, pick one to fill the Overview RFQ.{" "}
                 {status.channel3 ? "API key live." : "Set CHANNEL3_API_KEY to activate."}
               </p>
             </div>
@@ -196,10 +228,30 @@ export function SponsorsPanel({
           <input id="c3-q" value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
         <div className={s.reviewActions}>
-          <button type="button" className={s.primary} disabled={busy} title="Search Channel3 and prefill RFQ suggestion" onClick={() => void searchChannel3()}>
-            Enrich RFQ <ArrowRight size={15} />
+          <button type="button" className={s.primary} disabled={busy} title="Search Channel3 catalog" onClick={() => void searchChannel3()}>
+            Search catalog <ArrowRight size={15} />
           </button>
         </div>
+        {products.length > 0 && (
+          <ul className={s.channel3List} aria-label="Channel3 catalog results">
+            {products.map((product, index) => {
+              const priceLabel = product.price != null && Number.isFinite(product.price)
+                ? `$${product.price.toFixed(2)} ${product.currency ?? "USD"}`
+                : "Price n/a";
+              return (
+                <li key={product.productId ?? `${product.title}-${index}`}>
+                  <div>
+                    <strong>{product.title}</strong>
+                    <span>{priceLabel}{product.retailer ? ` · ${product.retailer}` : ""}</span>
+                  </div>
+                  <button type="button" className={s.secondary} onClick={() => useProduct(product)}>
+                    Use this
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
       <section className={`${s.card} ${s.stretchCard}`}>

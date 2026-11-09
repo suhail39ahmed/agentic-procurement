@@ -371,6 +371,13 @@ export default function Dashboard() {
   const [notice, setNotice] = useState(paypalBoot.notice);
   const [channel3Busy, setChannel3Busy] = useState(false);
   const [channel3Query, setChannel3Query] = useState("office sticky notes pack");
+  const [channel3Products, setChannel3Products] = useState<Array<{
+    title: string;
+    price?: number;
+    currency?: string;
+    retailer?: string;
+    productId?: string;
+  }>>([]);
   const [payablesSeed, setPayablesSeed] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
@@ -750,11 +757,12 @@ export default function Dashboard() {
     requestAnimationFrame(() => briefRef.current?.focus());
   }
 
-  /** Channel3 catalog → Overview RFQ fields (sellers negotiate this brief after Queue). */
-  async function enrichRfqFromChannel3(queryOverride?: string) {
+  /** Search Channel3 catalog and show product + price rows to pick from. */
+  async function searchChannel3Catalog(queryOverride?: string) {
     const query = (queryOverride ?? channel3Query).trim();
     if (!query || channel3Busy) return;
     setChannel3Busy(true);
+    setChannel3Products([]);
     try {
       const response = await fetch("/api/sponsors/channel3/search", {
         method: "POST",
@@ -765,13 +773,13 @@ export default function Dashboard() {
         error?: string;
         note?: string;
         configured?: boolean;
-        suggestion?: {
-          brief: string;
-          quantity: number;
-          maxUnitPrice: string;
-          neededByDays: number;
-          priority?: Priority;
-        } | null;
+        products?: Array<{
+          title: string;
+          price?: number;
+          currency?: string;
+          retailer?: string;
+          productId?: string;
+        }>;
       };
       if (!response.ok) {
         setNotice(payload.error ?? "Channel3 search failed.");
@@ -781,29 +789,41 @@ export default function Dashboard() {
         setNotice(payload.note ?? "CHANNEL3_API_KEY not set on the API.");
         return;
       }
-      if (!payload.suggestion) {
-        setNotice(payload.note ?? "No Channel3 products matched that query — try another.");
-        return;
-      }
-      setFields({
-        brief: payload.suggestion.brief,
-        priority: "balanced",
-        quantity: String(payload.suggestion.quantity),
-        maxUnitPrice: payload.suggestion.maxUnitPrice,
-        currency: "USD",
-        neededByDays: String(payload.suggestion.neededByDays),
-      });
-      setFieldErrors({});
-      setComposerMode("compose");
-      setPendingDraft(null);
-      setView("Overview");
+      const products = Array.isArray(payload.products) ? payload.products : [];
+      setChannel3Products(products);
       setNotice(
-        `${payload.note ?? "Channel3 hit"} · RFQ loaded. Review draft → Queue negotiation so sellers quote this product.`,
+        products.length
+          ? `${payload.note ?? "Channel3 results"} · pick a product below to fill the RFQ.`
+          : (payload.note ?? "No Channel3 products matched — try another query."),
       );
-      requestAnimationFrame(() => briefRef.current?.focus());
     } finally {
       setChannel3Busy(false);
     }
+  }
+
+  /** Apply one catalog row into the RFQ form (still Review → Queue to send to sellers). */
+  function applyChannel3Product(product: {
+    title: string;
+    price?: number;
+    retailer?: string;
+  }) {
+    const unit = product.price != null && Number.isFinite(product.price)
+      ? Math.min(product.price, 250)
+      : 25;
+    const retailer = product.retailer ? ` from ${product.retailer}` : "";
+    setFields({
+      brief: `Supply 1× "${product.title}"${retailer}. Match or beat unit price ≤ $${unit.toFixed(2)} USD. Prefer in-stock; ship within 14 days.`.slice(0, 500),
+      priority: "balanced",
+      quantity: "1",
+      maxUnitPrice: unit.toFixed(2),
+      currency: "USD",
+      neededByDays: "14",
+    });
+    setFieldErrors({});
+    setComposerMode("compose");
+    setPendingDraft(null);
+    setNotice(`Selected “${product.title}” at $${unit.toFixed(2)}. Edit details if needed, then Review draft → Queue negotiation.`);
+    requestAnimationFrame(() => briefRef.current?.focus());
   }
 
   async function seedDemoWorkspace() {
@@ -1275,7 +1295,10 @@ export default function Dashboard() {
               {composerMode === "compose" ? (
                 <form onSubmit={reviewDraft} className={s.briefForm} noValidate>
                   <div className={s.field}>
-                    <label htmlFor={`${formId}-channel3`}>Channel3 product search</label>
+                    <label htmlFor={`${formId}-channel3`}>Channel3 product catalog</label>
+                    <p className={s.description} style={{ marginBottom: 8 }}>
+                      Search Channel3 for real products and prices, pick one, then Review → Queue.
+                    </p>
                     <div className={s.budgetRow}>
                       <input
                         id={`${formId}-channel3`}
@@ -1288,12 +1311,37 @@ export default function Dashboard() {
                         type="button"
                         className={s.secondary}
                         disabled={channel3Busy || !channel3Query.trim()}
-                        title="Search Channel3 and fill this RFQ for sellers"
-                        onClick={() => void enrichRfqFromChannel3()}
+                        title="Search Channel3 catalog"
+                        onClick={() => void searchChannel3Catalog()}
                       >
-                        <PackageSearch size={15} /> {channel3Busy ? "Searching…" : "Use for RFQ"}
+                        <PackageSearch size={15} /> {channel3Busy ? "Searching…" : "Search catalog"}
                       </button>
                     </div>
+                    {channel3Products.length > 0 && (
+                      <ul className={s.channel3List} aria-label="Channel3 catalog results">
+                        {channel3Products.map((product, index) => {
+                          const priceLabel = product.price != null && Number.isFinite(product.price)
+                            ? `$${product.price.toFixed(2)} ${product.currency ?? "USD"}`
+                            : "Price n/a";
+                          return (
+                            <li key={product.productId ?? `${product.title}-${index}`}>
+                              <div>
+                                <strong>{product.title}</strong>
+                                <span>{priceLabel}{product.retailer ? ` · ${product.retailer}` : ""}</span>
+                              </div>
+                              <button
+                                type="button"
+                                className={s.secondary}
+                                title="Fill RFQ from this catalog product"
+                                onClick={() => applyChannel3Product(product)}
+                              >
+                                Use this
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
                   </div>
 
                   <label htmlFor={`${formId}-brief`}>Your procurement brief (sent to sellers)</label>

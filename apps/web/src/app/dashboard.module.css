@@ -154,6 +154,11 @@
   .secondary:hover:not(:disabled) { background: #edf5ff; border-color: #9fc2ea; }
   .formFooter { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 11px; border-top: 1px solid #f0f4f9; }
   .formFooter small { color: #97a6b9; font-size: 10px; padding-left: 5px; }
+  .channel3Box { display: grid; gap: 10px; margin-bottom: 4px; padding: 12px; border: 1px solid #e4ebf5; border-radius: 12px; background: #f8fbff; }
+  .channel3Pick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+  .channel3Pick select { width: 100%; border: 1px solid #d7e2f0; border-radius: 8px; padding: 9px 10px; font-size: 12px; color: #183e6a; background: #fff; }
+  .formDivider { display: flex; align-items: center; gap: 12px; margin: 18px 0 14px; color: #8090a5; font-size: 11px; letter-spacing: .02em; }
+  .formDivider::before, .formDivider::after { content: ""; flex: 1; height: 1px; background: #e4ebf5; }
   .suggestions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 7px; margin-top: 16px; }
   .suggestions > span { width: 100%; color: #8a9aaf; font-size: 9px; margin-bottom: 2px; }
   .suggestions button { display: inline-flex; align-items: center; gap: 6px; text-align: left; font-size: 10px; line-height: 1.7; color: #6982a0; border: 1px solid #e3ebf6; background: #f9fbff; border-radius: 7px; padding: 6px 9px; transition: transform .18s ease, border-color .18s, background .18s, color .18s; }
