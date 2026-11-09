@@ -14,14 +14,14 @@ export const DEMO_ACCOUNTS = {
     name: "Buyer · Purchasing",
     username: "buyer",
     password: "buyer",
-    blurb: "Create RFQs, negotiate, checkout, PayPal approve. Cannot approve over-threshold spends or capture.",
+    blurb: "Full buy path: RFQ, negotiate, PayPal, ship email. Cannot do Supervisor approval (over $20) or capture.",
   },
   owner: {
     role: "owner" as const,
     name: "Supervisor · Approvals",
     username: "supervisor",
     password: "supervisor",
-    blurb: "Approve spends over $20 (Supervisor approval), confirm delivery & capture, accept disputes.",
+    blurb: "Same as Buyer, plus Supervisor approval (over $20), capture, and dispute accept.",
     /** Legacy sandbox aliases still accepted at login. */
     aliases: ["owner"] as const,
   },

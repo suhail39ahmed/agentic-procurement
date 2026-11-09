@@ -127,25 +127,31 @@ function offersFromResult(result: unknown): Offer[] {
 
 function checkoutFromResult(result: unknown): {
   orderId: string;
+  paypalOrderId?: string;
   approveUrl?: string;
   amount?: string;
   supplierId?: string;
+  lastStatus?: string;
 } | null {
   if (!result || typeof result !== "object") return null;
   const checkout = (result as { checkout?: unknown }).checkout;
   if (!checkout || typeof checkout !== "object") return null;
   const c = checkout as Partial<{
     orderId: string;
+    paypalOrderId: string;
     approveUrl: string;
     amount: string;
     supplierId: string;
+    lastStatus: string;
   }>;
   if (!c.orderId) return null;
   return {
     orderId: c.orderId,
+    paypalOrderId: c.paypalOrderId,
     approveUrl: c.approveUrl,
     amount: c.amount,
     supplierId: c.supplierId,
+    lastStatus: c.lastStatus,
   };
 }
 
@@ -392,17 +398,17 @@ export default function Dashboard() {
   const [offerSearch, setOfferSearch] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [notice, setNotice] = useState(paypalBoot.notice);
-  const [demoSession, setDemoSession] = useState<DemoSession | null>(() => {
-    if (typeof window === "undefined") return null;
-    return readDemoSession();
-  });
-  const [demoAuthReady] = useState(true);
-  const [loginUser, setLoginUser] = useState(() => readDemoSession()?.role === "owner" ? "owner" : "buyer");
-  const [loginPass, setLoginPass] = useState(() => readDemoSession()?.role === "owner" ? "owner" : "buyer");
+  const [demoSession, setDemoSession] = useState<DemoSession | null>(null);
+  const [demoAuthReady, setDemoAuthReady] = useState(false);
+  const [loginUser, setLoginUser] = useState("buyer");
+  const [loginPass, setLoginPass] = useState("buyer");
   const [loginError, setLoginError] = useState("");
   const [processHelpOpen, setProcessHelpOpen] = useState(false);
   const [needsAttentionOpen, setNeedsAttentionOpen] = useState(true);
   const [recentCapturedOpen, setRecentCapturedOpen] = useState(true);
+  const [expandedNeedsId, setExpandedNeedsId] = useState<string | null>(null);
+  const [resumeBusyId, setResumeBusyId] = useState<string | null>(null);
+  const paymentActionRef = useRef<HTMLDivElement | null>(null);
   const [expandedCapturedId, setExpandedCapturedId] = useState<string | null>(null);
   const [capturedPreview, setCapturedPreview] = useState<{
     id: string;
@@ -577,42 +583,61 @@ export default function Dashboard() {
 
   /** Resume PayPal lifecycle for a negotiation that already has checkout (APPROVED → HELD → SHIPPED → CAPTURED). */
   async function resumePayment(id: string, payment: string) {
+    setView("Payments & orders");
+    setNeedsAttentionOpen(true);
+    setExpandedCapturedId(null);
+    setCapturedPreview(null);
+    setActiveOrder(null);
+    setShipmentParsed(null);
     setActiveNegotiationId(id);
     activeIdRef.current = id;
+    setResumeBusyId(id);
+    setExpandedNeedsId(id);
     setNotice("Loading payment checkpoint…");
-    const detail = await loadNegotiationDetail(id);
-    if (!detail) {
-      setNotice("Could not load that negotiation.");
-      return;
-    }
-    applyNegotiationResult(detail);
-    const saved = checkoutFromResult(detail.result);
-    if (!saved) {
-      setNotice("No checkout on this request yet — open Offers and use Checkout winning offer first.");
-      setView("Supplier offers");
-      return;
-    }
-    if (payment === "CAPTURED") {
-      setView("Payments & orders");
-      await toggleCapturedPreview({
-        id: detail.id,
-        brief: detail.brief,
-        payment: "CAPTURED",
-        maxUnitPrice: detail.maxUnitPrice,
+    try {
+      const detail = await loadNegotiationDetail(id);
+      if (!detail) {
+        setNotice("Could not load that negotiation — try Refresh.");
+        return;
+      }
+      applyNegotiationResult(detail, { hydrateCheckout: false });
+      const saved = checkoutFromResult(detail.result);
+      if (!saved) {
+        setNotice("No checkout on this request yet — open Offers and use Checkout winning offer first.");
+        setView("Supplier offers");
+        setExpandedNeedsId(null);
+        return;
+      }
+      if (payment === "CAPTURED") {
+        setExpandedNeedsId(null);
+        await toggleCapturedPreview({
+          id: detail.id,
+          brief: detail.brief,
+          payment: "CAPTURED",
+          maxUnitPrice: detail.maxUnitPrice,
+        });
+        setNotice("Opened capture details in Recently captured.");
+        return;
+      }
+      // Prefer the queue payment status so Open hold stays HELD even if order GET is stale.
+      await hydrateOrder(saved.orderId, {
+        ...saved,
+        lastStatus: payment || saved.lastStatus,
       });
-      setNotice("Opened capture details in Recently captured.");
-      return;
-    }
-    await hydrateOrder(saved.orderId, saved);
-    setView("Payments & orders");
-    if (payment === "APPROVED") {
-      setNotice("Resumed checkout — approve in the PayPal popup (or link), then Authorize hold.");
-    } else if (payment === "HELD") {
-      setNotice("Funds on hold — paste the seller shipment email (from Gmail) and Apply ship notice. Status stays HELD until then.");
-    } else if (payment === "SHIPPED") {
-      setNotice("Seller already shipped — Supervisor must Confirm delivery & capture.");
-    } else {
-      setNotice("Opened Payments for this request.");
+      requestAnimationFrame(() => {
+        paymentActionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+      if (payment === "APPROVED") {
+        setNotice("Pay opened — use Pay with PayPal (Buyer or Supervisor), then Authorize hold if needed.");
+      } else if (payment === "HELD") {
+        setNotice("Hold opened under this row — paste shipment email → Extract → Apply. Buyer or Supervisor can apply.");
+      } else if (payment === "SHIPPED") {
+        setNotice("Ready to capture — only Supervisor can Confirm delivery & capture.");
+      } else {
+        setNotice("Opened Payments for this request.");
+      }
+    } finally {
+      setResumeBusyId(null);
     }
   }
 
@@ -715,14 +740,20 @@ export default function Dashboard() {
 
   async function hydrateOrder(
     orderId: string,
-    fallback?: { paypalOrderId?: string; approveUrl?: string; amount?: string; supplierId?: string },
+    fallback?: {
+      paypalOrderId?: string;
+      approveUrl?: string;
+      amount?: string;
+      supplierId?: string;
+      lastStatus?: string;
+    },
   ) {
     try {
       const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, { cache: "no-store" });
       if (!response.ok) {
         setActiveOrder({
           orderId,
-          status: "APPROVED",
+          status: fallback?.lastStatus ?? "APPROVED",
           paypalOrderId: fallback?.paypalOrderId ?? paypalOrderIdFromApproveUrl(fallback?.approveUrl),
           approveUrl: fallback?.approveUrl,
           amount: fallback?.amount,
@@ -742,9 +773,16 @@ export default function Dashboard() {
         tracking?: { carrier: string; number: string };
       };
       const approveUrl = payload.approveUrl ?? fallback?.approveUrl;
+      const liveStatus = payload.status ?? "APPROVED";
+      const preferred = fallback?.lastStatus;
+      const advanced = new Set(["HELD", "SHIPPED", "CAPTURED"]);
+      // Queue payment can be ahead of /api/orders — keep HELD/SHIPPED when live still says APPROVED.
+      const status = preferred && advanced.has(preferred) && !advanced.has(liveStatus)
+        ? preferred
+        : (payload.status ?? preferred ?? "APPROVED");
       setActiveOrder({
         orderId: payload.id ?? orderId,
-        status: payload.status ?? "APPROVED",
+        status,
         paypalOrderId: payload.paypalOrderId
           ?? fallback?.paypalOrderId
           ?? paypalOrderIdFromApproveUrl(approveUrl),
@@ -758,7 +796,7 @@ export default function Dashboard() {
     } catch {
       setActiveOrder({
         orderId,
-        status: "APPROVED",
+        status: fallback?.lastStatus ?? "APPROVED",
         paypalOrderId: fallback?.paypalOrderId ?? paypalOrderIdFromApproveUrl(fallback?.approveUrl),
         approveUrl: fallback?.approveUrl,
         amount: fallback?.amount,
@@ -767,7 +805,7 @@ export default function Dashboard() {
     }
   }
 
-  function applyNegotiationResult(detail: NegotiationRecord) {
+  function applyNegotiationResult(detail: NegotiationRecord, options?: { hydrateCheckout?: boolean }) {
     activeIdRef.current = detail.id;
     setActiveNegotiationId(detail.id);
     if (detail.status === "SUCCEEDED") {
@@ -782,7 +820,7 @@ export default function Dashboard() {
             : `Live ranking for ${detail.id.slice(0, 8)}… · no offer meets budget and deadline, so checkout is blocked.`,
       );
       const saved = checkoutFromResult(detail.result);
-      if (saved) {
+      if (saved && options?.hydrateCheckout !== false) {
         void hydrateOrder(saved.orderId, saved);
       }
       return;
@@ -865,6 +903,16 @@ export default function Dashboard() {
     void loadNegotiations();
     requestAnimationFrame(() => headingRef.current?.focus());
   }
+
+  useEffect(() => {
+    const existing = readDemoSession();
+    if (existing) {
+      setDemoSession(existing);
+      setLoginUser(existing.role === "owner" ? "supervisor" : "buyer");
+      setLoginPass(existing.role === "owner" ? "supervisor" : "buyer");
+    }
+    setDemoAuthReady(true);
+  }, []);
 
   useEffect(() => {
     if (!demoSession) return;
@@ -1452,7 +1500,7 @@ export default function Dashboard() {
     const orderId = orderIdOverride ?? activeOrder?.orderId;
     if (!orderId) return;
     if (activeOrder?.status === "HELD" && activeOrder.orderId === orderId) {
-      setNotice("Funds already on hold — next step is Mark shipped (stop here for the Funds on hold metric).");
+      setNotice("Funds already on hold — paste shipment email → Apply ship notice when ready.");
       await loadNegotiations();
       return;
     }
@@ -1481,7 +1529,7 @@ export default function Dashboard() {
         if (response.status === 409 && /now HELD|already/i.test(payload.error ?? "")) {
           await hydrateOrder(orderId);
           await loadNegotiations();
-          setNotice("Funds already on hold — use Mark shipped when ready (leave HELD to show Funds on hold).");
+          setNotice("Funds already on hold — leave HELD for Funds on hold, or Apply ship notice when ready.");
           return;
         }
         setNotice(payload.error ?? `Authorize failed (${response.status}). Approve with the PayPal popup first, then retry Authorize hold.`);
@@ -1661,7 +1709,7 @@ export default function Dashboard() {
               <div>
                 <h1>ProcureAI demo login</h1>
                 <p className={s.description}>
-                  Sandbox roles only — Buyer creates buys; Supervisor approves spends over $20 and captures.
+                  Same workspace for both. Only difference: Supervisor approval (over $20) and capture.
                 </p>
               </div>
             </div>
@@ -1749,7 +1797,7 @@ export default function Dashboard() {
             <span className={s.avatar}>{isOwner ? "S" : "B"}</span>
             <div>
               {isOwner ? "Supervisor" : "Buyer"}
-              <small>{isOwner ? "Can approve & capture" : "Can buy & hold"}</small>
+              <small>{isOwner ? "Full path + approve & capture" : "Full path except approve & capture"}</small>
             </div>
             <button type="button" className={s.textButton} title="Sign out of demo role" onClick={signOutDemo}>
               <LogOut size={15} />
@@ -2547,7 +2595,7 @@ export default function Dashboard() {
                   <div>
                     <h3>Payment queues</h3>
                     <p className={s.description}>
-                      Needs attention opens the action panel. Recently captured View expands under the row (no duplicate box below).
+                      Pay / Open hold / Confirm expand actions under that row. Buyer and Supervisor can continue the flow; only over-$20 approve and capture need Supervisor.
                     </p>
                   </div>
                   <button type="button" className={s.secondary} onClick={() => void loadNegotiations()}>Refresh</button>
@@ -2570,27 +2618,165 @@ export default function Dashboard() {
                         APPROVED → PayPal / Authorize hold · HELD → ship · SHIPPED → capture
                       </p>
                       {paymentNeedsAttention.length > 0 ? (
-                        <ul className={s.paymentQueue}>
+                        <ul className={s.paymentQueueOpen}>
                           {paymentNeedsAttention.map((row) => {
                             const payLabel = paymentActionLabel(row.payment) ?? "Open";
-                            const selected = activeNegotiationId === row.id;
+                            const expanded = expandedNeedsId === row.id;
+                            const busy = resumeBusyId === row.id;
                             return (
-                              <li key={row.id} className={selected ? s.paymentQueueSelected : undefined}>
-                                <div>
-                                  <strong>{row.brief.slice(0, 88)}{row.brief.length > 88 ? "…" : ""}</strong>
-                                  <p>{row.payment} · {nextPaymentStepLabel(row.payment)} · max {money.format(row.maxUnitPrice)}</p>
+                              <li key={row.id} className={`${s.paymentQueueStack} ${expanded ? s.paymentQueueSelected : ""}`}>
+                                <div className={s.paymentQueueRow}>
+                                  <div>
+                                    <strong>{row.brief.slice(0, 88)}{row.brief.length > 88 ? "…" : ""}</strong>
+                                    <p>{row.payment} · {nextPaymentStepLabel(row.payment)} · max {money.format(row.maxUnitPrice)}</p>
+                                  </div>
+                                  <div className={s.gridActions}>
+                                    <span className={s.draftBadge}>{row.payment}</span>
+                                    <button
+                                      type="button"
+                                      className={s.primary}
+                                      disabled={orderBusy || busy}
+                                      aria-expanded={expanded}
+                                      onClick={() => {
+                                        if (expanded && activeNegotiationId === row.id) {
+                                          setExpandedNeedsId(null);
+                                          return;
+                                        }
+                                        void resumePayment(row.id, row.payment);
+                                      }}
+                                    >
+                                      {busy ? "Opening…" : expanded ? "Hide" : payLabel}
+                                    </button>
+                                  </div>
                                 </div>
-                                <div className={s.gridActions}>
-                                  <span className={s.draftBadge}>{row.payment}</span>
-                                  <button
-                                    type="button"
-                                    className={s.primary}
-                                    disabled={orderBusy}
-                                    onClick={() => void resumePayment(row.id, row.payment)}
-                                  >
-                                    {payLabel}
-                                  </button>
-                                </div>
+                                {expanded && (
+                                  <div className={s.paymentInlineWindow} ref={activeNegotiationId === row.id ? paymentActionRef : undefined}>
+                                    <div className={s.paymentInlineWindowHead}>
+                                      <strong>
+                                        {row.payment === "APPROVED" && "PayPal approve → Authorize hold"}
+                                        {row.payment === "HELD" && "Shipment email → Apply ship notice"}
+                                        {row.payment === "SHIPPED" && "Supervisor Confirm delivery & capture"}
+                                      </strong>
+                                      <button type="button" className={s.textButton} onClick={() => setExpandedNeedsId(null)}>
+                                        Close
+                                      </button>
+                                    </div>
+                                    {activeNegotiationId === row.id && activeOrder && activeOrder.status !== "CAPTURED" ? (
+                                      <>
+                                        <dl className={s.summaryList}>
+                                          <div><dt>Order</dt><dd>{activeOrder.orderId}</dd></div>
+                                          <div><dt>Status</dt><dd>{activeOrder.status}</dd></div>
+                                          {activeOrder.amount && <div><dt>Amount</dt><dd>${activeOrder.amount} USD</dd></div>}
+                                          {activeOrder.supplierId && <div><dt>Supplier</dt><dd>{activeOrder.supplierId}</dd></div>}
+                                          {activeOrder.authorizationId && <div><dt>Authorization</dt><dd>{activeOrder.authorizationId}</dd></div>}
+                                          {activeOrder.tracking && <div><dt>Tracking</dt><dd>{activeOrder.tracking.carrier} {activeOrder.tracking.number}</dd></div>}
+                                        </dl>
+                                        {activeOrder.status === "APPROVED" && (activeOrder.paypalOrderId || activeOrder.approveUrl) && (
+                                          <div className={s.paypalApproveBlock}>
+                                            {activeOrder.paypalOrderId && (
+                                              <PayPalApproveButtons
+                                                paypalOrderId={activeOrder.paypalOrderId}
+                                                onApproved={async (authorizationId) => {
+                                                  setNotice(authorizationId
+                                                    ? "PayPal hold authorized in popup — syncing…"
+                                                    : "PayPal approved — authorizing hold on server…");
+                                                  await authorizeHold(activeOrder.orderId, authorizationId);
+                                                }}
+                                                onCancel={() => setNotice("PayPal popup cancelled — approve again when ready.")}
+                                                onError={(message) => setNotice(message)}
+                                              />
+                                            )}
+                                            {activeOrder.approveUrl && (
+                                              <p className={s.summaryNote}>
+                                                Fallback — open as sandbox buyer:{" "}
+                                                <a href={activeOrder.approveUrl} target="_blank" rel="noreferrer">Approve on PayPal</a>
+                                                , then <strong>Authorize hold</strong>.
+                                              </p>
+                                            )}
+                                          </div>
+                                        )}
+                                        {activeOrder.status === "APPROVED" && !activeOrder.paypalOrderId && !activeOrder.approveUrl && (
+                                          <p className={s.summaryNote}>Missing PayPal approve link — re-checkout this offer from Supplier offers.</p>
+                                        )}
+                                        <div className={s.reviewActions}>
+                                          {activeOrder.status === "APPROVED" && (
+                                            <button
+                                              type="button"
+                                              className={s.secondary}
+                                              disabled={orderBusy}
+                                              onClick={() => void authorizeHold()}
+                                            >
+                                              Authorize hold
+                                            </button>
+                                          )}
+                                          {activeOrder.status === "HELD" && (
+                                            <div className={s.shipmentEmailBlock}>
+                                              <p className={s.summaryNote}>
+                                                <strong>HELD</strong> — paste seller shipment email (Gmail) or load sample → Extract → Apply.
+                                                Buyer or Supervisor can do this step.
+                                              </p>
+                                              <div className={s.field}>
+                                                <label htmlFor={`ship-email-${row.id}`}>Shipment email</label>
+                                                <textarea
+                                                  id={`ship-email-${row.id}`}
+                                                  rows={6}
+                                                  value={shipmentEmailText}
+                                                  onChange={(e) => {
+                                                    setShipmentEmailText(e.target.value);
+                                                    setShipmentParsed(null);
+                                                  }}
+                                                  placeholder="Paste the carrier / seller shipped email…"
+                                                />
+                                              </div>
+                                              {shipmentParsed && (
+                                                <dl className={s.summaryList}>
+                                                  <div><dt>Carrier</dt><dd>{shipmentParsed.carrier}</dd></div>
+                                                  <div><dt>Tracking</dt><dd>{shipmentParsed.number}</dd></div>
+                                                  <div><dt>Match</dt><dd>{shipmentParsed.matchedBy} · {shipmentParsed.confidence}</dd></div>
+                                                </dl>
+                                              )}
+                                              <div className={s.reviewActions} style={{ flexWrap: "wrap" }}>
+                                                <button type="button" className={s.secondary} disabled={shipEmailBusy || orderBusy} onClick={() => void loadSampleShipmentEmail()}>
+                                                  Load sample email
+                                                </button>
+                                                <button type="button" className={s.secondary} disabled={shipEmailBusy || orderBusy} onClick={() => void extractShipmentEmail()}>
+                                                  Extract tracking
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  className={s.primary}
+                                                  disabled={orderBusy || shipEmailBusy || !shipmentParsed}
+                                                  onClick={() => void applyShipmentEmailNotice()}
+                                                >
+                                                  Apply ship notice → SHIPPED
+                                                </button>
+                                              </div>
+                                            </div>
+                                          )}
+                                          {activeOrder.status === "SHIPPED" && (
+                                            <>
+                                              <p className={s.summaryNote} style={{ flexBasis: "100%", margin: "0 0 4px" }}>
+                                                Supplier reported <strong>SHIPPED</strong>
+                                                {activeOrder.tracking ? ` (${activeOrder.tracking.carrier} ${activeOrder.tracking.number})` : ""}.
+                                                Only Supervisor can capture.
+                                              </p>
+                                              {!isOwner && (
+                                                <p className={s.summaryNote} style={{ flexBasis: "100%" }}>
+                                                  Switch to <strong>Supervisor</strong> (supervisor / supervisor) to capture.
+                                                </p>
+                                              )}
+                                              <button type="button" className={s.primary} disabled={orderBusy || !isOwner} onClick={() => void confirmDeliveryCapture()}>
+                                                Confirm delivery & capture
+                                              </button>
+                                            </>
+                                          )}
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <p className={s.tableNote}>{busy ? "Loading checkout…" : "Could not open this order — click the button again or Refresh."}</p>
+                                    )}
+                                  </div>
+                                )}
                               </li>
                             );
                           })}
@@ -2688,122 +2874,8 @@ export default function Dashboard() {
 
             {view === "Payments & orders" && !activeOrder && !pendingOwnerApproval && paymentNeedsAttention.length === 0 && <div className={s.empty}>
               <span className={s.emptyIcon}><Package size={26} /></span><h3>No open payment work</h3>
-              <p>Checkout a winning offer from Supplier offers, or resume an APPROVED row from Negotiations.</p>
+              <p>Checkout a winning offer from Supplier offers, or open an APPROVED / HELD row under Needs attention.</p>
             </div>}
-            {view === "Payments & orders" && activeOrder && activeOrder.status !== "CAPTURED" && (
-              <div className={s.reviewPanel}>
-                <dl className={s.summaryList}>
-                  <div><dt>Order</dt><dd>{activeOrder.orderId}</dd></div>
-                  <div><dt>Status</dt><dd>{activeOrder.status}</dd></div>
-                  {activeOrder.amount && <div><dt>Amount</dt><dd>${activeOrder.amount} USD</dd></div>}
-                  {activeOrder.supplierId && <div><dt>Supplier</dt><dd>{activeOrder.supplierId}</dd></div>}
-                  {activeOrder.authorizationId && <div><dt>Authorization</dt><dd>{activeOrder.authorizationId}</dd></div>}
-                  {activeOrder.tracking && <div><dt>Tracking</dt><dd>{activeOrder.tracking.carrier} {activeOrder.tracking.number}</dd></div>}
-                  {activeOrder.captureId && <div><dt>Capture</dt><dd>{activeOrder.captureId}</dd></div>}
-                </dl>
-                {activeOrder.status === "APPROVED" && (activeOrder.paypalOrderId || activeOrder.approveUrl) && (
-                  <div className={s.paypalApproveBlock}>
-                    {activeOrder.paypalOrderId && (
-                      <PayPalApproveButtons
-                        paypalOrderId={activeOrder.paypalOrderId}
-                        onApproved={async (authorizationId) => {
-                          setNotice(authorizationId
-                            ? "PayPal hold authorized in popup — syncing…"
-                            : "PayPal approved — authorizing hold on server…");
-                          await authorizeHold(activeOrder.orderId, authorizationId);
-                        }}
-                        onCancel={() => setNotice("PayPal popup cancelled — approve again when ready.")}
-                        onError={(message) => setNotice(message)}
-                      />
-                    )}
-                    {activeOrder.approveUrl && (
-                      <p className={s.summaryNote}>
-                        Fallback — open in a new tab as the sandbox buyer:{" "}
-                        <a href={activeOrder.approveUrl} target="_blank" rel="noreferrer">Approve on PayPal</a>
-                        , then click <strong>Authorize hold</strong> below (popup path does hold for you).
-                      </p>
-                    )}
-                  </div>
-                )}
-                <div className={s.reviewActions}>
-                  {activeOrder.status === "APPROVED" && (
-                    <button
-                      type="button"
-                      className={s.secondary}
-                      disabled={orderBusy}
-                      title="Needed after Approve-on-PayPal link. Popup approve already runs this for you."
-                      onClick={() => void authorizeHold()}
-                    >
-                      Authorize hold
-                    </button>
-                  )}
-                  {activeOrder.status === "HELD" && (
-                    <div className={s.shipmentEmailBlock}>
-                      <p className={s.summaryNote}>
-                        <strong>HELD</strong> — funds stay on hold here. Paste the seller’s shipment email from Gmail
-                        (or load sample) → Extract tracking → Apply. Status only becomes SHIPPED when you apply.
-                      </p>
-                      <div className={s.field}>
-                        <label htmlFor="ship-email">Shipment email (Gmail copy/paste)</label>
-                        <textarea
-                          id="ship-email"
-                          rows={7}
-                          value={shipmentEmailText}
-                          onChange={(e) => {
-                            setShipmentEmailText(e.target.value);
-                            setShipmentParsed(null);
-                          }}
-                          placeholder="Paste the carrier / seller “your order has shipped” email here…"
-                        />
-                      </div>
-                      {shipmentParsed && (
-                        <dl className={s.summaryList}>
-                          <div><dt>Carrier</dt><dd>{shipmentParsed.carrier}</dd></div>
-                          <div><dt>Tracking</dt><dd>{shipmentParsed.number}</dd></div>
-                          <div><dt>Match</dt><dd>{shipmentParsed.matchedBy} · {shipmentParsed.confidence}</dd></div>
-                        </dl>
-                      )}
-                      <div className={s.reviewActions} style={{ flexWrap: "wrap" }}>
-                        <button type="button" className={s.secondary} disabled={shipEmailBusy || orderBusy} onClick={() => void loadSampleShipmentEmail()}>
-                          Load sample email
-                        </button>
-                        <button type="button" className={s.secondary} disabled={shipEmailBusy || orderBusy} onClick={() => void extractShipmentEmail()}>
-                          Extract tracking
-                        </button>
-                        <button
-                          type="button"
-                          className={s.primary}
-                          disabled={orderBusy || shipEmailBusy || !shipmentParsed}
-                          onClick={() => void applyShipmentEmailNotice()}
-                        >
-                          Apply ship notice → SHIPPED
-                        </button>
-                      </div>
-                      <p className={s.tableNote}>
-                        Tip: open Gmail → copy the shipment message → paste here. Full Gmail OAuth inbox sync can come later; paste keeps the demo sandbox-safe.
-                      </p>
-                    </div>
-                  )}
-                  {activeOrder.status === "SHIPPED" && (
-                    <>
-                      <p className={s.summaryNote} style={{ flexBasis: "100%", margin: "0 0 4px" }}>
-                        Supplier reported <strong>SHIPPED</strong>
-                        {activeOrder.tracking ? ` (${activeOrder.tracking.carrier} ${activeOrder.tracking.number})` : ""}.
-                        Money is still on hold until Supervisor confirms delivery.
-                      </p>
-                      {!isOwner && (
-                        <p className={s.summaryNote} style={{ flexBasis: "100%" }}>
-                          Capture requires <strong>Supervisor</strong> login (supervisor / supervisor).
-                        </p>
-                      )}
-                      <button type="button" className={s.primary} disabled={orderBusy || !isOwner} onClick={() => void confirmDeliveryCapture()}>
-                        Confirm delivery & capture
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
             {view === "Payments & orders" && (
               <DisputePanel notice={notice} setNotice={setNotice} demoRole={demoRole} />
             )}
