@@ -90,7 +90,8 @@ export function BryntumGanttPanel({
             return `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};box-shadow:0 0 0 2px ${color}33"></span>`;
           },
         },
-        { type: "name", field: "name", width: 240, text: "Milestone" },
+        // Plain column (not type:"name") — avoids Bryntum's grey tree/leaf icons next to labels.
+        { field: "name", width: 260, text: "Milestone", htmlEncode: true },
         { type: "startdate", width: 110 },
         { type: "enddate", width: 110 },
       ],
@@ -160,6 +161,14 @@ export function BryntumGanttPanel({
 
   return (
     <div className="bryntum-gantt-host" style={{ height: 420, width: "100%" }}>
+      <style>{`
+        .bryntum-gantt-host .b-tree-icon,
+        .bryntum-gantt-host .b-icon-tree-leaf,
+        .bryntum-gantt-host .b-icon-tree-expand,
+        .bryntum-gantt-host .b-icon-tree-collapse {
+          display: none !important;
+        }
+      `}</style>
       <BryntumGantt key={tasks.map((t) => `${t.id}:${t.startDate}:${t.flag}`).join("|")} {...ganttProps} />
     </div>
   );
