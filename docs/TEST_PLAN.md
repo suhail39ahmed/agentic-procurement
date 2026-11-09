@@ -95,7 +95,7 @@ Negative case:
 ## 5d. Partners + payables smoke
 
 - [ ] Overview: Channel3 **Use for RFQ** fills brief → Review → **Queue negotiation** (sellers see Channel3 product RFQ)
-- [ ] Automation: Channel3 enrich also loads Overview RFQ
+- [ ] Overview: Channel3 search → pick product → Use market price → Review
 - [ ] Bryntum Gantt loads; Simulate late capture / refund / dispute moves or flags bars; Reset plan restores baseline
 - [ ] KERNEL fetch → opens **Payables** with page text → **Extract** (or paste sample invoice text with no URL)
 - [ ] Payables: Extract → Match (PO/receipt ≈ $1.50) → Payout · optional Client invoice
