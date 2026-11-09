@@ -69,7 +69,7 @@ export function PayPalApproveButtons({
   return (
     <div className={s.paypalButtons}>
       <p className={s.description}>
-        Pay with PayPal opens a sandbox popup on this page — approve as the buyer, then we place the authorize hold.
+        Pay with PayPal opens a sandbox popup — approve as the buyer and we place the authorize hold automatically (status → HELD / Funds on hold). Use the Authorize hold button only if you approved via the fallback link.
       </p>
       <PayPalScriptProvider
         options={{

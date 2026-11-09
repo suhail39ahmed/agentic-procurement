@@ -1268,12 +1268,18 @@ export default function Dashboard() {
     }
   }
 
-  async function authorizeHold() {
-    if (!activeOrder?.orderId || orderBusy) return;
+  async function authorizeHold(orderIdOverride?: string) {
+    const orderId = orderIdOverride ?? activeOrder?.orderId;
+    if (!orderId) return;
+    if (activeOrder?.status === "HELD" && activeOrder.orderId === orderId) {
+      setNotice("Funds already on hold — next step is Mark shipped (stop here for the Funds on hold metric).");
+      await loadNegotiations();
+      return;
+    }
     setOrderBusy(true);
     setNotice("Authorizing PayPal hold…");
     try {
-      const response = await fetch(`/api/orders/${encodeURIComponent(activeOrder.orderId)}/authorize`, {
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}/authorize`, {
         method: "POST",
       });
       const payload = await response.json().catch(() => ({})) as {
@@ -1281,18 +1287,33 @@ export default function Dashboard() {
         status?: string;
         authorizationId?: string;
         amount?: string;
+        paypalOrderId?: string;
+        approveUrl?: string;
       };
       if (!response.ok) {
-        setNotice(payload.error ?? `Authorize failed (${response.status}). Approve the PayPal link first.`);
+        // Popup already authorized, or user clicked Authorize hold twice — treat HELD as success.
+        if (response.status === 409 && /now HELD|already/i.test(payload.error ?? "")) {
+          await hydrateOrder(orderId);
+          await loadNegotiations();
+          setNotice("Funds already on hold — use Mark shipped when ready (leave HELD to show Funds on hold).");
+          return;
+        }
+        setNotice(payload.error ?? `Authorize failed (${response.status}). Approve with PayPal first, then retry Authorize hold.`);
         return;
       }
-      setActiveOrder(current => current ? {
+      setActiveOrder(current => current && current.orderId === orderId ? {
         ...current,
         status: payload.status ?? "HELD",
         authorizationId: payload.authorizationId,
         amount: payload.amount ?? current.amount,
-      } : current);
-      setNotice("Funds held (authorized, not captured).");
+      } : {
+        orderId,
+        status: payload.status ?? "HELD",
+        authorizationId: payload.authorizationId,
+        amount: payload.amount,
+      });
+      await loadNegotiations();
+      setNotice("Funds on hold (HELD). Stop here for the metric — or Mark shipped when you want to continue.");
     } catch {
       setNotice("Authorize failed.");
     } finally {
@@ -1477,8 +1498,8 @@ export default function Dashboard() {
                       <li><em>Overview</em> → Channel3 search (e.g. sticky notes) → pick product → <em>Use market price → Review</em> → <em>Queue negotiation</em>. Or <em>Load demo request</em> / track card <em>Start negotiation demo</em> for chairs.</li>
                       <li>Wait until status <em>SUCCEEDED</em> (Requests / Negotiations grid). Click <em>Offers</em> on that row.</li>
                       <li>Check AG Grid: unit price, delivery days, match score, Eligible. Live SSE shows buyer/seller counters.</li>
-                      <li><em>Checkout winning offer</em> → <em>Payments</em> → PayPal popup (sandbox buyer) → <em>Authorize hold</em>.</li>
-                      <li>Needs attention: <em>Ship</em> → <em>Capture</em>. Captured: open <em>Recently captured → View</em> (inline details only).</li>
+                      <li><em>Checkout winning offer</em> → <em>Payments</em> → PayPal popup (sandbox buyer). Hold runs automatically → <em>HELD</em> / Funds on hold. Use <em>Authorize hold</em> only after the fallback approve link.</li>
+                      <li>Stop at HELD for the Funds on hold metric. Then Needs attention: <em>Ship</em> → <em>Capture</em>. Captured: <em>Recently captured → View</em>.</li>
                       <li>Overview Bryntum Gantt: one bar per live checkout; hover status dots (green done / orange action / blue hold).</li>
                     </ol>
 
@@ -2306,8 +2327,8 @@ export default function Dashboard() {
                       <PayPalApproveButtons
                         paypalOrderId={activeOrder.paypalOrderId}
                         onApproved={async () => {
-                          setNotice("PayPal buyer approved in popup — authorizing hold…");
-                          await authorizeHold();
+                          setNotice("PayPal buyer approved — placing authorize hold automatically…");
+                          await authorizeHold(activeOrder.orderId);
                         }}
                         onCancel={() => setNotice("PayPal popup cancelled — approve again when ready.")}
                         onError={(message) => setNotice(message)}
@@ -2317,21 +2338,32 @@ export default function Dashboard() {
                       <p className={s.summaryNote}>
                         Fallback — open in a new tab as the sandbox buyer:{" "}
                         <a href={activeOrder.approveUrl} target="_blank" rel="noreferrer">Approve on PayPal</a>
-                        , then click Authorize hold.
+                        , then click <strong>Authorize hold</strong> below (popup path does hold for you).
                       </p>
                     )}
                   </div>
                 )}
                 <div className={s.reviewActions}>
                   {activeOrder.status === "APPROVED" && (
-                    <button type="button" className={s.secondary} disabled={orderBusy} onClick={() => void authorizeHold()}>
+                    <button
+                      type="button"
+                      className={s.secondary}
+                      disabled={orderBusy}
+                      title="Needed after Approve-on-PayPal link. Popup approve already runs this for you."
+                      onClick={() => void authorizeHold()}
+                    >
                       Authorize hold
                     </button>
                   )}
                   {activeOrder.status === "HELD" && (
-                    <button type="button" className={s.primary} disabled={orderBusy} onClick={() => void markOrderShipped()}>
-                      Mark shipped
-                    </button>
+                    <>
+                      <p className={s.summaryNote} style={{ flexBasis: "100%", margin: "0 0 4px" }}>
+                        Status is <strong>HELD</strong> — Funds on hold. Stop here for the demo metric, or continue to ship.
+                      </p>
+                      <button type="button" className={s.primary} disabled={orderBusy} onClick={() => void markOrderShipped()}>
+                        Mark shipped
+                      </button>
+                    </>
                   )}
                   {activeOrder.status === "SHIPPED" && (
                     <button type="button" className={s.primary} disabled={orderBusy} onClick={() => void confirmDeliveryCapture()}>
