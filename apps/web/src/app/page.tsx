@@ -380,7 +380,7 @@ export default function Dashboard() {
   const [streamStatus, setStreamStatus] = useState("");
   const [boundStreamKey, setBoundStreamKey] = useState("");
   const briefRef = useRef<HTMLTextAreaElement>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatLogRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLButtonElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -709,11 +709,15 @@ export default function Dashboard() {
         return;
       }
       setChatMessages((current) => [...current, { role: "assistant", content: payload.reply! }]);
-      requestAnimationFrame(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }));
     } catch {
       setChatError("Assistant unreachable. Is the API running with Azure AI env vars?");
     } finally {
       setChatBusy(false);
+      // Scroll only the chat panel — never the page (scrollIntoView was jumping to top).
+      requestAnimationFrame(() => {
+        const log = chatLogRef.current;
+        if (log) log.scrollTop = log.scrollHeight;
+      });
     }
   }
 
@@ -1472,14 +1476,13 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ) : (
-                  <div className={s.chatLog} aria-live="polite">
+                  <div className={s.chatLog} aria-live="polite" ref={chatLogRef}>
                     {chatMessages.map((turn, index) => (
                       <div key={`${turn.role}-${index}`} className={turn.role === "user" ? s.chatUser : s.chatBot}>
                         <strong>{turn.role === "user" ? "You" : "Assistant"}</strong>
                         <p>{turn.content}</p>
                       </div>
                     ))}
-                    <div ref={chatEndRef} />
                   </div>
                 )}
                 {chatError && <p className={s.fieldError} role="alert">{chatError}</p>}
