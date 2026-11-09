@@ -12,6 +12,7 @@ import {
   AllCommunityModule, ModuleRegistry, themeQuartz,
   type ColDef,
   type GridApi,
+  type ICellRendererParams,
 } from "ag-grid-community";
 import s from "./dashboard.module.css";
 import Link from "next/link";
@@ -214,19 +215,6 @@ type FeedRow = {
   payment: string;
 };
 
-const feedColumns: ColDef<FeedRow>[] = [
-  { field: "brief", headerName: "Request", flex: 2, minWidth: 220 },
-  { field: "status", headerName: "Negotiation", minWidth: 130 },
-  { field: "payment", headerName: "Payment", minWidth: 120 },
-  { field: "priority", headerName: "Priority", minWidth: 110 },
-  { field: "quantity", headerName: "Qty", minWidth: 80 },
-  {
-    field: "maxUnitPrice", headerName: "Max unit", minWidth: 120,
-    valueFormatter: ({ value }) =>
-      typeof value === "number" ? money.format(value) : "—",
-  },
-];
-
 const gridTheme = themeQuartz.withParams({
   accentColor: "#0070e0",
   backgroundColor: "#ffffff",
@@ -237,6 +225,19 @@ const gridTheme = themeQuartz.withParams({
   fontSize: 14,
   rowHeight: 56,
   headerHeight: 48,
+});
+
+/** Compact theme so ~4 negotiation rows fit before the grid scrolls. */
+const negotiationGridTheme = themeQuartz.withParams({
+  accentColor: "#0070e0",
+  backgroundColor: "#ffffff",
+  foregroundColor: "#142c52",
+  headerBackgroundColor: "#f5f8fd",
+  borderColor: "#e5ebf4",
+  fontFamily: "inherit",
+  fontSize: 13,
+  rowHeight: 48,
+  headerHeight: 40,
 });
 
 function syncGridRows<T extends { id?: string; supplier?: string }>(
@@ -409,22 +410,103 @@ export default function Dashboard() {
   const activeNegotiation = negotiations.find((item) => item.id === activeNegotiationId) ?? null;
   const succeededNegotiations = negotiations.filter((item) => item.status === "SUCCEEDED");
   const feedRows = useMemo<FeedRow[]>(() => {
-    return negotiations.map((item) => {
-      const payment = item.id === activeNegotiationId && activeOrder
-        ? activeOrder.status
-        : item.paymentStatus
-          ?? (item.hasCheckout ? "APPROVED" : "—");
-      return {
-        id: item.id,
-        brief: item.brief,
-        status: item.status,
-        priority: priorityLabel(item.priority),
-        quantity: item.quantity,
-        maxUnitPrice: item.maxUnitPrice,
-        payment,
-      };
-    });
-  }, [negotiations, activeNegotiationId, activeOrder]);
+    const q = search.trim().toLowerCase();
+    return negotiations
+      .map((item) => {
+        const payment = item.id === activeNegotiationId && activeOrder
+          ? activeOrder.status
+          : item.paymentStatus
+            ?? (item.hasCheckout ? "APPROVED" : "—");
+        return {
+          id: item.id,
+          brief: item.brief,
+          status: item.status,
+          priority: priorityLabel(item.priority),
+          quantity: item.quantity,
+          maxUnitPrice: item.maxUnitPrice,
+          payment,
+        };
+      })
+      .filter((row) => {
+        if (!q) return true;
+        return [row.brief, row.status, row.priority, row.payment, String(row.quantity)]
+          .join(" ")
+          .toLowerCase()
+          .includes(q);
+      });
+  }, [negotiations, activeNegotiationId, activeOrder, search]);
+
+  async function openNegotiationOffers(id: string) {
+    setActiveNegotiationId(id);
+    activeIdRef.current = id;
+    const detail = await loadNegotiationDetail(id);
+    if (detail) {
+      applyNegotiationResult(detail);
+      setView("Supplier offers");
+    }
+  }
+
+  async function startOrRetryNegotiation(id: string) {
+    const response = await fetch(`/api/negotiations/${encodeURIComponent(id)}/start`, { method: "POST" });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({})) as { error?: string };
+      setNotice(payload.error ?? `Start failed (${response.status}).`);
+      return;
+    }
+    setActiveNegotiationId(id);
+    activeIdRef.current = id;
+    setNotice("Negotiation start accepted.");
+    await loadNegotiations();
+  }
+
+  const negotiationColumns: ColDef<FeedRow>[] = [
+    { field: "brief", headerName: "Request", flex: 2, minWidth: 200 },
+    { field: "status", headerName: "Status", minWidth: 110, maxWidth: 130 },
+    { field: "payment", headerName: "Payment", minWidth: 100, maxWidth: 120 },
+    { field: "priority", headerName: "Priority", minWidth: 100, maxWidth: 120 },
+    { field: "quantity", headerName: "Qty", minWidth: 70, maxWidth: 80 },
+    {
+      field: "maxUnitPrice",
+      headerName: "Max unit",
+      minWidth: 100,
+      maxWidth: 120,
+      valueFormatter: ({ value }) =>
+        typeof value === "number" ? money.format(value) : "—",
+    },
+    {
+      headerName: "Actions",
+      colId: "actions",
+      minWidth: 170,
+      maxWidth: 200,
+      sortable: false,
+      filter: false,
+      cellRenderer: (params: ICellRendererParams<FeedRow>) => {
+        const row = params.data;
+        if (!row) return null;
+        return (
+          <div className={s.gridActions}>
+            <button
+              type="button"
+              className={s.textButton}
+              onClick={() => void openNegotiationOffers(row.id)}
+            >
+              Offers
+            </button>
+            {(row.status === "QUEUED" || row.status === "FAILED") && (
+              <button
+                type="button"
+                className={s.textButton}
+                onClick={() => void startOrRetryNegotiation(row.id)}
+              >
+                Start
+              </button>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
+
   const visibleDrafts = drafts.filter(draft => {
     const haystack = [
       draft.brief,
@@ -432,15 +514,6 @@ export default function Dashboard() {
       String(draft.quantity),
       draft.currency,
       String(draft.neededByDays),
-    ].join(" ").toLowerCase();
-    return haystack.includes(search.toLowerCase());
-  });
-  const visibleNegotiations = negotiations.filter(item => {
-    const haystack = [
-      item.brief,
-      item.status,
-      priorityLabel(item.priority),
-      String(item.quantity),
     ].join(" ").toLowerCase();
     return haystack.includes(search.toLowerCase());
   });
@@ -1595,87 +1668,38 @@ export default function Dashboard() {
             <section className={s.card}>
               <div className={s.sectionHeader}>
                 <div>
-                  <h2>Negotiation feed</h2>
-                  <p className={s.description}>Live AG Grid rows via applyTransaction — status, payment, priority.</p>
+                  <h2>Negotiations</h2>
+                  <p className={s.description}>
+                    AG Grid from Postgres — about 4 rows visible, scroll for more. Offers opens the supplier table.
+                  </p>
                 </div>
-                <button type="button" className={s.secondary} onClick={() => void loadNegotiations()}>Refresh</button>
+                <div className={s.tableActions}>
+                  <label className={s.search}>
+                    <Search size={16} />
+                    <input
+                      aria-label="Search negotiations"
+                      placeholder="Filter negotiations"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                    />
+                  </label>
+                  <button type="button" className={s.secondary} onClick={() => void loadNegotiations()}>Refresh</button>
+                </div>
               </div>
-              <div className={s.grid}>
+              {negotiationsError && <p className={s.fieldError} role="alert">{negotiationsError}</p>}
+              <div className={`${s.grid} ${s.gridCompact}`}>
                 <AgGridReact<FeedRow>
-                  theme={gridTheme}
-                  columnDefs={feedColumns}
-                  defaultColDef={{ flex: 1, sortable: true, filter: true, resizable: true }}
+                  theme={negotiationGridTheme}
+                  columnDefs={negotiationColumns}
+                  defaultColDef={{ flex: 1, sortable: true, filter: false, resizable: true }}
                   onGridReady={(event) => {
                     feedGridApi.current = event.api;
                     syncGridRows(event.api, feedRows, (row) => row.id);
                   }}
                   getRowId={(params) => params.data.id}
-                  overlayNoRowsTemplate="<span>No negotiations yet. Seed demo or queue a request.</span>"
+                  overlayNoRowsTemplate="<span>No negotiations yet. Queue a request from Overview.</span>"
                 />
               </div>
-            </section>
-
-            <section className={s.card}>
-              <div className={s.sectionHeader}>
-                <div>
-                  <h2>Queued negotiations</h2>
-                  <p className={s.description}>Durable rows from Postgres. Queue starts the negotiate run automatically.</p>
-                </div>
-                <button type="button" className={s.secondary} onClick={() => void loadNegotiations()}>Refresh</button>
-              </div>
-              {negotiationsError && <p className={s.fieldError} role="alert">{negotiationsError}</p>}
-              {visibleNegotiations.length > 0 ? <ul className={s.draftList}>
-                {visibleNegotiations.map(item => <li key={item.id}>
-                  <div className={s.iconTile}><Sparkles size={19} /></div>
-                  <details className={s.draftDetail}>
-                    <summary>{item.brief}</summary>
-                    <p>Priority: {priorityLabel(item.priority)} · Qty {item.quantity} · Max {money.format(item.maxUnitPrice)} {item.currency} · Within {item.neededByDays} days</p>
-                    <p>Created {new Date(item.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST.</p>
-                    <p>Id {item.id}. Workflow run: {item.workflowRunId ?? "not started"}.</p>
-                    <button
-                      type="button"
-                      className={s.textButton}
-                      onClick={() => {
-                        setActiveNegotiationId(item.id);
-                        void loadNegotiationDetail(item.id).then(detail => {
-                          if (detail) {
-                            applyNegotiationResult(detail);
-                            setView("Supplier offers");
-                          }
-                        });
-                      }}
-                    >
-                      View offers <ArrowRight size={15} />
-                    </button>
-                    {(item.status === "QUEUED" || item.status === "FAILED") && (
-                      <button
-                        type="button"
-                        className={s.textButton}
-                        onClick={() => {
-                          void fetch(`/api/negotiations/${encodeURIComponent(item.id)}/start`, { method: "POST" })
-                            .then(async response => {
-                              if (!response.ok) {
-                                const payload = await response.json().catch(() => ({})) as { error?: string };
-                                setNotice(payload.error ?? `Start failed (${response.status}).`);
-                                return;
-                              }
-                              setActiveNegotiationId(item.id);
-                              setNotice("Negotiation start accepted.");
-                              await loadNegotiations();
-                            });
-                        }}
-                      >
-                        Start / retry <ArrowRight size={15} />
-                      </button>
-                    )}
-                  </details>
-                  <span className={s.draftBadge}>{item.status}</span>
-                </li>)}
-              </ul> : !negotiationsError && <div className={s.empty}>
-                <span className={s.emptyIcon}><Sparkles size={25} /></span>
-                <h3>{search ? "No matching negotiations" : "No queued negotiations yet"}</h3>
-                <p>{search ? "Try a different search." : "Review a request and choose Queue negotiation to persist it."}</p>
-              </div>}
             </section>
 
             <section className={s.card}>
