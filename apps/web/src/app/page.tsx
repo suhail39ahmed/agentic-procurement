@@ -392,7 +392,6 @@ export default function Dashboard() {
   );
   const heldCount = activeOrder?.status === "HELD" || activeOrder?.status === "SHIPPED" ? 1 : 0;
   const capturedCount = activeOrder?.status === "CAPTURED" ? 1 : 0;
-  const activeOrderCount = activeOrder ? 1 : 0;
   const activeNegotiation = negotiations.find((item) => item.id === activeNegotiationId) ?? null;
   const succeededNegotiations = negotiations.filter((item) => item.status === "SUCCEEDED");
   const feedRows = useMemo<FeedRow[]>(() => {
@@ -1094,7 +1093,7 @@ export default function Dashboard() {
               <button
                 type="button"
                 className={s.secondary}
-                title="Fill the composer with the chairs demo brief"
+                title="Fill the composer with the ≤$2 micro-pack demo brief"
                 onClick={loadDemoRequest}
               >
                 Load demo request
@@ -1102,7 +1101,7 @@ export default function Dashboard() {
               <button
                 type="button"
                 className={s.secondary}
-                title="Queue a live negotiation with the chairs example in one click"
+                title="Queue a live ≤$2 micro-pack negotiation in one click"
                 onClick={() => void seedDemoWorkspace()}
                 disabled={queueBusy}
               >
@@ -1119,31 +1118,71 @@ export default function Dashboard() {
           </section>
 
           <div className={s.stackStrip} aria-label="Built with">
-            <span className={s.stackLabel}>Built with</span>
-            <span className={s.stackLogo} title="PayPal Agent Toolkit + Orders API (sandbox)">PayPal</span>
-            <span className={s.stackLogo} title="Hosted on Render · Workflows SDK">Render</span>
-            <span className={s.stackLogo} title="AG Grid Community · applyTransaction + SSE">AG Grid</span>
-            <span className={s.stackLogo} title="Channel3 product catalog enrich">Channel3</span>
-            <span className={s.stackLogo} title="Bryntum-style delivery / payout timeline">Bryntum</span>
-            <span className={s.stackLogo} title="KERNEL browser fetch for invoice pages">KERNEL</span>
-            <span className={s.stackLogo} title="OpenAPI for APIMatic DX / MCP">APIMatic</span>
-            <span className={s.stackLogo} title="Astropods-style agent registry & governance">Astropods</span>
+            <span className={s.stackLabel}>Core</span>
+            <span className={`${s.stackLogo} ${s.stackLogoCore}`} title="PayPal sandbox Orders AUTHORIZE + Agent Toolkit/MCP">PayPal</span>
+            <span className={`${s.stackLogo} ${s.stackLogoCore}`} title="Hosted on Render · Workflows SDK">Render</span>
+            <span className={`${s.stackLogo} ${s.stackLogoCore}`} title="AG Grid Community · live applyTransaction + SSE">AG Grid</span>
+            <span className={`${s.stackLogo} ${s.stackLogoCore}`} title="Postman collection in docs/postman">Postman</span>
+            <span className={s.stackLabel}>Partners</span>
+            <span className={s.stackLogo} title="Channel3 catalog enrich (set CHANNEL3_API_KEY)">Channel3</span>
+            <span className={s.stackLogo} title="Bryntum-category schedule timeline">Bryntum</span>
+            <span className={s.stackLogo} title="KERNEL page fetch for invoices">KERNEL</span>
+            <span className={s.stackLogo} title="OpenAPI → APIMatic DX">APIMatic</span>
+            <span className={s.stackLogo} title="Astropods-style agent registry">Astropods</span>
           </div>
 
           <div className={s.previewNotice}>
             <ShieldCheck size={17} />
             <p>
-              Queue negotiation persists to Postgres and runs live buyer/seller AI. PayPal authorize → ship →
-              owner confirm → capture is available in Payments &amp; orders. Automation covers replenishment, FX, Slack, and forecasts.
+              Dual track: <strong>Negotiate</strong> (marketplace) and <strong>Payables</strong> (invoices/payouts).
+              Demo spend capped at <strong>$2</strong>. Use Seed demo or open Payables for the judge path.
             </p>
           </div>
 
+          {view === "Overview" && (
+            <section className={s.trackLaunch} aria-label="Choose a demo track">
+              <button
+                type="button"
+                className={s.trackCard}
+                onClick={() => void seedDemoWorkspace()}
+                disabled={queueBusy}
+                title="Queue a ≤$2 micro-pack negotiation"
+              >
+                <span className={s.iconTile}><Sparkles size={20} /></span>
+                <h3>1 · Agent marketplace</h3>
+                <p>Buyer AI negotiates with seller AIs, ranks offers in AG Grid, then PayPal authorize → capture.</p>
+                <ul className={s.trackSteps}>
+                  <li>Seed or compose a ≤$2 request</li>
+                  <li>Watch live SSE + Supplier offers</li>
+                  <li>Checkout → approve → authorize → ship → capture</li>
+                </ul>
+                <span className={s.trackCta}>{queueBusy ? "Seeding…" : "Start negotiation demo"} <ArrowRight size={14} /></span>
+              </button>
+              <button
+                type="button"
+                className={s.trackCard}
+                onClick={() => navigate("Payables")}
+                title="Open invoice extract, match, payout, client invoice"
+              >
+                <span className={s.iconTile}><Wallet size={20} /></span>
+                <h3>2 · Payables agent</h3>
+                <p>Read supplier invoices, three-way match, payout suppliers, invoice clients, handle disputes.</p>
+                <ul className={s.trackSteps}>
+                  <li>Extract the $1.50 sample invoice</li>
+                  <li>Match PO + receipt → payout</li>
+                  <li>Create client invoice + simulate dispute</li>
+                </ul>
+                <span className={s.trackCta}>Open Payables <ArrowRight size={14} /></span>
+              </button>
+            </section>
+          )}
+
           <section className={s.metrics} aria-label="Workspace summary">
             {[
-              { label: "Negotiations", value: String(negotiations.length), detail: negotiationsError ? "API unreachable" : "Loaded from database", icon: Sparkles, target: "Requests" as View },
-              { label: "Funds on hold", value: String(heldCount), detail: heldCount ? "Authorized, not captured" : "Authorize after PayPal approve", icon: ShieldCheck, target: "Payments & orders" as View },
+              { label: "Negotiations", value: String(negotiations.length), detail: negotiationsError ? "API unreachable" : "Marketplace track", icon: Sparkles, target: "Requests" as View },
+              { label: "Funds on hold", value: String(heldCount), detail: heldCount ? "Authorized, not captured" : "After PayPal approve", icon: ShieldCheck, target: "Payments & orders" as View },
               { label: "Captured", value: String(capturedCount), detail: capturedCount ? "Owner confirmed delivery" : "Confirm after ship", icon: CreditCard, target: "Payments & orders" as View },
-              { label: "Active orders", value: String(activeOrderCount), detail: activeOrder ? `Status ${activeOrder.status}` : "Checkout a winning offer", icon: Package, target: "Payments & orders" as View },
+              { label: "Payables", value: "AP", detail: "Extract · match · payout", icon: Wallet, target: "Payables" as View },
             ].map(({ label, value, detail, icon: Icon, target }) => (
               <button className={s.metric} key={label} onClick={() => navigate(target)}>
                 <span className={s.metricTop}><span>{label}</span><Icon size={18} /></span>

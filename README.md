@@ -96,7 +96,10 @@ flowchart LR
   - **KERNEL** invoice page fetch bridge (`KERNEL_API_KEY`, env-gated)
   - **APIMatic**-ready OpenAPI source of truth
   - **Astropods**-style agent registry (scopes, human gates, spend caps)
+  - **Postman** collection: `docs/postman/ProcureAI.postman_collection.json`
   - Slack approvals stretch (`SLACK_WEBHOOK_URL`)
+
+**Judge path (≤ $2):** Overview → track cards → Seed negotiation **or** Open Payables.
 
 ---
 

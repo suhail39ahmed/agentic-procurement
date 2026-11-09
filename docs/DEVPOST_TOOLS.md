@@ -10,9 +10,12 @@ Paste into Devpost “APIs, libraries, and frameworks”:
 - **KERNEL** — Browser/agent page fetch bridge for supplier invoice HTML → extract
 - **APIMatic** — OpenAPI source at `docs/openapi.yaml` for SDK/docs/MCP generation
 - **Astropods** — Agent registry panel (scopes, human gates, DEMO_MAX_USD spend caps)
+- **Postman** — `docs/postman/ProcureAI.postman_collection.json`
 - **Slack** — Approval cards via `SLACK_WEBHOOK_URL` (stretch)
 - Azure AI Foundry — buyer/seller/extractor/assistant models
 - Next.js, Express, Drizzle/Postgres, pnpm monorepo
+
+**Core for judging:** PayPal + Render + AG Grid + Postman. Partners above are env-gated / showcase (use credits where you have them).
 
 ## Slack webhook (do not commit)
 
