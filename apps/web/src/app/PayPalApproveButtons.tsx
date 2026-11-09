@@ -26,12 +26,14 @@ export function PayPalApproveButtons({
   onError,
 }: {
   paypalOrderId: string;
-  onApproved: () => void | Promise<void>;
+  /** authorizationId from PayPal JS SDK when popup authorize succeeds */
+  onApproved: (authorizationId?: string) => void | Promise<void>;
   onCancel?: () => void;
   onError?: (message: string) => void;
 }) {
   const [config, setConfig] = useState<BrowserConfig | null>(null);
   const [loadError, setLoadError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,7 +71,8 @@ export function PayPalApproveButtons({
   return (
     <div className={s.paypalButtons}>
       <p className={s.description}>
-        Pay with PayPal opens a sandbox popup — approve as the buyer and we place the authorize hold automatically (status → HELD / Funds on hold). Use the Authorize hold button only if you approved via the fallback link.
+        Pay with PayPal opens a sandbox popup. After you approve, we authorize the hold in the popup
+        (status → HELD / Funds on hold). Use <strong>Authorize hold</strong> only if you used the fallback link.
       </p>
       <PayPalScriptProvider
         options={{
@@ -81,10 +84,35 @@ export function PayPalApproveButtons({
       >
         <PayPalButtons
           style={{ layout: "vertical", shape: "rect", label: "paypal", height: 42 }}
-          disabled={!paypalOrderId}
+          disabled={!paypalOrderId || busy}
           createOrder={() => Promise.resolve(paypalOrderId)}
-          onApprove={async () => {
-            await onApproved();
+          onApprove={async (_data, actions) => {
+            setBusy(true);
+            try {
+              if (!actions.order) {
+                onError?.("PayPal order actions unavailable — use Authorize hold after the fallback link.");
+                return;
+              }
+              // Required for intent=authorize: finalize authorization in the SDK, then sync our ledger.
+              const details = await actions.order.authorize();
+              const authorizationId = details.purchase_units?.[0]?.payments?.authorizations?.[0]?.id;
+              if (!authorizationId) {
+                onError?.("PayPal approved but returned no authorization id — click Authorize hold to retry on the server.");
+                await onApproved();
+                return;
+              }
+              await onApproved(authorizationId);
+            } catch (err) {
+              const message = err instanceof Error ? err.message : "PayPal authorize failed";
+              // Fall back to server authorize (e.g. order already approved via link).
+              try {
+                await onApproved();
+              } catch {
+                onError?.(message);
+              }
+            } finally {
+              setBusy(false);
+            }
           }}
           onCancel={() => {
             onCancel?.();

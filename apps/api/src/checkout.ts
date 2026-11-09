@@ -228,27 +228,54 @@ checkoutRouter.post("/orders/:id/authorize", async (req, res) => {
     if (!checkout || checkout.orderId !== order.id) {
       return res.status(409).json({ error: "Checkout state missing for this order" });
     }
+
+    // Idempotent: popup may call us twice after actions.order.authorize().
+    if (order.status === "HELD" && order.authorizationId) {
+      return res.json({
+        orderId: order.id,
+        status: order.status,
+        authorizationId: order.authorizationId,
+        amount: checkout.amount,
+        reuse: true,
+      });
+    }
+
     if (order.status !== "APPROVED") {
       return res.status(409).json({ error: `Order must be APPROVED before authorize (now ${order.status})` });
     }
 
+    const clientAuthId = typeof req.body?.authorizationId === "string"
+      ? req.body.authorizationId.trim()
+      : "";
+
     const intent = intentFromCheckout(checkout);
     let authorizationId: string;
-    try {
-      authorizationId = await authorizePayment(intent);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (/ORDER_NOT_APPROVED|Payer has not yet approved/i.test(message)) {
-        return res.status(409).json({
-          error: "PayPal buyer has not approved yet. Open the approve link, Complete Purchase in sandbox, then Authorize hold.",
-          paypalOrderId: checkout.paypalOrderId,
-          approveUrl: checkout.approveUrl,
-        });
+    if (clientAuthId) {
+      // PayPal JS SDK already authorized in the popup — just sync our ledger.
+      authorizationId = clientAuthId;
+    } else {
+      try {
+        authorizationId = await authorizePayment(intent);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (/ORDER_NOT_APPROVED|Payer has not yet approved/i.test(message)) {
+          return res.status(409).json({
+            error: "PayPal buyer has not approved yet. Use the PayPal popup (or approve link), then Authorize hold.",
+            paypalOrderId: checkout.paypalOrderId,
+            approveUrl: checkout.approveUrl,
+          });
+        }
+        if (/ORDER_ALREADY_AUTHORIZED|AUTHORIZATION_ALREADY|ALREADY_AUTHORIZED/i.test(message)) {
+          return res.status(409).json({
+            error: `Order already authorized on PayPal (${message}). Refresh Payments or reopen this checkout.`,
+            paypalOrderId: checkout.paypalOrderId,
+          });
+        }
+        throw err;
       }
-      throw err;
     }
 
-    const held = transition(order, "AUTHORIZE", "payment-tool", {
+    const held = transition(order, "AUTHORIZE", clientAuthId ? "paypal-js-sdk" : "payment-tool", {
       authorizationId,
       heldAt: new Date().toISOString(),
       deliverBy: new Date(Date.now() + negotiation.neededByDays * 86_400_000).toISOString(),

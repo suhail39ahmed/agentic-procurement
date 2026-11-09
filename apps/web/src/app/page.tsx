@@ -1268,7 +1268,7 @@ export default function Dashboard() {
     }
   }
 
-  async function authorizeHold(orderIdOverride?: string) {
+  async function authorizeHold(orderIdOverride?: string, authorizationIdFromPaypal?: string) {
     const orderId = orderIdOverride ?? activeOrder?.orderId;
     if (!orderId) return;
     if (activeOrder?.status === "HELD" && activeOrder.orderId === orderId) {
@@ -1277,10 +1277,16 @@ export default function Dashboard() {
       return;
     }
     setOrderBusy(true);
-    setNotice("Authorizing PayPal hold…");
+    setNotice(authorizationIdFromPaypal
+      ? "PayPal authorized in popup — saving funds on hold…"
+      : "Authorizing PayPal hold…");
     try {
       const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}/authorize`, {
         method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(
+          authorizationIdFromPaypal ? { authorizationId: authorizationIdFromPaypal } : {},
+        ),
       });
       const payload = await response.json().catch(() => ({})) as {
         error?: string;
@@ -1289,16 +1295,16 @@ export default function Dashboard() {
         amount?: string;
         paypalOrderId?: string;
         approveUrl?: string;
+        reuse?: boolean;
       };
       if (!response.ok) {
-        // Popup already authorized, or user clicked Authorize hold twice — treat HELD as success.
         if (response.status === 409 && /now HELD|already/i.test(payload.error ?? "")) {
           await hydrateOrder(orderId);
           await loadNegotiations();
           setNotice("Funds already on hold — use Mark shipped when ready (leave HELD to show Funds on hold).");
           return;
         }
-        setNotice(payload.error ?? `Authorize failed (${response.status}). Approve with PayPal first, then retry Authorize hold.`);
+        setNotice(payload.error ?? `Authorize failed (${response.status}). Approve with the PayPal popup first, then retry Authorize hold.`);
         return;
       }
       setActiveOrder(current => current && current.orderId === orderId ? {
@@ -2326,9 +2332,11 @@ export default function Dashboard() {
                     {activeOrder.paypalOrderId && (
                       <PayPalApproveButtons
                         paypalOrderId={activeOrder.paypalOrderId}
-                        onApproved={async () => {
-                          setNotice("PayPal buyer approved — placing authorize hold automatically…");
-                          await authorizeHold(activeOrder.orderId);
+                        onApproved={async (authorizationId) => {
+                          setNotice(authorizationId
+                            ? "PayPal hold authorized in popup — syncing…"
+                            : "PayPal approved — authorizing hold on server…");
+                          await authorizeHold(activeOrder.orderId, authorizationId);
                         }}
                         onCancel={() => setNotice("PayPal popup cancelled — approve again when ready.")}
                         onError={(message) => setNotice(message)}
