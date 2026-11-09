@@ -1812,32 +1812,6 @@ export default function Dashboard() {
               <StretchPanel setNotice={setNotice} />
               <SponsorsPanel
                 setNotice={setNotice}
-                onChannel3Suggestion={(next) => {
-                  const loaded = {
-                    brief: next.brief,
-                    priority: next.priority,
-                    quantity: next.quantity,
-                    maxUnitPrice: next.maxUnitPrice,
-                    currency: next.currency,
-                    neededByDays: next.neededByDays,
-                  };
-                  setFields(loaded);
-                  const result = validateFields(loaded);
-                  setFieldErrors(result.errors);
-                  setView("Overview");
-                  if (result.draft) {
-                    setPendingDraft(result.draft);
-                    setComposerMode("review");
-                    setNotice(
-                      "Channel3 market price set as RFQ ceiling — confirm on Overview, then Queue so sellers compete to beat it.",
-                    );
-                    requestAnimationFrame(() => reviewHeadingRef.current?.focus());
-                  } else {
-                    setPendingDraft(null);
-                    setComposerMode("compose");
-                    setNotice("Channel3 product loaded on Overview — fix fields, then Review → Queue.");
-                  }
-                }}
                 onKernelInvoiceText={(text) => {
                   setPayablesSeed(text);
                   setView("Payables");

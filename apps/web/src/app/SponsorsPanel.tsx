@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
-import { ArrowRight, CalendarDays, PackageSearch, Globe, RefreshCw } from "lucide-react";
+import { CalendarDays, Globe, RefreshCw } from "lucide-react";
 import s from "./dashboard.module.css";
 import type { GanttDependency, GanttTaskRow } from "./BryntumGanttPanel";
 
@@ -31,30 +31,12 @@ type SchedulePayload = {
 
 export function SponsorsPanel({
   setNotice,
-  onChannel3Suggestion,
   onKernelInvoiceText,
 }: {
   setNotice: (value: string) => void;
-  onChannel3Suggestion?: (fields: {
-    brief: string;
-    quantity: string;
-    maxUnitPrice: string;
-    currency: "USD";
-    neededByDays: string;
-    priority: "balanced";
-  }) => void;
   onKernelInvoiceText?: (text: string) => void;
 }) {
   const [status, setStatus] = useState<Record<string, boolean | number | null>>({});
-  const [query, setQuery] = useState("office sticky notes pack");
-  const [products, setProducts] = useState<Array<{
-    title: string;
-    price?: number;
-    currency?: string;
-    retailer?: string;
-    productId?: string;
-  }>>([]);
-  const [selected, setSelected] = useState("");
   const [kernelUrl, setKernelUrl] = useState("https://example.com");
   const [schedule, setSchedule] = useState<SchedulePayload | null>(null);
   const [busy, setBusy] = useState(false);
@@ -75,72 +57,6 @@ export function SponsorsPanel({
     }, 0);
     return () => window.clearTimeout(timer);
   }, [loadSchedule]);
-
-  async function searchChannel3() {
-    setBusy(true);
-    setProducts([]);
-    setSelected("");
-    try {
-      const response = await fetch("/api/sponsors/channel3/search", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ query, maxPrice: 250 }),
-      });
-      const payload = await response.json().catch(() => ({})) as {
-        error?: string;
-        note?: string;
-        configured?: boolean;
-        products?: Array<{
-          title: string;
-          price?: number;
-          currency?: string;
-          retailer?: string;
-          productId?: string;
-        }>;
-        suggestion?: {
-          brief: string;
-          quantity: number;
-          maxUnitPrice: string;
-          neededByDays: number;
-        } | null;
-      };
-      if (!response.ok) {
-        setNotice(payload.error ?? "Channel3 search failed.");
-        return;
-      }
-      const rows = Array.isArray(payload.products) ? payload.products : [];
-      setProducts(rows);
-      if (rows.length) setSelected("0");
-      setNotice(
-        rows.length
-          ? `${payload.note ?? "Channel3 live results"} · pick one, then Use market price → Review.`
-          : (payload.note ?? (payload.configured ? "No products" : "Channel3 not configured")),
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function applyCatalogProduct(product: {
-    title: string;
-    price?: number;
-    retailer?: string;
-  }) {
-    if (!onChannel3Suggestion) return;
-    const unit = product.price != null && Number.isFinite(product.price)
-      ? Math.min(product.price, 250)
-      : 25;
-    const retailer = product.retailer ? ` from ${product.retailer}` : "";
-    onChannel3Suggestion({
-      brief: `Supply 1× "${product.title}"${retailer}. Match or beat Channel3 market unit price ≤ $${unit.toFixed(2)} USD. Prefer in-stock; ship within 14 days.`.slice(0, 500),
-      quantity: "1",
-      maxUnitPrice: unit.toFixed(2),
-      currency: "USD",
-      neededByDays: "14",
-      priority: "balanced",
-    });
-    setNotice(`“${product.title}” @ $${unit.toFixed(2)} → Overview review (sellers must match/beat this).`);
-  }
 
   async function kernelFetch() {
     setBusy(true);
@@ -213,63 +129,6 @@ export function SponsorsPanel({
 
   return (
     <div className={s.stretchGrid}>
-      <section className={`${s.card} ${s.stretchCard}`}>
-        <div className={s.sectionHeader}>
-          <div className={s.inlineTitle}>
-            <span className={s.iconTile}><PackageSearch size={20} /></span>
-            <div>
-              <h2>Channel3 → RFQ ceiling</h2>
-              <p className={s.description}>
-                Live Channel3 search (not our Postgres). Pick a product; its market price becomes the seller ceiling on Overview.{" "}
-                {status.channel3 ? "API key live." : "Set CHANNEL3_API_KEY to activate."}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className={s.channel3Box}>
-          <div className={s.field}>
-            <label htmlFor="c3-q">Search query</label>
-            <div className={s.budgetRow}>
-              <input id="c3-q" value={query} onChange={(e) => setQuery(e.target.value)} />
-              <button type="button" className={s.secondary} disabled={busy} title="Search Channel3 catalog" onClick={() => void searchChannel3()}>
-                {busy ? "Searching…" : "Search"}
-              </button>
-            </div>
-          </div>
-          {products.length > 0 && (
-            <div className={s.channel3Pick}>
-              <div className={s.field}>
-                <label htmlFor="c3-pick">Select product</label>
-                <select id="c3-pick" value={selected} onChange={(e) => setSelected(e.target.value)}>
-                  {products.map((product, index) => {
-                    const priceLabel = product.price != null && Number.isFinite(product.price)
-                      ? `$${product.price.toFixed(2)}`
-                      : "price n/a";
-                    const retail = product.retailer ? ` · ${product.retailer}` : "";
-                    return (
-                      <option key={product.productId ?? `${product.title}-${index}`} value={String(index)}>
-                        {product.title.slice(0, 60)}{product.title.length > 60 ? "…" : ""} — {priceLabel}{retail}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-              <button
-                type="button"
-                className={s.primary}
-                disabled={selected === "" || !onChannel3Suggestion}
-                onClick={() => {
-                  const product = products[Number(selected)];
-                  if (product) applyCatalogProduct(product);
-                }}
-              >
-                Use market price → Review <ArrowRight size={15} />
-              </button>
-            </div>
-          )}
-        </div>
-      </section>
-
       <section className={`${s.card} ${s.stretchCard}`}>
         <div className={s.sectionHeader}>
           <div className={s.inlineTitle}>
