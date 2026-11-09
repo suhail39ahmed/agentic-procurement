@@ -596,7 +596,7 @@ export default function Dashboard() {
 
   function paymentActionLabel(payment: string): string | null {
     if (payment === "APPROVED") return "Pay";
-    if (payment === "HELD") return "Ship";
+    if (payment === "HELD") return "Mark shipped";
     if (payment === "SHIPPED") return "Capture";
     if (payment === "CAPTURED") return "View";
     return null;
