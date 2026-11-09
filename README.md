@@ -1,7 +1,5 @@
 # Agentic Procurement
 
-![ProcureAI — agents negotiate, PayPal pays safely](docs/procureai-devpost-cover.jpg)
-
 **ProcureAI** — AI agents that negotiate, buy and pay on PayPal: agentic procurement and payables for small businesses.
 
 **Hosted demo:** https://agentic-procurement-web.onrender.com · **Devpost pack:** [`docs/DEVPOST_SUBMISSION.md`](docs/DEVPOST_SUBMISSION.md)
