@@ -9,6 +9,8 @@ Use this after the latest deploy is live. Prefer hosted URLs for submission demo
 
 Sandbox buyer: `OWNER_BUYER_EMAIL` / `PAYPAL_SANDBOX_PASSWORD` from your private `.env` (never commit).
 
+**Spend guard:** keep every sandbox charge ≤ **$2** (`DEMO_MAX_USD=2`). Demo seed uses qty `1` / max unit `$2.00` (micro sellers). Do not use large chair budgets.
+
 ---
 
 ## 0. Preconditions
@@ -75,12 +77,28 @@ Negative case:
 
 ---
 
-## 5b. PayPal Agent Toolkit surfaces
+## 5b. Payables agent (UI)
+
+- [ ] **Payables** → extract sample $1.50 invoice text
+- [ ] Match with PO/receipt `$1.50` → MATCHED
+- [ ] Payout to sandbox seller email (≤$2)
+- [ ] Create & send client invoice `$1.50`
+- [ ] Disputes: simulate → draft → owner-approved accept
+
+## 5c. PayPal Agent Toolkit surfaces
 
 - [ ] Assistant can create/send a sandbox client invoice when asked (Toolkit tools in reply metadata)
 - [ ] Payments → **Simulate CUSTOMER.DISPUTE.CREATED** → dispute appears
 - [ ] **Draft response** stores agent draft; **Approve accept_dispute_claim** requires draft + `{approved:true}`
 - [ ] `pnpm --filter paypal mcp` starts MCP server (stdio) with sandbox token
+
+## 5d. Sponsors (Automation)
+
+- [ ] Channel3 enrich (or “not configured” notice if no key)
+- [ ] Bryntum timeline shows delivery / replenish / dues
+- [ ] KERNEL fetch page text (direct fallback without key)
+- [ ] Astropods agent registry lists buyer/seller/extractor/assistant
+
 
 ---
 

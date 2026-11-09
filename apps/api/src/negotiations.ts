@@ -10,6 +10,7 @@ import {
 } from "db";
 import { scheduleNegotiationRun } from "./run-negotiation";
 import { isQuoteCurrency, toUsd } from "./fx";
+import { assertDemoAmount } from "./demo-cap";
 
 export const negotiationsRouter = Router();
 
@@ -81,6 +82,12 @@ function validateCreate(body: CreateBody):
   }
 
   const maxUsd = toUsd(Math.round(maxUnitPrice * 100) / 100, body.currency);
+  const lineTotal = Math.round(maxUsd * quantity * 100) / 100;
+  const capped = assertDemoAmount(lineTotal, "order total (qty × max unit USD)");
+  if (!capped.ok) return { ok: false, error: capped.error };
+  const unitCap = assertDemoAmount(maxUsd, "max unit price (USD)");
+  if (!unitCap.ok) return { ok: false, error: unitCap.error };
+
   const briefNote = body.currency === "USD"
     ? brief
     : `${brief} [Budget ${body.currency} ${maxUnitPrice.toFixed(2)} → $${maxUsd.toFixed(2)} USD]`;

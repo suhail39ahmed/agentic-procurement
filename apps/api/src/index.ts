@@ -10,6 +10,7 @@ import { assistantRouter } from "./assistant";
 import { disputesRouter } from "./disputes";
 import { invoicesRouter } from "./invoices";
 import { stretchRouter } from "./stretch";
+import { sponsorsRouter } from "./sponsors/routes";
 import { assertMandateSecret, assertSandboxOnly } from "./security";
 
 assertSandboxOnly();
@@ -56,6 +57,7 @@ app.use("/api/assistant", assistantRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/invoices", invoicesRouter);
 app.use("/api/stretch", stretchRouter);
+app.use("/api/sponsors", sponsorsRouter);
 app.use("/api", checkoutRouter);
 app.listen(port, "0.0.0.0", () => {
   console.log(`[api] listening on http://0.0.0.0:${port} (sandbox-only, paypal-agent-toolkit)`);

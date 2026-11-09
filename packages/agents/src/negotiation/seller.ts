@@ -47,8 +47,52 @@ export type SellerConfig = {
     },
   ];
   
+  /** Micro-price sellers for DEMO_MAX_USD / ≤$2 sandbox smoke tests. */
+  export const microSellers: SellerConfig[] = [
+    {
+      id: "seller-micro-a",
+      name: "Pixel Supplies Co",
+      floorPrice: 0.85,
+      listPrice: 1.75,
+      stock: 5000,
+      leadTimeDays: 7,
+      persona: "Opens near list and concedes toward floor for small demo SKUs.",
+    },
+    {
+      id: "seller-micro-b",
+      name: "BundleBits",
+      floorPrice: 0.7,
+      listPrice: 1.5,
+      stock: 8000,
+      leadTimeDays: 12,
+      persona: "Volume-friendly micro goods; quick concessions on unit price.",
+    },
+    {
+      id: "seller-micro-c",
+      name: "ValueStickers Direct",
+      floorPrice: 0.55,
+      listPrice: 1.2,
+      stock: 20_000,
+      leadTimeDays: 21,
+      persona: "Cheapest micro SKU with slower delivery.",
+    },
+    {
+      id: "seller-micro-d",
+      name: "Express Mini Packs",
+      floorPrice: 1.1,
+      listPrice: 1.95,
+      stock: 2000,
+      leadTimeDays: 3,
+      persona: "Premium-fast micro packs; small discounts only.",
+    },
+  ];
+
+  export function sellersForBudget(maxUnitPriceUsd: number): SellerConfig[] {
+    return maxUnitPriceUsd <= 2 ? microSellers : sellers;
+  }
+
   export function getSeller(id: string): SellerConfig {
-    const seller = sellers.find((s) => s.id === id);
+    const seller = sellers.find((s) => s.id === id) ?? microSellers.find((s) => s.id === id);
     if (!seller) throw new Error(`Unknown seller ${id}`);
     return seller;
   }

@@ -5,7 +5,7 @@ import {
   ArrowRight, ArrowUpRight, Bot, Check, ChevronRight,
   CreditCard, FileText, Layers3, LayoutDashboard,
   Maximize2, Menu, Minimize2, Package, Plus,
-  RefreshCw, Search, Send, ShieldCheck, Sparkles, X,
+  RefreshCw, Search, Send, ShieldCheck, Sparkles, Wallet, X,
 } from "lucide-react";
 import { AgGridReact } from "ag-grid-react";
 import {
@@ -16,10 +16,13 @@ import {
 import s from "./dashboard.module.css";
 import Link from "next/link";
 import { StretchPanel } from "./StretchPanel";
+import { PayablesPanel } from "./PayablesPanel";
+import { DisputePanel } from "./DisputePanel";
+import { SponsorsPanel } from "./SponsorsPanel";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-type View = "Overview" | "Requests" | "Supplier offers" | "Payments & orders" | "Automation";
+type View = "Overview" | "Requests" | "Supplier offers" | "Payments & orders" | "Automation" | "Payables";
 type Priority = "price" | "speed" | "balanced";
 type Currency = "USD" | "SGD" | "INR";
 type ComposerMode = "compose" | "review";
@@ -138,6 +141,7 @@ const navigation = [
   { name: "Requests" as const, icon: FileText },
   { name: "Supplier offers" as const, icon: Layers3 },
   { name: "Payments & orders" as const, icon: CreditCard },
+  { name: "Payables" as const, icon: Wallet },
   { name: "Automation" as const, icon: RefreshCw },
 ];
 
@@ -149,20 +153,20 @@ const priorities: { value: Priority; label: string; detail: string }[] = [
 
 const examples: RequestFields[] = [
   {
-    brief: "50 ergonomic chairs for the new floor. Prefer durable mesh backs.",
+    brief: "1 demo micro pack for sandbox smoke (≤$2). Prefer durable packaging.",
     priority: "price",
-    quantity: "50",
-    maxUnitPrice: "200.00",
-    currency: "USD",
-    neededByDays: "30",
-  },
-  {
-    brief: "Compare suppliers with delivery speed as my priority for standing desks.",
-    priority: "speed",
-    quantity: "12",
-    maxUnitPrice: "450.00",
+    quantity: "1",
+    maxUnitPrice: "2.00",
     currency: "USD",
     neededByDays: "14",
+  },
+  {
+    brief: "1 express mini pack — speed priority, sandbox demo budget.",
+    priority: "speed",
+    quantity: "1",
+    maxUnitPrice: "1.95",
+    currency: "USD",
+    neededByDays: "7",
   },
 ];
 
@@ -311,157 +315,6 @@ function validateFields(fields: RequestFields): { errors: FieldErrors; draft?: O
       neededByDays,
     },
   };
-}
-
-type LocalDispute = {
-  disputeId: string;
-  status: string;
-  reason: string;
-  amount?: string;
-  agentDraft?: string;
-  agentDraftAt?: string;
-  acceptApprovedBy?: string;
-};
-
-function DisputePanel({
-  notice,
-  setNotice,
-}: {
-  notice: string;
-  setNotice: (value: string) => void;
-}) {
-  const [items, setItems] = useState<LocalDispute[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [selected, setSelected] = useState<string | null>(null);
-
-  async function refresh() {
-    const response = await fetch("/api/disputes", { cache: "no-store" });
-    const payload = await response.json().catch(() => ({})) as {
-      local?: LocalDispute[];
-      error?: string;
-      toolkitError?: string;
-    };
-    if (!response.ok) {
-      setNotice(payload.error ?? `Disputes failed (${response.status}).`);
-      return;
-    }
-    setItems(Array.isArray(payload.local) ? payload.local : []);
-    if (payload.toolkitError) {
-      setNotice(`Toolkit list warning: ${payload.toolkitError}`);
-    }
-  }
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void refresh();
-    }, 0);
-    return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function simulate() {
-    setBusy(true);
-    try {
-      const response = await fetch("/api/disputes/simulate", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-      const payload = await response.json().catch(() => ({})) as { error?: string; disputeId?: string; eventType?: string };
-      if (!response.ok) {
-        setNotice(payload.error ?? "Simulate dispute failed.");
-        return;
-      }
-      setNotice(`${payload.eventType ?? "CUSTOMER.DISPUTE.CREATED"} · ${payload.disputeId}`);
-      await refresh();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function draft(id: string) {
-    setBusy(true);
-    setSelected(id);
-    try {
-      const response = await fetch(`/api/disputes/${encodeURIComponent(id)}/draft`, { method: "POST" });
-      const payload = await response.json().catch(() => ({})) as { error?: string };
-      if (!response.ok) {
-        setNotice(payload.error ?? "Draft failed.");
-        return;
-      }
-      setNotice("Agent draft stored. Review, then accept only if you approve.");
-      await refresh();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function accept(id: string) {
-    setBusy(true);
-    try {
-      const response = await fetch(`/api/disputes/${encodeURIComponent(id)}/accept`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ approved: true, note: "Owner approved from dashboard" }),
-      });
-      const payload = await response.json().catch(() => ({})) as { error?: string };
-      if (!response.ok) {
-        setNotice(payload.error ?? "Accept failed (sandbox Toolkit).");
-        return;
-      }
-      setNotice("accept_dispute_claim invoked behind owner approval.");
-      await refresh();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className={s.reviewPanel} style={{ marginTop: 18 }}>
-      <div className={s.sectionHeader}>
-        <div>
-          <h3>Disputes (PayPal Agent Toolkit)</h3>
-          <p className={s.description}>list/get via Toolkit · agent draft stored · accept_dispute_claim only after approval</p>
-        </div>
-        <div className={s.reviewActions}>
-          <button type="button" className={s.secondary} disabled={busy} onClick={() => void refresh()}>Refresh</button>
-          <button type="button" className={s.secondary} disabled={busy} onClick={() => void simulate()}>Simulate CUSTOMER.DISPUTE.CREATED</button>
-        </div>
-      </div>
-      {items.length === 0 ? (
-        <div className={s.empty}>
-          <span className={s.emptyIcon}><ShieldCheck size={26} /></span>
-          <h3>No disputes yet</h3>
-          <p>Simulate a sandbox dispute or wait for a PayPal webhook.</p>
-        </div>
-      ) : (
-        <ul className={s.draftList}>
-          {items.map((item) => (
-            <li key={item.disputeId}>
-              <div className={s.iconTile}><ShieldCheck size={19} /></div>
-              <details className={s.draftDetail} open={selected === item.disputeId}>
-                <summary>{item.disputeId} · {item.status}</summary>
-                <p>{item.reason}{item.amount ? ` · $${item.amount}` : ""}</p>
-                {item.agentDraft && <p><strong>Draft:</strong> {item.agentDraft}</p>}
-                {item.acceptApprovedBy && <p>Accepted by {item.acceptApprovedBy}</p>}
-                <div className={s.reviewActions}>
-                  <button type="button" className={s.textButton} disabled={busy} onClick={() => void draft(item.disputeId)}>
-                    Draft response <ArrowRight size={15} />
-                  </button>
-                  <button
-                    type="button"
-                    className={s.textButton}
-                    disabled={busy || !item.agentDraft || Boolean(item.acceptApprovedBy)}
-                    onClick={() => void accept(item.disputeId)}
-                  >
-                    Approve accept_dispute_claim <ArrowRight size={15} />
-                  </button>
-                </div>
-              </details>
-              <span className={s.draftBadge}>{item.status}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <p className={s.status} role="status">{notice}</p>
-    </div>
-  );
 }
 
 function readPaypalReturnBoot(): { view: View; notice: string; clearQuery: boolean } {
@@ -902,7 +755,7 @@ export default function Dashboard() {
     setComposerMode("review");
     setFieldErrors({});
     setStreamLines([]);
-    setNotice("Seeding demo: queueing negotiation with the chairs example…");
+    setNotice("Seeding demo: queueing ≤$2 micro-pack negotiation…");
     setQueueBusy(true);
     try {
       const response = await fetch("/api/negotiations", {
@@ -1223,6 +1076,7 @@ export default function Dashboard() {
               <h1 ref={headingRef} tabIndex={-1}>
                 {view === "Overview" ? <>Better buying.<br /><span>Clearer decisions.</span></>
                   : view === "Automation" ? <>Automation that<br /><span>stays under control.</span></>
+                  : view === "Payables" ? <>Invoices in.<br /><span>Payouts out.</span></>
                   : view === "Supplier offers" ? <>Live offers.<br /><span>Ranked in AG Grid.</span></>
                   : view === "Payments & orders" ? <>PayPal holds.<br /><span>You capture.</span></>
                   : view === "Requests" ? <>Every request.<br /><span>One trail.</span></>
@@ -1230,8 +1084,10 @@ export default function Dashboard() {
               </h1>
               <p className={s.subtitle}>
                 {view === "Automation"
-                  ? "Replenishment, FX compare, Slack approvals, and spend forecasts — stretch features in one place."
-                  : "From your first request to the final payment. AI negotiates; you approve and capture."}
+                  ? "Replenishment, FX, Slack, forecasts, sponsors — stretch + partner tools."
+                  : view === "Payables"
+                    ? "Extract supplier invoices, three-way match, payout, client invoice, disputes. Demo amounts ≤ $2."
+                    : "Marketplace negotiate → approve → authorize → capture. Payables extend the same control plane."}
               </p>
             </div>
             <div className={s.reviewActions}>
@@ -1264,18 +1120,14 @@ export default function Dashboard() {
 
           <div className={s.stackStrip} aria-label="Built with">
             <span className={s.stackLabel}>Built with</span>
-            <span className={s.stackLogo} title="PayPal Agent Toolkit + Orders API (sandbox)">
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden><path fill="#003087" d="M7.1 21.2h2.4l.5-3.1c.1-.5.5-.9 1-.9h1.7c3.5 0 5.9-1.5 6.5-4.7.3-1.4.1-2.6-.6-3.5-.7-.9-1.9-1.4-3.4-1.4H10c-.6 0-1.1.4-1.2 1L7.1 21.2z"/><path fill="#009CDE" d="M20.5 8.1c.1.7.1 1.4-.1 2.2-.8 4-3.6 5.5-7.4 5.5H11l-.7 4.4H7.9L9.6 9.3c.1-.6.7-1.1 1.3-1.1h4.4c1.7 0 3 .4 3.8 1.2.6.6.9 1.4 1.4 2.7z"/><path fill="#012169" d="M9.3 3.1h5.1c1.2 0 2.1.2 2.8.6.2.1.4.3.6.4-.7-.9-1.9-1.4-3.5-1.4H9c-.6 0-1.1.4-1.2 1L6.1 14.6H3.7l1.8-11.3c.1-.6.7-1.1 1.3-1.1h2.5z"/></svg>
-              PayPal
-            </span>
-            <span className={s.stackLogo} title="Hosted on Render · Workflows SDK for long-running agent tasks">
-              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden><path fill="#46E3B7" d="M12 2 2.5 20.5h5.2L12 9.8l4.3 10.7h5.2L12 2z"/></svg>
-              Render
-            </span>
-            <span className={s.stackLogo} title="AG Grid Community · live applyTransaction + SSE feed">
-              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="#1F6B43" strokeWidth="2"/><path stroke="#1F6B43" strokeWidth="2" d="M3 9h18M3 14h18M9 4v16M15 4v16"/></svg>
-              AG Grid
-            </span>
+            <span className={s.stackLogo} title="PayPal Agent Toolkit + Orders API (sandbox)">PayPal</span>
+            <span className={s.stackLogo} title="Hosted on Render · Workflows SDK">Render</span>
+            <span className={s.stackLogo} title="AG Grid Community · applyTransaction + SSE">AG Grid</span>
+            <span className={s.stackLogo} title="Channel3 product catalog enrich">Channel3</span>
+            <span className={s.stackLogo} title="Bryntum-style delivery / payout timeline">Bryntum</span>
+            <span className={s.stackLogo} title="KERNEL browser fetch for invoice pages">KERNEL</span>
+            <span className={s.stackLogo} title="OpenAPI for APIMatic DX / MCP">APIMatic</span>
+            <span className={s.stackLogo} title="Astropods-style agent registry & governance">Astropods</span>
           </div>
 
           <div className={s.previewNotice}>
@@ -1751,7 +1603,28 @@ export default function Dashboard() {
           </section>}
 
           {view === "Automation" && (
-            <StretchPanel setNotice={setNotice} />
+            <>
+              <StretchPanel setNotice={setNotice} />
+              <SponsorsPanel
+                setNotice={setNotice}
+                onChannel3Suggestion={(fields) => {
+                  setFields({
+                    brief: fields.brief,
+                    priority: fields.priority,
+                    quantity: fields.quantity,
+                    maxUnitPrice: fields.maxUnitPrice,
+                    currency: fields.currency,
+                    neededByDays: fields.neededByDays,
+                  });
+                  setComposerMode("compose");
+                  setNotice("Channel3 suggestion loaded into the Overview composer (≤$2).");
+                }}
+              />
+            </>
+          )}
+
+          {view === "Payables" && (
+            <PayablesPanel setNotice={setNotice} />
           )}
 
           {(view === "Overview" || view === "Payments & orders") && <section className={`${s.card} ${s.paymentCard}`}>
@@ -1819,7 +1692,7 @@ export default function Dashboard() {
           </section>}
 
           <footer className={s.footer}>
-            <span>ProcureAI · Independent hackathon project · PayPal · Render · AG Grid</span>
+            <span>ProcureAI · PayPal · Render · AG Grid · Channel3 · Bryntum · KERNEL · APIMatic · Astropods</span>
             <span>Sandbox only · Not an official PayPal product</span>
           </footer>
         </div>

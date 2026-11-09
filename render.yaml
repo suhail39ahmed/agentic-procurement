@@ -38,6 +38,14 @@ services:
         sync: false
       - key: MANDATE_SECRET
         sync: false
+      - key: DEMO_MAX_USD
+        value: "2"
+      - key: CHANNEL3_API_KEY
+        sync: false
+      - key: KERNEL_API_KEY
+        sync: false
+      - key: ASTROPODS_WORKSPACE
+        sync: false
 
   - type: web
     name: agentic-procurement-web

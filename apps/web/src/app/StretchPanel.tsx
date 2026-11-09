@@ -59,12 +59,12 @@ export function StretchPanel({
     warehouseExport?: { columns: string[]; rows: string[][] };
   } | null>(null);
 
-  const [sku, setSku] = useState("CHAIR-MESH-01");
-  const [label, setLabel] = useState("Ergonomic mesh chairs");
-  const [threshold, setThreshold] = useState("20");
-  const [reorder, setReorder] = useState("50");
-  const [onHand, setOnHand] = useState("15");
-  const [approvalAmount, setApprovalAmount] = useState("1250.00");
+  const [sku, setSku] = useState("MICRO-PACK-01");
+  const [label, setLabel] = useState("Demo micro pack");
+  const [threshold, setThreshold] = useState("5");
+  const [reorder, setReorder] = useState("1");
+  const [onHand, setOnHand] = useState("3");
+  const [approvalAmount, setApprovalAmount] = useState("1.50");
 
   async function refreshAll() {
     const [rep, slack, fc] = await Promise.all([
@@ -146,7 +146,7 @@ export function StretchPanel({
           thresholdQty: Number(threshold),
           reorderQty: Number(reorder),
           onHand: Number(onHand),
-          maxUnitPrice: 200,
+          maxUnitPrice: 2,
           currency: "USD",
           neededByDays: 21,
           priority: "balanced",

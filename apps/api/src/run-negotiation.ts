@@ -6,7 +6,7 @@ import {
   type Negotiation,
   type NegotiationPriority,
 } from "db";
-import { negotiate, sellers, type NegotiationEvent, type RfqMessage, type Weights } from "agents";
+import { negotiate, sellersForBudget, type NegotiationEvent, type RfqMessage, type Weights } from "agents";
 
 const priorityWeights: Record<NegotiationPriority, Weights> = {
   price: { price: 0.85, speed: 0.15 },
@@ -69,9 +69,10 @@ export async function runNegotiation(ownerId: string, id: string): Promise<void>
       // reputation table may not be migrated yet on older deploys
     }
 
+    const rfq = toRfq(claimed);
     const result = await negotiate(
-      toRfq(claimed),
-      sellers,
+      rfq,
+      sellersForBudget(rfq.maxUnitPrice),
       (event) => {
         liveEvents.push(event);
         persistLive([...liveEvents]);
