@@ -689,12 +689,14 @@ export default function Dashboard() {
     const nextHistory = [...chatMessages, { role: "user" as const, content: message }];
     setChatMessages(nextHistory);
     try {
+      const eligible = offers.filter((o) => o.withinBudget && o.meetsDeadline);
       const context = [
-        activeNegotiationId ? `Active negotiation: ${activeNegotiationId}` : "",
+        activeNegotiationId ? `negotiation=${activeNegotiationId}` : "",
         offers.length
-          ? `Offers: ${offers.map((o) => `${o.supplier} $${o.unitPrice}/${o.leadTimeDays}d score=${o.score} eligible=${o.withinBudget && o.meetsDeadline}`).join("; ")}`
-          : "",
-        activeOrder ? `Active order ${activeOrder.orderId} status ${activeOrder.status}` : "",
+          ? `offers=${offers.map((o) => `${o.supplier}:$${o.unitPrice}/${o.leadTimeDays}d/score=${o.score.toFixed(2)}/${o.withinBudget && o.meetsDeadline ? "eligible" : "ineligible"}`).join(", ")}`
+          : "offers=none",
+        eligible[0] ? `best_eligible=${eligible[0].supplier}` : "best_eligible=none",
+        activeOrder ? `order=${activeOrder.orderId}:${activeOrder.status}` : "",
       ].filter(Boolean).join("\n");
       const response = await fetch("/api/assistant/chat", {
         method: "POST",
