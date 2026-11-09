@@ -1345,12 +1345,12 @@ export default function Dashboard() {
                           >
                             {channel3Products.map((product, index) => {
                               const priceLabel = product.price != null && Number.isFinite(product.price)
-                                ? `$${product.price.toFixed(2)}`
-                                : "price n/a";
+                                ? `$${Number(product.price).toFixed(2)}`
+                                : "price pending";
                               const retail = product.retailer ? ` · ${product.retailer}` : "";
                               return (
                                 <option key={product.productId ?? `${product.title}-${index}`} value={String(index)}>
-                                  {product.title.slice(0, 60)}{product.title.length > 60 ? "…" : ""} — {priceLabel}{retail}
+                                  {product.title.slice(0, 52)}{product.title.length > 52 ? "…" : ""} — {priceLabel}{retail}
                                 </option>
                               );
                             })}

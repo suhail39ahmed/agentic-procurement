@@ -51,22 +51,19 @@ sponsorsRouter.post("/channel3/search", async (req, res) => {
   try {
     const result = await searchChannel3(query, Math.min(maxPrice, cap));
     const suggestion = result.products[0];
-    const parsedPrice = suggestion?.price != null && Number.isFinite(Number(suggestion.price))
-      ? Number(suggestion.price)
-      : null;
-    const unit = parsedPrice != null
-      ? Math.min(parsedPrice, cap)
+    const unit = suggestion
+      ? Math.min(Number(suggestion.price), cap)
       : Math.min(25, cap);
     const retailer = suggestion?.retailer ? ` from ${suggestion.retailer}` : "";
     return res.json({
       ...result,
+      // Live Channel3 payload only — catalog rows are not written to Postgres.
       suggestion: suggestion
         ? {
-          // Plain RFQ text for sellers — no internal catalog IDs in the brief.
-          brief: `Supply 1× "${suggestion.title}"${retailer}. Match or beat unit price ≤ $${unit.toFixed(2)} USD. Prefer in-stock; ship within 14 days.`.slice(0, 500),
+          brief: `Supply 1× "${suggestion.title}"${retailer}. Match or beat Channel3 market unit price ≤ $${unit.toFixed(2)} USD. Prefer in-stock; ship within 14 days.`.slice(0, 500),
           quantity: 1,
           maxUnitPrice: unit.toFixed(2),
-          currency: "USD",
+          currency: suggestion.currency || "USD",
           neededByDays: 14,
           priority: "balanced" as const,
           productTitle: suggestion.title,
