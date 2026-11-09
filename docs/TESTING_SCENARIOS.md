@@ -3,85 +3,98 @@
 **Demo:** https://agentic-procurement-web.onrender.com  
 **API:** https://agentic-procurement-api.onrender.com/health  
 
-Free Render may cold-start 30–60s — wait and refresh once. Hard-refresh (`Ctrl+Shift+R`) before recording.
+Hard-refresh (`Ctrl+Shift+R`). Free Render cold start may need 30–60s.
 
-**Policy:** order total ≤ **$20** auto-allow; above **$20** → REQUIRE_APPROVAL before Pay.
-
----
-
-## Demo video path (≈3 min)
-
-1. **Overview** — dual-track + Buying assistant `Say hi`
-2. Channel3 search → **Use market price → Review** → **Queue negotiation** (or Seed demo chairs)
-3. **Supplier offers** — AG Grid ranks; open a **new** SUCCEEDED row (not old snapshots)
-4. **Checkout** → PayPal sandbox approve → **Authorize hold** → ship → capture
-5. **Payables** — Extract sample → Match
-6. **Overview** Bryntum Gantt — live checkpoints; hover status dots
-7. **Automation** — KERNEL fetch only (opens Payables)
+**Policy:** order total ≤ **$20** auto-allow; above **$20** → REQUIRE_APPROVAL before Pay.  
+**Hold rule:** funds stay authorized through **HELD** and **SHIPPED**; money moves only on **CAPTURE**. PayPal popup approve **auto-runs** authorize hold → **HELD**. Use **Authorize hold** only after the fallback approve link.
 
 ---
 
-## Buying assistant
+## Run these 4, then Payables
 
-| # | Steps | Expected |
+| # | Scenario | Goal |
 |---|---|---|
-| A1 | Overview → Buying assistant → `Say hi` → Send | **Thinking…** then **Ready**; short reply |
-| A2 | Ask `How does authorize then capture work?` | Hold → ship → owner confirm → capture; does **not** capture alone |
-| A3 | Ask for a ~$45 sandbox client invoice | May call Toolkit create/send; concise next step |
+| **1** | Sticky notes → hold | Funds on hold (**HELD**) — stop before ship |
+| **2** | Sticky notes → capture | Full path to **CAPTURED** |
+| **3** | Chair / >$20 | Human approval before pay |
+| **4** | Dispute | Simulate dispute → draft → owner-gated accept |
+| then | **Payables** | Extract → Match → optional Payout |
+
+Optional after that: Overview Bryntum dots, Automation → KERNEL.
 
 ---
 
-## Scenario pack
+### 1 — Funds on hold (≤ $20)
 
-### S1 — Marketplace negotiate
-
-| Case | Steps | Pass if |
+| Step | You do | Pass if |
 |---|---|---|
-| S1.1 | Overview → Channel3 **Use market price → Review** *or* Seed / type brief → **Queue** | Status → SUCCEEDED |
-| S1.2 | **Supplier offers** on that new row | Ranked offers + SSE chat |
-| S1.3 | Sticky-note / low budget RFQ | Sellers scale near ceiling; eligible winner possible |
+| 1.1 | Channel3 `office sticky notes pack` → **Use market price → Review** → **Queue** | **SUCCEEDED**; sellers near ceiling |
+| 1.2 | **Offers** on that **new** row → **Checkout winning offer** | Payments opens; PayPal buttons |
+| 1.3 | Sandbox buyer approves in popup | Status → **HELD** automatically (Funds on hold) |
+| 1.4 | **Stop** — do not Mark shipped | Metric **Funds on hold** ≥ 1; Needs attention shows **Mark shipped** |
 
-### S2 — PayPal authorize → capture
+---
 
-| Case | Steps | Pass if |
+### 2 — Full capture (second sticky / small RFQ)
+
+| Step | You do | Pass if |
 |---|---|---|
-| S2.1 | **Checkout winning offer** | Order / PayPal buttons or approve URL |
-| S2.2 | Sandbox buyer approves | Status ready for hold |
-| S2.3 | **Authorize hold** | **HELD** (not captured) |
-| S2.4 | Mark shipped → **Confirm delivery & capture** | **CAPTURED**; Payments inbox updates |
+| 2.1 | Queue another ≤ $20 RFQ → Offers → Checkout → PayPal approve | **HELD** |
+| 2.2 | **Mark shipped** | **SHIPPED** (still on hold) |
+| 2.3 | **Confirm delivery & capture** | **CAPTURED**; Recently captured → **View** expands inline |
 
-### S3 — Human approval (>$20)
+---
 
-| Case | Steps | Pass if |
+### 3 — Approval required (>$20)
+
+| Step | You do | Pass if |
 |---|---|---|
-| S3.1 | Checkout chair (or any total > $20) | REQUIRE_APPROVAL before pay |
-| S3.2 | Owner approve | Pay / checkout can proceed |
+| 3.1 | Chairs RFQ (e.g. qty 1–12, max unit ~$180) → Queue → Offers → Checkout | **REQUIRE_APPROVAL** before pay |
+| 3.2 | Owner approve → Pay / PayPal approve | Hold can proceed; no silent capture |
 
-### S4 — Payables
+**Sample brief:** `12 ergonomic desk chairs. Prefer durable mesh backs and 5-year warranty.` · Qty `1` · Max `180` · 30 days.
 
-| Case | Steps | Pass if |
+---
+
+### 4 — Dispute (before Payables)
+
+| Step | You do | Pass if |
 |---|---|---|
-| S4.1 | **Payables** → Extract (sample prefilled) | Vendor / amount extracted |
-| S4.2 | Match PO/receipt = invoice | **MATCHED** |
-| S4.3 | Optional Payout / client invoice | Sandbox success or clear error |
+| 4.1 | **Payments & orders** → Disputes → **Simulate CUSTOMER.DISPUTE.CREATED** | Dispute id appears |
+| 4.2 | **Draft response** | Agent draft stored |
+| 4.3 | **Approve accept_dispute_claim** | Runs only with owner approval; clear notice |
 
-### S5 — KERNEL
+---
 
-| Case | Steps | Pass if |
+### Then — Payables
+
+| Step | You do | Pass if |
 |---|---|---|
-| S5.1 | **Automation** → public URL → Fetch | Opens Payables with page text |
-| S5.2 | Extract | Fields or clear parse error |
+| P.1 | **Payables** → Extract (sample text) | Vendor / amount extracted |
+| P.2 | PO + receipt = invoice amount → **Match** | **MATCHED** |
+| P.3 | Optional **Payout** / client invoice | Sandbox ok or clear error |
+| P.4 | Optional **Automation** → KERNEL fetch | Opens Payables with page text |
 
-### S6 — Bryntum (Overview only)
+---
 
-| Case | Steps | Pass if |
-|---|---|---|
-| S6.1 | **Overview** after checkout activity | Gantt shows live authorize/capture checkpoints |
-| S6.2 | Hover a status dot | Tooltip with payment status |
+## Recording order (≈3 min cut)
 
-### S7 — Safety
+1. Overview + assistant hi  
+2. Scenario **1** (stop at HELD — show Funds on hold)  
+3. Scenario **2** through capture (or skip ship/capture if short on time)  
+4. Scenario **4** dispute simulate + draft  
+5. Jump to **Payables** extract + match  
+6. Safety line: agents negotiate; policy + PayPal hold money  
 
-| Case | Steps | Pass if |
-|---|---|---|
-| S7.1 | Capture before PayPal approve | Error; no capture |
-| S7.2 | API `/health` | `ok` + `paypalEnv: sandbox` |
+Scenario **3** (approval) if you have ~20s left.
+
+---
+
+## Quick checks
+
+| Check | Expected |
+|---|---|
+| API `/health` | `ok` + `paypalEnv: sandbox` |
+| Capture before approve | Error; no capture |
+| Old Supplier offers row | Frozen snapshot — use a **new** SUCCEEDED negotiation |
+| Authorize hold after popup | Already **HELD** — button is for fallback link only |

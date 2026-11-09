@@ -91,11 +91,11 @@ Local setup: see README **Quick start** (`pnpm install`, copy `.env.example`, sa
 
 ### Suggested video outline (≤3:00)
 
-1. **0:00–0:20** Hosted URL + dual-track Overview  
-2. **0:20–1:10** Channel3 → RFQ → Queue → AG Grid offers → Checkout → PayPal approve → Authorize  
-3. **1:10–2:00** Payables: extract sample → match → payout mention  
-4. **2:00–2:40** Overview Bryntum Gantt + Automation KERNEL → Payables  
+1. **0:00–0:20** Hosted URL + dual-track Overview + assistant hi  
+2. **0:20–1:10** Sticky RFQ → Offers → Checkout → PayPal approve → **HELD** (Funds on hold); optional ship→capture  
+3. **1:10–1:40** Payments → Simulate dispute → draft (owner-gated accept)  
+4. **1:40–2:30** Jump to **Payables**: extract → match → payout mention  
+5. **2:30–3:00** Safety line: agents negotiate; ≤$20 auto / >$20 approval; PayPal holds until capture  
 
-5. **2:40–3:00** Safety line: agents negotiate, policy + PayPal hold money  
 
 Do **not** use copyrighted music or third-party trademarks beyond fair product logos you have rights to show.
