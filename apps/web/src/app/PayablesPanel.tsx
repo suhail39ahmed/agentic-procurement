@@ -38,7 +38,12 @@ export function PayablesPanel({
   seedText?: string | null;
 }) {
   const [busy, setBusy] = useState(false);
-  const [text, setText] = useState(SAMPLE_INVOICE);
+  // Parent remounts this panel with a new key when KERNEL seeds text (avoids setState-in-effect).
+  const [text, setText] = useState(() =>
+    typeof seedText === "string" && seedText.trim()
+      ? seedText.trim().slice(0, 20_000)
+      : SAMPLE_INVOICE,
+  );
   const [items, setItems] = useState<SupplierInvoice[]>([]);
   const [poAmount, setPoAmount] = useState("1.50");
   const [receiptAmount, setReceiptAmount] = useState("1.50");
@@ -66,12 +71,6 @@ export function PayablesPanel({
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (typeof seedText === "string" && seedText.trim()) {
-      setText(seedText.trim().slice(0, 20_000));
-    }
-  }, [seedText]);
 
   async function extract() {
     setBusy(true);

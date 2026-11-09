@@ -1748,7 +1748,11 @@ export default function Dashboard() {
           )}
 
           {view === "Payables" && (
-            <PayablesPanel setNotice={setNotice} seedText={payablesSeed} />
+            <PayablesPanel
+              key={payablesSeed ? `seed-${payablesSeed.slice(0, 48)}` : "sample"}
+              setNotice={setNotice}
+              seedText={payablesSeed}
+            />
           )}
 
           {(view === "Overview" || view === "Payments & orders") && <section className={`${s.card} ${s.paymentCard}`}>
