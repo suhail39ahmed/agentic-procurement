@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { assertDemoAmount, demoMaxUsd } from "../demo-cap";
-import { agentRegistry } from "./astropods";
 import { channel3Configured, searchChannel3 } from "./channel3";
 import { fetchInvoicePageText, kernelConfigured } from "./kernel";
 
@@ -19,15 +18,9 @@ sponsorsRouter.get("/status", (_req, res) => {
     demoMaxUsd: demoMaxUsd(),
     channel3: channel3Configured(),
     kernel: kernelConfigured(),
-    astropods: Boolean(process.env.ASTROPODS_WORKSPACE?.trim()),
     bryntum: true,
-    apimatic: true,
-    note: "Env-gated sponsors: set CHANNEL3_API_KEY / KERNEL_API_KEY / ASTROPODS_WORKSPACE to activate live calls.",
+    note: "Env-gated sponsors: set CHANNEL3_API_KEY / KERNEL_API_KEY to activate live calls.",
   });
-});
-
-sponsorsRouter.get("/agents", (_req, res) => {
-  res.json(agentRegistry());
 });
 
 sponsorsRouter.post("/channel3/search", async (req, res) => {

@@ -92,12 +92,11 @@ Negative case:
 - [ ] **Draft response** stores agent draft; **Approve accept_dispute_claim** requires draft + `{approved:true}`
 - [ ] `pnpm --filter paypal mcp` starts MCP server (stdio) with sandbox token
 
-## 5d. Sponsors (Automation)
+## 5d. Partners (Automation)
 
 - [ ] Channel3 enrich (or “not configured” notice if no key)
 - [ ] Bryntum timeline shows delivery / replenish / dues
 - [ ] KERNEL fetch page text (direct fallback without key)
-- [ ] Astropods agent registry lists buyer/seller/extractor/assistant
 
 
 ---

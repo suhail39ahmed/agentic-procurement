@@ -8,14 +8,11 @@ Paste into Devpost “APIs, libraries, and frameworks”:
 - **Channel3** — Product catalog enrich for RFQ prefill (env-gated `CHANNEL3_API_KEY`)
 - **Bryntum** — Schedule/timeline UI for delivery, replenishment, and payout dues
 - **KERNEL** — Browser/agent page fetch bridge for supplier invoice HTML → extract
-- **APIMatic** — OpenAPI source at `docs/openapi.yaml` for SDK/docs/MCP generation
-- **Astropods** — Agent registry panel (scopes, human gates, DEMO_MAX_USD spend caps)
-- **Postman** — `docs/postman/ProcureAI.postman_collection.json`
 - **Slack** — Approval cards via `SLACK_WEBHOOK_URL` (stretch)
 - Azure AI Foundry — buyer/seller/extractor/assistant models
 - Next.js, Express, Drizzle/Postgres, pnpm monorepo
 
-**Core for judging:** PayPal + Render + AG Grid + Postman. Partners above are env-gated / showcase (use credits where you have them).
+**Core for judging:** PayPal + Render + AG Grid. Partners: Channel3 / Bryntum / KERNEL (use credits where you have them).
 
 ## Slack webhook (do not commit)
 

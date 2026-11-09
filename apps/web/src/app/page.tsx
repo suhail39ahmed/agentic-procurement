@@ -1122,13 +1122,10 @@ export default function Dashboard() {
             <span className={`${s.stackLogo} ${s.stackLogoCore}`} title="PayPal sandbox Orders AUTHORIZE + Agent Toolkit/MCP">PayPal</span>
             <span className={`${s.stackLogo} ${s.stackLogoCore}`} title="Hosted on Render · Workflows SDK">Render</span>
             <span className={`${s.stackLogo} ${s.stackLogoCore}`} title="AG Grid Community · live applyTransaction + SSE">AG Grid</span>
-            <span className={`${s.stackLogo} ${s.stackLogoCore}`} title="Postman collection in docs/postman">Postman</span>
             <span className={s.stackLabel}>Partners</span>
             <span className={s.stackLogo} title="Channel3 catalog enrich (set CHANNEL3_API_KEY)">Channel3</span>
             <span className={s.stackLogo} title="Bryntum-category schedule timeline">Bryntum</span>
             <span className={s.stackLogo} title="KERNEL page fetch for invoices">KERNEL</span>
-            <span className={s.stackLogo} title="OpenAPI → APIMatic DX">APIMatic</span>
-            <span className={s.stackLogo} title="Astropods-style agent registry">Astropods</span>
           </div>
 
           <div className={s.previewNotice}>
@@ -1731,7 +1728,7 @@ export default function Dashboard() {
           </section>}
 
           <footer className={s.footer}>
-            <span>ProcureAI · PayPal · Render · AG Grid · Channel3 · Bryntum · KERNEL · APIMatic · Astropods</span>
+            <span>ProcureAI · PayPal · Render · AG Grid · Channel3 · Bryntum · KERNEL</span>
             <span>Sandbox only · Not an official PayPal product</span>
           </footer>
         </div>

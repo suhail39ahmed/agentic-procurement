@@ -84,8 +84,7 @@ flowchart LR
 - Postgres migrations live in `packages/db/migrations/` (including `0000_rollback.sql` for disposable DBs only — never run against Render prod). Run `0003_ap_toolkit.sql` for dispute drafts / AP tables.
 - CI: `.github/workflows/ci.yml` (typecheck/lint/build + secret scan).
 - API refuses to start unless `PAYPAL_ENV=sandbox` and `MANDATE_SECRET` is set.
-- Dashboard: negotiation SSE feed, AG Grid `applyTransaction`, Payables panel (extract/match/payout/client invoice), Automation (FX/replenish/Slack/forecast) + sponsor panels.
-- OpenAPI for APIMatic DX: `docs/openapi.yaml`.
+- Dashboard: negotiation SSE feed, AG Grid `applyTransaction`, Payables panel (extract/match/payout/client invoice), Automation (FX/replenish/Slack/forecast) + partner panels.
 - E2E checklist: `docs/TEST_PLAN.md` (use qty 1, max unit ≤ $2).
 - Hackathon / sponsor tools used:
   - **PayPal** sandbox REST + Checkout AUTHORIZE, webhooks, Agent Toolkit/MCP
@@ -94,9 +93,6 @@ flowchart LR
   - **Channel3** catalog enrich (`CHANNEL3_API_KEY`, env-gated)
   - **Bryntum**-category schedule timeline (delivery / replenish / payout dues)
   - **KERNEL** invoice page fetch bridge (`KERNEL_API_KEY`, env-gated)
-  - **APIMatic**-ready OpenAPI source of truth
-  - **Astropods**-style agent registry (scopes, human gates, spend caps)
-  - **Postman** collection: `docs/postman/ProcureAI.postman_collection.json`
   - Slack approvals stretch (`SLACK_WEBHOOK_URL`)
 
 **Judge path (≤ $2):** Overview → track cards → Seed negotiation **or** Open Payables.
