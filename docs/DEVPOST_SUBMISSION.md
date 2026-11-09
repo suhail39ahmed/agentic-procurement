@@ -13,7 +13,7 @@ ProcureAI — Agentic Procurement & Payables
 **Elevator pitch** (≤200 chars)
 
 ```
-Buyer & seller AIs negotiate; PayPal authorize→capture after delivery. Dual-track marketplace + AP extract/match/payout, Channel3 RFQs, KERNEL invoices, Bryntum Gantt that reschedules on payment events.
+Buyer & seller AIs negotiate; PayPal authorize→capture after delivery. Dual-track marketplace + AP extract/match/payout, Channel3 RFQs, KERNEL invoices, Bryntum Gantt rescheduling on payment events.
 ```
 
 **Hosted demo URL**
