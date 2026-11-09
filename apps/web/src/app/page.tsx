@@ -3,7 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   ArrowRight, ArrowUpRight, Bot, Check, ChevronDown, ChevronRight,
-  CreditCard, FileText, Layers3, LayoutDashboard,
+  CircleHelp, CreditCard, FileText, Layers3, LayoutDashboard,
   Maximize2, Menu, Minimize2, Package, PackageSearch, Plus,
   RefreshCw, Search, Send, ShieldCheck, Sparkles, Wallet, X,
 } from "lucide-react";
@@ -373,6 +373,7 @@ export default function Dashboard() {
   const [offerSearch, setOfferSearch] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [notice, setNotice] = useState(paypalBoot.notice);
+  const [processHelpOpen, setProcessHelpOpen] = useState(false);
   const [needsAttentionOpen, setNeedsAttentionOpen] = useState(true);
   const [recentCapturedOpen, setRecentCapturedOpen] = useState(true);
   const [expandedCapturedId, setExpandedCapturedId] = useState<string | null>(null);
@@ -1440,31 +1441,53 @@ export default function Dashboard() {
                     : "Marketplace negotiate → approve → authorize → capture. Payables extend the same control plane."}
               </p>
             </div>
-            <div className={s.reviewActions}>
-              <button
-                type="button"
-                className={s.secondary}
-                title="Fill the composer with a sample procurement brief"
-                onClick={loadDemoRequest}
-              >
-                Load demo request
-              </button>
-              <button
-                type="button"
-                className={s.secondary}
-                title="Queue a live sample negotiation in one click"
-                onClick={() => void seedDemoWorkspace()}
-                disabled={queueBusy}
-              >
-                {queueBusy ? "Seeding…" : "Seed demo (1 click)"}
-              </button>
-              <button
-                className={s.primary}
-                title="Start a new sourcing brief on the Overview composer"
-                onClick={newRequest}
-              >
-                <Plus size={18} /> New request
-              </button>
+            <div className={s.headingActions}>
+              <div className={s.processHelp}>
+                <button
+                  type="button"
+                  className={s.processHelpToggle}
+                  aria-expanded={processHelpOpen}
+                  onClick={() => setProcessHelpOpen((open) => !open)}
+                >
+                  <CircleHelp size={16} />
+                  Help · how it works
+                  {processHelpOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+                {processHelpOpen && (
+                  <div className={s.processHelpPanel}>
+                    <strong>Marketplace path</strong>
+                    <ol>
+                      <li>Channel3 search or write a brief → Review → Queue</li>
+                      <li>Supplier offers rank in AG Grid (open a new SUCCEEDED row)</li>
+                      <li>Checkout → PayPal approve → Authorize hold</li>
+                      <li>Mark shipped → Confirm delivery &amp; capture</li>
+                    </ol>
+                    <strong>Payables path</strong>
+                    <ol>
+                      <li>Payables → Extract invoice → Match → Payout</li>
+                      <li>Automation → KERNEL fetch can open Payables with page text</li>
+                    </ol>
+                    <p>Totals ≤ $20 auto-allow; above $20 need owner approval. Agents negotiate — PayPal holds money.</p>
+                  </div>
+                )}
+              </div>
+              <div className={s.reviewActions}>
+                <button
+                  type="button"
+                  className={s.secondary}
+                  title="Fill the composer with a sample procurement brief"
+                  onClick={loadDemoRequest}
+                >
+                  Load demo request
+                </button>
+                <button
+                  className={s.primary}
+                  title="Start a new sourcing brief on the Overview composer"
+                  onClick={newRequest}
+                >
+                  <Plus size={18} /> New request
+                </button>
+              </div>
             </div>
           </section>
 
