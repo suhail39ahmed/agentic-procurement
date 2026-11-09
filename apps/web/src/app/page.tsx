@@ -1451,7 +1451,9 @@ export default function Dashboard() {
             <section className={`${s.card} ${s.assistant}`} aria-labelledby="assistant-title">
               <div className={s.sectionHeader}>
                 <div className={s.inlineTitle}><Bot size={20} /><h2 id="assistant-title">Buying assistant</h2></div>
-                <span className={s.pending}>{chatBusy ? "Thinking…" : "Connected"}</span>
+                <span className={s.pending}>
+                  {chatBusy ? "Thinking…" : chatError ? "Not connected" : "Ready"}
+                </span>
               </div>
               <div className={s.assistantBody}>
                 {chatMessages.length === 0 ? (

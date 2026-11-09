@@ -18,7 +18,7 @@ Sandbox only. Order totals above the policy approval threshold require human app
 - [ ] API `/health` returns `ok` (and `paypalEnv: sandbox` on hosted)
 - [ ] Web loads Overview without console/proxy 503 errors
 - [ ] Refresh shows negotiations count from Postgres (not stuck at 0)
-- [ ] Buying assistant shows **Connected** (not “Not connected”)
+- [ ] Buying assistant shows **Ready**; a short “hi” returns a reply (if it fails, badge becomes **Not connected** + error text)
 
 ---
 
