@@ -2,6 +2,10 @@
     "name": "workflows",
     "private": true,
     "type": "module",
+    "scripts": {
+        "workflows:start": "tsx src/main.ts",
+        "start": "tsx src/main.ts"
+    },
     "dependencies": {
         "@renderinc/sdk": "^1.8.0",
         "agents": "workspace:^"

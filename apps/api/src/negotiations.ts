@@ -9,6 +9,7 @@ import {
   type NegotiationPriority,
 } from "db";
 import { scheduleNegotiationRun } from "./run-negotiation";
+import { isQuoteCurrency, toUsd } from "./fx";
 
 export const negotiationsRouter = Router();
 
@@ -65,7 +66,9 @@ function validateCreate(body: CreateBody):
     return { ok: false, error: "maxUnitPrice must use up to 2 decimal places" };
   }
 
-  if (body.currency !== "USD") return { ok: false, error: "currency must be USD" };
+  if (!isQuoteCurrency(body.currency)) {
+    return { ok: false, error: "currency must be USD, SGD, or INR" };
+  }
 
   const neededByDays = Number(body.neededByDays);
   if (!Number.isInteger(neededByDays) || neededByDays < 1 || neededByDays > 365) {
@@ -77,14 +80,19 @@ function validateCreate(body: CreateBody):
     return { ok: false, error: "idempotencyKey must be 1..128 characters" };
   }
 
+  const maxUsd = toUsd(Math.round(maxUnitPrice * 100) / 100, body.currency);
+  const briefNote = body.currency === "USD"
+    ? brief
+    : `${brief} [Budget ${body.currency} ${maxUnitPrice.toFixed(2)} → $${maxUsd.toFixed(2)} USD]`;
+
   return {
     ok: true,
     value: {
-      brief,
+      brief: briefNote.slice(0, 500),
       priority,
       quantity,
-      maxUnitPrice: Math.round(maxUnitPrice * 100) / 100,
-      currency: "USD",
+      maxUnitPrice: maxUsd,
+      currency: "USD" as const,
       neededByDays,
       idempotencyKey,
     },
