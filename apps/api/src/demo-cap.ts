@@ -1,10 +1,13 @@
-/** Optional hard ceiling for sandbox amounts (default $250). Set 0/off/false to disable. */
+/**
+ * Optional hard ceiling for sandbox amounts.
+ * Default null (disabled) so POLICY_APPROVAL_THRESHOLD can require approval above $250.
+ * Set DEMO_MAX_USD=250 while testing if you want a temporary hard stop.
+ */
 export function demoMaxUsd(): number | null {
   const raw = process.env.DEMO_MAX_USD;
-  if (raw === "0" || raw === "off" || raw === "false") return null;
-  if (raw === undefined || raw === "") return 250;
+  if (raw === undefined || raw === "" || raw === "0" || raw === "off" || raw === "false") return null;
   const n = Number(raw);
-  if (!Number.isFinite(n) || n <= 0) return 250;
+  if (!Number.isFinite(n) || n <= 0) return null;
   return n;
 }
 
