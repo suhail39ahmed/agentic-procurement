@@ -378,6 +378,7 @@ export default function Dashboard() {
     retailer?: string;
     productId?: string;
   }>>([]);
+  const [channel3Selected, setChannel3Selected] = useState("");
   const [payablesSeed, setPayablesSeed] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
@@ -763,6 +764,7 @@ export default function Dashboard() {
     if (!query || channel3Busy) return;
     setChannel3Busy(true);
     setChannel3Products([]);
+    setChannel3Selected("");
     try {
       const response = await fetch("/api/sponsors/channel3/search", {
         method: "POST",
@@ -791,9 +793,10 @@ export default function Dashboard() {
       }
       const products = Array.isArray(payload.products) ? payload.products : [];
       setChannel3Products(products);
+      if (products.length) setChannel3Selected("0");
       setNotice(
         products.length
-          ? `${payload.note ?? "Channel3 results"} · pick a product below to fill the RFQ.`
+          ? `${payload.note ?? "Channel3 results"} · choose a product in the dropdown, then Use for RFQ.`
           : (payload.note ?? "No Channel3 products matched — try another query."),
       );
     } finally {
@@ -1294,10 +1297,10 @@ export default function Dashboard() {
 
               {composerMode === "compose" ? (
                 <form onSubmit={reviewDraft} className={s.briefForm} noValidate>
-                  <div className={s.field}>
-                    <label htmlFor={`${formId}-channel3`}>Channel3 product catalog</label>
-                    <p className={s.description} style={{ marginBottom: 8 }}>
-                      Search Channel3 for real products and prices, pick one, then Review → Queue.
+                  <div className={s.channel3Box}>
+                    <label htmlFor={`${formId}-channel3`}>Option A — Channel3 catalog</label>
+                    <p className={s.description}>
+                      Search products, pick one from the dropdown (name + price), then Use for RFQ.
                     </p>
                     <div className={s.budgetRow}>
                       <input
@@ -1314,35 +1317,48 @@ export default function Dashboard() {
                         title="Search Channel3 catalog"
                         onClick={() => void searchChannel3Catalog()}
                       >
-                        <PackageSearch size={15} /> {channel3Busy ? "Searching…" : "Search catalog"}
+                        <PackageSearch size={15} /> {channel3Busy ? "Searching…" : "Search"}
                       </button>
                     </div>
                     {channel3Products.length > 0 && (
-                      <ul className={s.channel3List} aria-label="Channel3 catalog results">
-                        {channel3Products.map((product, index) => {
-                          const priceLabel = product.price != null && Number.isFinite(product.price)
-                            ? `$${product.price.toFixed(2)} ${product.currency ?? "USD"}`
-                            : "Price n/a";
-                          return (
-                            <li key={product.productId ?? `${product.title}-${index}`}>
-                              <div>
-                                <strong>{product.title}</strong>
-                                <span>{priceLabel}{product.retailer ? ` · ${product.retailer}` : ""}</span>
-                              </div>
-                              <button
-                                type="button"
-                                className={s.secondary}
-                                title="Fill RFQ from this catalog product"
-                                onClick={() => applyChannel3Product(product)}
-                              >
-                                Use this
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
+                      <div className={s.channel3Pick}>
+                        <div className={s.field}>
+                          <label htmlFor={`${formId}-channel3-pick`}>Select product</label>
+                          <select
+                            id={`${formId}-channel3-pick`}
+                            value={channel3Selected}
+                            onChange={(event) => setChannel3Selected(event.target.value)}
+                          >
+                            {channel3Products.map((product, index) => {
+                              const priceLabel = product.price != null && Number.isFinite(product.price)
+                                ? `$${product.price.toFixed(2)}`
+                                : "price n/a";
+                              const retail = product.retailer ? ` · ${product.retailer}` : "";
+                              return (
+                                <option key={product.productId ?? `${product.title}-${index}`} value={String(index)}>
+                                  {product.title.slice(0, 60)}{product.title.length > 60 ? "…" : ""} — {priceLabel}{retail}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                        <button
+                          type="button"
+                          className={s.primary}
+                          disabled={channel3Selected === ""}
+                          title="Fill RFQ fields from the selected Channel3 product"
+                          onClick={() => {
+                            const product = channel3Products[Number(channel3Selected)];
+                            if (product) applyChannel3Product(product);
+                          }}
+                        >
+                          Use for RFQ
+                        </button>
+                      </div>
                     )}
                   </div>
+
+                  <div className={s.formDivider} role="separator">or fill in all the details yourself</div>
 
                   <label htmlFor={`${formId}-brief`}>Your procurement brief (sent to sellers)</label>
                   <textarea

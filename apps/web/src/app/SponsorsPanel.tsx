@@ -54,6 +54,7 @@ export function SponsorsPanel({
     retailer?: string;
     productId?: string;
   }>>([]);
+  const [selected, setSelected] = useState("");
   const [kernelUrl, setKernelUrl] = useState("https://example.com");
   const [schedule, setSchedule] = useState<SchedulePayload | null>(null);
   const [busy, setBusy] = useState(false);
@@ -78,6 +79,7 @@ export function SponsorsPanel({
   async function searchChannel3() {
     setBusy(true);
     setProducts([]);
+    setSelected("");
     try {
       const response = await fetch("/api/sponsors/channel3/search", {
         method: "POST",
@@ -108,9 +110,10 @@ export function SponsorsPanel({
       }
       const rows = Array.isArray(payload.products) ? payload.products : [];
       setProducts(rows);
+      if (rows.length) setSelected("0");
       setNotice(
         rows.length
-          ? `${payload.note ?? "Channel3 results"} · pick a product to fill the RFQ.`
+          ? `${payload.note ?? "Channel3 results"} · choose from the dropdown, then Use for RFQ.`
           : (payload.note ?? (payload.configured ? "No products" : "Channel3 not configured")),
       );
     } finally {
@@ -223,35 +226,48 @@ export function SponsorsPanel({
             </div>
           </div>
         </div>
-        <div className={s.field}>
-          <label htmlFor="c3-q">Search query</label>
-          <input id="c3-q" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <div className={s.channel3Box}>
+          <div className={s.field}>
+            <label htmlFor="c3-q">Search query</label>
+            <div className={s.budgetRow}>
+              <input id="c3-q" value={query} onChange={(e) => setQuery(e.target.value)} />
+              <button type="button" className={s.secondary} disabled={busy} title="Search Channel3 catalog" onClick={() => void searchChannel3()}>
+                {busy ? "Searching…" : "Search"}
+              </button>
+            </div>
+          </div>
+          {products.length > 0 && (
+            <div className={s.channel3Pick}>
+              <div className={s.field}>
+                <label htmlFor="c3-pick">Select product</label>
+                <select id="c3-pick" value={selected} onChange={(e) => setSelected(e.target.value)}>
+                  {products.map((product, index) => {
+                    const priceLabel = product.price != null && Number.isFinite(product.price)
+                      ? `$${product.price.toFixed(2)}`
+                      : "price n/a";
+                    const retail = product.retailer ? ` · ${product.retailer}` : "";
+                    return (
+                      <option key={product.productId ?? `${product.title}-${index}`} value={String(index)}>
+                        {product.title.slice(0, 60)}{product.title.length > 60 ? "…" : ""} — {priceLabel}{retail}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              <button
+                type="button"
+                className={s.primary}
+                disabled={selected === "" || !onChannel3Suggestion}
+                onClick={() => {
+                  const product = products[Number(selected)];
+                  if (product) useProduct(product);
+                }}
+              >
+                Use for RFQ <ArrowRight size={15} />
+              </button>
+            </div>
+          )}
         </div>
-        <div className={s.reviewActions}>
-          <button type="button" className={s.primary} disabled={busy} title="Search Channel3 catalog" onClick={() => void searchChannel3()}>
-            Search catalog <ArrowRight size={15} />
-          </button>
-        </div>
-        {products.length > 0 && (
-          <ul className={s.channel3List} aria-label="Channel3 catalog results">
-            {products.map((product, index) => {
-              const priceLabel = product.price != null && Number.isFinite(product.price)
-                ? `$${product.price.toFixed(2)} ${product.currency ?? "USD"}`
-                : "Price n/a";
-              return (
-                <li key={product.productId ?? `${product.title}-${index}`}>
-                  <div>
-                    <strong>{product.title}</strong>
-                    <span>{priceLabel}{product.retailer ? ` · ${product.retailer}` : ""}</span>
-                  </div>
-                  <button type="button" className={s.secondary} onClick={() => useProduct(product)}>
-                    Use this
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
       </section>
 
       <section className={`${s.card} ${s.stretchCard}`}>
