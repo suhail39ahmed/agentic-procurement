@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight, Bot, CalendarDays, PackageSearch, Globe } from "lucide-react";
+import { ArrowRight, CalendarDays, PackageSearch, Globe } from "lucide-react";
 import s from "./dashboard.module.css";
 
 type TimelineEvent = {
@@ -10,15 +10,6 @@ type TimelineEvent = {
   start: string;
   end: string;
   type: string;
-};
-
-type AgentRow = {
-  id: string;
-  track: string;
-  role: string;
-  scopes: string[];
-  humanGate: string;
-  spendCap: string;
 };
 
 export function SponsorsPanel({
@@ -39,25 +30,19 @@ export function SponsorsPanel({
   const [query, setQuery] = useState("office sticky notes pack");
   const [kernelUrl, setKernelUrl] = useState("https://example.com");
   const [events, setEvents] = useState<TimelineEvent[]>([]);
-  const [agents, setAgents] = useState<AgentRow[]>([]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void (async () => {
-        const [st, tl, ag] = await Promise.all([
+        const [st, tl] = await Promise.all([
           fetch("/api/sponsors/status", { cache: "no-store" }),
           fetch("/api/sponsors/timeline", { cache: "no-store" }),
-          fetch("/api/sponsors/agents", { cache: "no-store" }),
         ]);
         if (st.ok) setStatus(await st.json() as Record<string, boolean | number | null>);
         if (tl.ok) {
           const payload = await tl.json() as { events?: TimelineEvent[] };
           setEvents(Array.isArray(payload.events) ? payload.events : []);
-        }
-        if (ag.ok) {
-          const payload = await ag.json() as { agents?: AgentRow[] };
-          setAgents(Array.isArray(payload.agents) ? payload.agents : []);
         }
       })().catch(() => undefined);
     }, 0);
@@ -82,7 +67,6 @@ export function SponsorsPanel({
           maxUnitPrice: string;
           neededByDays: number;
         } | null;
-        products?: Array<{ title: string; price?: number }>;
       };
       if (!response.ok) {
         setNotice(payload.error ?? "Channel3 search failed.");
@@ -194,28 +178,6 @@ export function SponsorsPanel({
                 {ev.title}
               </div>
             </div>
-          ))}
-        </div>
-      </section>
-
-      <section className={`${s.card} ${s.stretchCard}`}>
-        <div className={s.sectionHeader}>
-          <div className={s.inlineTitle}>
-            <span className={s.iconTile}><Bot size={20} /></span>
-            <div>
-              <h2>Astropods agent registry</h2>
-              <p className={s.description}>Governed agent inventory — scopes, human gates, spend caps.</p>
-            </div>
-          </div>
-        </div>
-        <div className={s.agentRegistry}>
-          {agents.map((a) => (
-            <article key={a.id}>
-              <strong>{a.role} · {a.track}</strong>
-              <p>Scopes: {a.scopes.join(", ")}</p>
-              <p>Human gate: {a.humanGate}</p>
-              <p>Spend: {a.spendCap}</p>
-            </article>
           ))}
         </div>
       </section>

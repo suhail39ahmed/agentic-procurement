@@ -44,8 +44,6 @@ services:
         sync: false
       - key: KERNEL_API_KEY
         sync: false
-      - key: ASTROPODS_WORKSPACE
-        sync: false
 
   - type: web
     name: agentic-procurement-web
