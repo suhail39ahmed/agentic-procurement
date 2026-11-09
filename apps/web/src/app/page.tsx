@@ -405,36 +405,39 @@ export default function Dashboard() {
     () => offers.filter((offer) => offer.withinBudget && offer.meetsDeadline),
     [offers],
   );
-  const heldCount = activeOrder?.status === "HELD" || activeOrder?.status === "SHIPPED" ? 1 : 0;
-  const capturedCount = activeOrder?.status === "CAPTURED" ? 1 : 0;
   const activeNegotiation = negotiations.find((item) => item.id === activeNegotiationId) ?? null;
   const succeededNegotiations = negotiations.filter((item) => item.status === "SUCCEEDED");
+
+  const allFeedRows = useMemo<FeedRow[]>(() => {
+    return negotiations.map((item) => {
+      const payment = item.id === activeNegotiationId && activeOrder?.status
+        ? activeOrder.status
+        : item.paymentStatus ?? (item.hasCheckout ? "APPROVED" : "—");
+      return {
+        id: item.id,
+        brief: item.brief,
+        status: item.status,
+        priority: priorityLabel(item.priority),
+        quantity: item.quantity,
+        maxUnitPrice: item.maxUnitPrice,
+        payment,
+      };
+    });
+  }, [negotiations, activeNegotiationId, activeOrder]);
+
   const feedRows = useMemo<FeedRow[]>(() => {
     const q = search.trim().toLowerCase();
-    return negotiations
-      .map((item) => {
-        const payment = item.id === activeNegotiationId && activeOrder
-          ? activeOrder.status
-          : item.paymentStatus
-            ?? (item.hasCheckout ? "APPROVED" : "—");
-        return {
-          id: item.id,
-          brief: item.brief,
-          status: item.status,
-          priority: priorityLabel(item.priority),
-          quantity: item.quantity,
-          maxUnitPrice: item.maxUnitPrice,
-          payment,
-        };
-      })
-      .filter((row) => {
-        if (!q) return true;
-        return [row.brief, row.status, row.priority, row.payment, String(row.quantity)]
-          .join(" ")
-          .toLowerCase()
-          .includes(q);
-      });
-  }, [negotiations, activeNegotiationId, activeOrder, search]);
+    if (!q) return allFeedRows;
+    return allFeedRows.filter((row) =>
+      [row.brief, row.status, row.priority, row.payment, String(row.quantity)]
+        .join(" ")
+        .toLowerCase()
+        .includes(q));
+  }, [allFeedRows, search]);
+
+  // Metric cards must match grid Payment column across all negotiations, not only activeOrder.
+  const heldCount = allFeedRows.filter((row) => row.payment === "HELD" || row.payment === "SHIPPED").length;
+  const capturedCount = allFeedRows.filter((row) => row.payment === "CAPTURED").length;
 
   async function openNegotiationOffers(id: string) {
     setActiveNegotiationId(id);
