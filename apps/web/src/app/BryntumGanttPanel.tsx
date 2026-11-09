@@ -15,6 +15,7 @@ export type GanttTaskRow = {
   endDate: string;
   duration: number;
   flag?: string;
+  statusLabel?: string;
   note?: string;
   eventColor?: string;
   cls?: string;
@@ -39,6 +40,17 @@ function registerLicense() {
 
 registerLicense();
 
+function statusColor(flag?: string, statusLabel?: string): string {
+  const key = (statusLabel || flag || "ok").toLowerCase();
+  if (key.includes("captured") || key === "ok") return "#16a34a";
+  if (key.includes("approved") || key.includes("late") || key.includes("await")) return "#ea580c";
+  if (key.includes("held") || key.includes("ship")) return "#2563eb";
+  if (key.includes("fail")) return "#dc2626";
+  if (key.includes("refund")) return "#7c3aed";
+  if (key.includes("dispute")) return "#db2777";
+  return "#64748b";
+}
+
 export function BryntumGanttPanel({
   tasks,
   dependencies,
@@ -62,22 +74,76 @@ export function BryntumGanttPanel({
       barMargin: 8,
       rowHeight: 42,
       columns: [
-        { type: "name", field: "name", width: 220, text: "Milestone" },
+        {
+          text: " ",
+          field: "flag",
+          width: 36,
+          minWidth: 36,
+          sortable: false,
+          filterable: false,
+          align: "center",
+          htmlEncode: false,
+          renderer: ({ record }: { record: { get?: (f: string) => unknown; flag?: string; statusLabel?: string } }) => {
+            const flag = String(record.get?.("flag") ?? record.flag ?? "");
+            const statusLabel = String(record.get?.("statusLabel") ?? record.statusLabel ?? "");
+            const color = statusColor(flag, statusLabel);
+            return `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};box-shadow:0 0 0 2px ${color}33"></span>`;
+          },
+        },
+        { type: "name", field: "name", width: 240, text: "Milestone" },
         { type: "startdate", width: 110 },
         { type: "enddate", width: 110 },
       ],
+      taskTooltipFeature: {
+        template: ({ taskRecord }: { taskRecord: {
+          get?: (field: string) => unknown;
+          name?: string;
+          statusLabel?: string;
+          flag?: string;
+          note?: string;
+          startDate?: Date | string;
+          endDate?: Date | string;
+        } }) => {
+          const read = (field: string) => {
+            const viaGet = taskRecord.get?.(field);
+            if (viaGet != null && viaGet !== "") return viaGet;
+            return (taskRecord as Record<string, unknown>)[field];
+          };
+          const status = String(read("statusLabel") || read("flag") || "status");
+          const note = String(read("note") || "No extra detail");
+          const name = String(read("name") || "");
+          const startRaw = read("startDate");
+          const endRaw = read("endDate");
+          const start = startRaw
+            ? new Date(startRaw as string | Date).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })
+            : "—";
+          const endDate = endRaw
+            ? new Date(endRaw as string | Date).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })
+            : "—";
+          return `
+            <div style="padding:4px 2px;max-width:280px;line-height:1.45">
+              <div style="font-weight:700;color:#0f2744;margin-bottom:4px">${status}</div>
+              <div style="color:#16375f;margin-bottom:6px">${name}</div>
+              <div style="color:#5b6f88;font-size:12px">${note}</div>
+              <div style="color:#8090a5;font-size:11px;margin-top:6px">${start} → ${endDate}</div>
+            </div>
+          `;
+        },
+      },
       project: {
         autoSetConstraints: true,
         tasksData: tasks.map((t) => ({
           id: t.id,
-          name: t.flag && t.flag !== "ok" ? `${t.name} [${t.flag}]` : t.name,
+          name: t.name,
           startDate: t.startDate,
           endDate: t.endDate,
           duration: t.duration,
           manuallyScheduled: t.manuallyScheduled ?? true,
-          cls: t.cls,
-          eventColor: t.eventColor,
+          cls: t.cls ?? (t.flag && t.flag !== "ok" ? `flag-${t.flag}` : undefined),
+          eventColor: t.eventColor ?? statusColor(t.flag, t.statusLabel),
           note: t.note,
+          flag: t.flag,
+          statusLabel: t.statusLabel ?? t.flag ?? "ok",
         })),
         dependenciesData: dependencies.map((d) => ({
           id: d.id,

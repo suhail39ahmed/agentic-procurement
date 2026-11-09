@@ -11,18 +11,10 @@ const BryntumGanttPanel = dynamic(
   { ssr: false, loading: () => <p className={s.description}>Loading Bryntum Gantt…</p> },
 );
 
-type AgentLogEntry = {
-  at: string;
-  signal: string;
-  action: string;
-  taskIds: string[];
-};
-
 type OverviewSchedule = {
   note?: string;
   tasks?: GanttTaskRow[];
   dependencies?: GanttDependency[];
-  agentLog?: AgentLogEntry[];
   projectStartDate?: string;
   projectEndDate?: string;
   liveCount?: number;
@@ -67,9 +59,8 @@ export function OverviewSchedulePanel({ setNotice }: { setNotice: (value: string
           <div>
             <h2>Payment plan · completed + open</h2>
             <p className={s.description}>
-              Bryntum Gantt on Overview — dummy completed history plus your live negotiation checkpoints
-              (APPROVED / HELD / SHIPPED / CAPTURED). Simulate signals stay under Automation.
-              {schedule?.liveCount != null ? ` · ${schedule.liveCount} live · ~${schedule.completedCount ?? 0} completed markers` : ""}
+              Status dots: green = done, orange = needs action, blue = on hold. Hover a bar for APPROVED / CAPTURED detail.
+              {schedule?.liveCount != null ? ` · ${schedule.liveCount} live · ~${schedule.completedCount ?? 0} completed` : ""}
             </p>
           </div>
         </div>
@@ -84,18 +75,6 @@ export function OverviewSchedulePanel({ setNotice }: { setNotice: (value: string
         projectStartDate={schedule?.projectStartDate}
         projectEndDate={schedule?.projectEndDate}
       />
-
-      {schedule?.agentLog && schedule.agentLog.length > 0 && (
-        <div className={s.agentRegistry} style={{ marginTop: 12 }}>
-          {schedule.agentLog.slice(0, 6).map((entry) => (
-            <article key={`${entry.at}-${entry.signal}-${entry.taskIds.join("-")}`}>
-              <strong>{entry.signal}</strong>
-              <p>{entry.action}</p>
-              <p>{new Date(entry.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST · {entry.taskIds.join(", ")}</p>
-            </article>
-          ))}
-        </div>
-      )}
     </section>
   );
 }

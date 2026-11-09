@@ -12,6 +12,8 @@ export type ScheduleTask = {
   endDate: string;
   duration: number;
   flag: MilestoneFlag;
+  /** Shown in Gantt hover + status dot (e.g. APPROVED, CAPTURED). */
+  statusLabel?: string;
   type: "authorize" | "capture" | "delivery" | "replenish" | "payout" | "client";
   note?: string;
   eventColor?: string;
@@ -374,6 +376,7 @@ export function buildOverviewSchedule(rows: WorkspacePaymentRow[]) {
       endDate: isoDay(-9),
       duration: 1,
       flag: "ok",
+      statusLabel: "AUTHORIZED",
       type: "authorize",
       note: "Sandbox history · completed authorize",
       eventColor: colorFor("ok"),
@@ -386,6 +389,7 @@ export function buildOverviewSchedule(rows: WorkspacePaymentRow[]) {
       endDate: isoDay(-6),
       duration: 1,
       flag: "ok",
+      statusLabel: "CAPTURED",
       type: "capture",
       note: "Sandbox history · owner confirmed delivery",
       eventColor: colorFor("ok"),
@@ -398,6 +402,7 @@ export function buildOverviewSchedule(rows: WorkspacePaymentRow[]) {
       endDate: isoDay(-3),
       duration: 1,
       flag: "ok",
+      statusLabel: "CAPTURED",
       type: "capture",
       note: "Sandbox history · Channel3 RFQ path",
       eventColor: colorFor("ok"),
@@ -433,8 +438,9 @@ export function buildOverviewSchedule(rows: WorkspacePaymentRow[]) {
         endDate: addDays(base, 1),
         duration: 1,
         flag: "late",
+        statusLabel: "APPROVED",
         type: "authorize",
-        note: `Open Payments → Pay · ${row.id.slice(0, 8)}`,
+        note: `Checkout open — needs PayPal approve / Authorize hold · ${row.id.slice(0, 8)}`,
         eventColor: colorFor("late"),
         manuallyScheduled: true,
       });
@@ -454,8 +460,9 @@ export function buildOverviewSchedule(rows: WorkspacePaymentRow[]) {
       endDate: addDays(base, -1),
       duration: 1,
       flag: "ok",
+      statusLabel: "AUTHORIZED",
       type: "authorize",
-      note: `Hold placed · ${row.id.slice(0, 8)}`,
+      note: `Authorize hold complete · ${row.id.slice(0, 8)}`,
       eventColor: colorFor("ok"),
       manuallyScheduled: true,
     });
@@ -468,9 +475,10 @@ export function buildOverviewSchedule(rows: WorkspacePaymentRow[]) {
         endDate: addDays(base, 1),
         duration: 1,
         flag: "late",
+        statusLabel: "HELD",
         type: "capture",
-        note: "Needs Mark shipped",
-        eventColor: colorFor("late"),
+        note: `Authorize hold complete — awaiting ship · ${label}`,
+        eventColor: "#2563eb",
         manuallyScheduled: true,
       });
       log.unshift({
@@ -487,8 +495,9 @@ export function buildOverviewSchedule(rows: WorkspacePaymentRow[]) {
         endDate: addDays(base, 1),
         duration: 1,
         flag: "late",
+        statusLabel: "SHIPPED",
         type: "capture",
-        note: "Needs Confirm delivery & capture",
+        note: `Shipped — awaiting owner capture · ${label}`,
         eventColor: colorFor("late"),
         manuallyScheduled: true,
       });
@@ -506,8 +515,9 @@ export function buildOverviewSchedule(rows: WorkspacePaymentRow[]) {
         endDate: addDays(base, 1),
         duration: 1,
         flag: "ok",
+        statusLabel: "CAPTURED",
         type: "capture",
-        note: "Completed negotiation payment",
+        note: `Negotiation payment complete · ${label}`,
         eventColor: colorFor("ok"),
         manuallyScheduled: true,
       });
