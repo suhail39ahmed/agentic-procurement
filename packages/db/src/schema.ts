@@ -147,9 +147,65 @@ export const disputes = pgTable("disputes", {
   status: text("status").notNull(),
   openedAt: ts("opened_at").notNull(),
   updatedAt: ts("updated_at").notNull().defaultNow(),
+  agentDraft: text("agent_draft"),
+  agentDraftAt: ts("agent_draft_at"),
+  acceptApprovedBy: text("accept_approved_by"),
+  acceptApprovedAt: ts("accept_approved_at"),
 }, (table) => ({
   orderIdIdx: index("disputes_order_id_idx").on(table.orderId),
   statusIdx: index("disputes_status_idx").on(table.status),
+}));
+
+export const supplierInvoices = pgTable("supplier_invoices", {
+  id: text("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  source: text("source").notNull(),
+  vendorName: text("vendor_name"),
+  supplierId: text("supplier_id"),
+  invoiceNumber: text("invoice_number"),
+  currency: text("currency").notNull().default("USD"),
+  amount: integer("amount").notNull(),
+  dueDate: text("due_date"),
+  lineItems: jsonb("line_items"),
+  confidence: integer("confidence").notNull().default(0),
+  lowConfidence: integer("low_confidence").notNull().default(0),
+  rawText: text("raw_text"),
+  paypalInvoiceId: text("paypal_invoice_id"),
+  status: text("status").notNull().default("EXTRACTED"),
+  matchStatus: text("match_status").notNull().default("UNMATCHED"),
+  matchNotes: text("match_notes"),
+  orderId: text("order_id"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  ownerCreatedIdx: index("supplier_invoices_owner_created_idx").on(table.ownerId, table.createdAt),
+  matchStatusIdx: index("supplier_invoices_match_status_idx").on(table.matchStatus),
+}));
+
+export const supplierReputation = pgTable("supplier_reputation", {
+  supplierId: text("supplier_id").primaryKey(),
+  onTimeScore: integer("on_time_score").notNull().default(500),
+  disputeScore: integer("dispute_score").notNull().default(500),
+  priceHonestyScore: integer("price_honesty_score").notNull().default(500),
+  ordersCounted: integer("orders_counted").notNull().default(0),
+  disputesCounted: integer("disputes_counted").notNull().default(0),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+});
+
+export const payoutBatches = pgTable("payout_batches", {
+  id: text("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  paypalBatchId: text("paypal_batch_id"),
+  status: text("status").notNull(),
+  amount: integer("amount").notNull(),
+  currency: text("currency").notNull().default("USD"),
+  invoiceId: text("invoice_id"),
+  receiver: text("receiver").notNull(),
+  note: text("note"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  ownerCreatedIdx: index("payout_batches_owner_created_idx").on(table.ownerId, table.createdAt),
 }));
 
 export const preferences = pgTable("preferences", {

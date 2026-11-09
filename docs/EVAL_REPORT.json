@@ -1,9 +1,11 @@
 {
-  "generatedAt": "2026-11-08T18:22:18.622Z",
+  "generatedAt": "2026-11-09T03:05:59.222Z",
   "scenarioCount": 50,
   "withWinner": 40,
   "avgSavingsVsListUsd": 948.89,
   "avgSavingsPct": 14.4,
+  "avgJudgeScore": 0.673,
+  "judgePromptVersion": "JUDGE_V0_heuristic",
   "policyCounts": {
     "NO_ELIGIBLE": 10,
     "ALLOW": 7,
@@ -27,7 +29,9 @@
       "policyReasons": [
         "No offer met budget and deadline"
       ],
-      "eligibleCount": 0
+      "eligibleCount": 0,
+      "judgeScore": 0.2,
+      "judgeNotes": "No eligible winner; fairness low by definition."
     },
     {
       "id": 2,
@@ -39,7 +43,9 @@
       "policyReasons": [
         "No offer met budget and deadline"
       ],
-      "eligibleCount": 0
+      "eligibleCount": 0,
+      "judgeScore": 0.2,
+      "judgeNotes": "No eligible winner; fairness low by definition."
     },
     {
       "id": 3,
@@ -51,7 +57,9 @@
       "policyReasons": [
         "No offer met budget and deadline"
       ],
-      "eligibleCount": 0
+      "eligibleCount": 0,
+      "judgeScore": 0.2,
+      "judgeNotes": "No eligible winner; fairness low by definition."
     },
     {
       "id": 4,
@@ -66,7 +74,9 @@
       "savingsPct": 15.2,
       "policy": "ALLOW",
       "policyReasons": [],
-      "eligibleCount": 2
+      "eligibleCount": 2,
+      "judgeScore": 0.9,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-a policy=ALLOW savingsPct=15.2"
     },
     {
       "id": 5,
@@ -83,7 +93,9 @@
       "policyReasons": [
         "Order total $3009 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 2
+      "eligibleCount": 2,
+      "judgeScore": 0.8,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-a policy=REQUIRE_APPROVAL savingsPct=15.7"
     },
     {
       "id": 6,
@@ -100,7 +112,9 @@
       "policyReasons": [
         "Order total $3515 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 2
+      "eligibleCount": 2,
+      "judgeScore": 0.7,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-b policy=REQUIRE_APPROVAL savingsPct=9.9"
     },
     {
       "id": 7,
@@ -117,7 +131,9 @@
       "policyReasons": [
         "Order total $3570.75 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 3
+      "eligibleCount": 3,
+      "judgeScore": 0.85,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-b policy=REQUIRE_APPROVAL savingsPct=20.4"
     },
     {
       "id": 8,
@@ -134,7 +150,9 @@
       "policyReasons": [
         "Order total $5304 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 3
+      "eligibleCount": 3,
+      "judgeScore": 0.8,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-d policy=REQUIRE_APPROVAL savingsPct=15"
     },
     {
       "id": 9,
@@ -151,7 +169,9 @@
       "policyReasons": [
         "Order total $5017 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 3
+      "eligibleCount": 3,
+      "judgeScore": 0.8,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-a policy=REQUIRE_APPROVAL savingsPct=17.6"
     },
     {
       "id": 10,
@@ -168,7 +188,9 @@
       "policyReasons": [
         "Order total $5504 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 3
+      "eligibleCount": 3,
+      "judgeScore": 0.8,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-a policy=REQUIRE_APPROVAL savingsPct=18.1"
     },
     {
       "id": 11,
@@ -185,7 +207,9 @@
       "policyReasons": [
         "Order total $4821.25 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 1
+      "eligibleCount": 1,
+      "judgeScore": 0.75,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-c policy=REQUIRE_APPROVAL savingsPct=16.5"
     },
     {
       "id": 12,
@@ -202,7 +226,9 @@
       "policyReasons": [
         "Order total $5966 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 1
+      "eligibleCount": 1,
+      "judgeScore": 0.65,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-c policy=REQUIRE_APPROVAL savingsPct=4.8"
     },
     {
       "id": 13,
@@ -214,7 +240,9 @@
       "policyReasons": [
         "No offer met budget and deadline"
       ],
-      "eligibleCount": 0
+      "eligibleCount": 0,
+      "judgeScore": 0.2,
+      "judgeNotes": "No eligible winner; fairness low by definition."
     },
     {
       "id": 14,
@@ -226,7 +254,9 @@
       "policyReasons": [
         "No offer met budget and deadline"
       ],
-      "eligibleCount": 0
+      "eligibleCount": 0,
+      "judgeScore": 0.2,
+      "judgeNotes": "No eligible winner; fairness low by definition."
     },
     {
       "id": 15,
@@ -243,7 +273,9 @@
       "policyReasons": [
         "Order total $7849 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 2
+      "eligibleCount": 2,
+      "judgeScore": 0.85,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-a policy=REQUIRE_APPROVAL savingsPct=20.5"
     },
     {
       "id": 16,
@@ -260,7 +292,9 @@
       "policyReasons": [
         "Order total $9350 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 2
+      "eligibleCount": 2,
+      "judgeScore": 0.8,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-a policy=REQUIRE_APPROVAL savingsPct=11"
     },
     {
       "id": 17,
@@ -277,7 +311,9 @@
       "policyReasons": [
         "Order total $11421.5 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 3
+      "eligibleCount": 3,
+      "judgeScore": 0.8,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-d policy=REQUIRE_APPROVAL savingsPct=10.2"
     },
     {
       "id": 18,
@@ -294,7 +330,9 @@
       "policyReasons": [
         "Order total $9198 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 3
+      "eligibleCount": 3,
+      "judgeScore": 0.8,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-b policy=REQUIRE_APPROVAL savingsPct=15.8"
     },
     {
       "id": 19,
@@ -311,7 +349,9 @@
       "policyReasons": [
         "Order total $9617 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 3
+      "eligibleCount": 3,
+      "judgeScore": 0.8,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-b policy=REQUIRE_APPROVAL savingsPct=16.4"
     },
     {
       "id": 20,
@@ -328,7 +368,9 @@
       "policyReasons": [
         "Order total $13128.5 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 3
+      "eligibleCount": 3,
+      "judgeScore": 0.8,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-d policy=REQUIRE_APPROVAL savingsPct=11.8"
     },
     {
       "id": 21,
@@ -340,7 +382,9 @@
       "policyReasons": [
         "No offer met budget and deadline"
       ],
-      "eligibleCount": 0
+      "eligibleCount": 0,
+      "judgeScore": 0.2,
+      "judgeNotes": "No eligible winner; fairness low by definition."
     },
     {
       "id": 22,
@@ -355,7 +399,9 @@
       "savingsPct": 17.4,
       "policy": "ALLOW",
       "policyReasons": [],
-      "eligibleCount": 1
+      "eligibleCount": 1,
+      "judgeScore": 0.85,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-b policy=ALLOW savingsPct=17.4"
     },
     {
       "id": 23,
@@ -370,7 +416,9 @@
       "savingsPct": 14.3,
       "policy": "ALLOW",
       "policyReasons": [],
-      "eligibleCount": 3
+      "eligibleCount": 3,
+      "judgeScore": 0.9,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-a policy=ALLOW savingsPct=14.3"
     },
     {
       "id": 24,
@@ -385,7 +433,9 @@
       "savingsPct": 18.7,
       "policy": "ALLOW",
       "policyReasons": [],
-      "eligibleCount": 3
+      "eligibleCount": 3,
+      "judgeScore": 0.9,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-b policy=ALLOW savingsPct=18.7"
     },
     {
       "id": 25,
@@ -402,7 +452,9 @@
       "policyReasons": [
         "Order total $3523.25 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 1
+      "eligibleCount": 1,
+      "judgeScore": 0.75,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-d policy=REQUIRE_APPROVAL savingsPct=13.6"
     },
     {
       "id": 26,
@@ -414,7 +466,9 @@
       "policyReasons": [
         "No offer met budget and deadline"
       ],
-      "eligibleCount": 0
+      "eligibleCount": 0,
+      "judgeScore": 0.2,
+      "judgeNotes": "No eligible winner; fairness low by definition."
     },
     {
       "id": 27,
@@ -431,7 +485,9 @@
       "policyReasons": [
         "Order total $5192.25 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 1
+      "eligibleCount": 1,
+      "judgeScore": 0.65,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-d policy=REQUIRE_APPROVAL savingsPct=5.9"
     },
     {
       "id": 28,
@@ -448,7 +504,9 @@
       "policyReasons": [
         "Order total $4550 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 2
+      "eligibleCount": 2,
+      "judgeScore": 0.8,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-a policy=REQUIRE_APPROVAL savingsPct=16.7"
     },
     {
       "id": 29,
@@ -465,7 +523,9 @@
       "policyReasons": [
         "Order total $5916 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 3
+      "eligibleCount": 3,
+      "judgeScore": 0.8,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-d policy=REQUIRE_APPROVAL savingsPct=15"
     },
     {
       "id": 30,
@@ -482,7 +542,9 @@
       "policyReasons": [
         "Order total $5536 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 3
+      "eligibleCount": 3,
+      "judgeScore": 0.8,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-a policy=REQUIRE_APPROVAL savingsPct=17.6"
     },
     {
       "id": 31,
@@ -494,7 +556,9 @@
       "policyReasons": [
         "No offer met budget and deadline"
       ],
-      "eligibleCount": 0
+      "eligibleCount": 0,
+      "judgeScore": 0.2,
+      "judgeNotes": "No eligible winner; fairness low by definition."
     },
     {
       "id": 32,
@@ -506,7 +570,9 @@
       "policyReasons": [
         "No offer met budget and deadline"
       ],
-      "eligibleCount": 0
+      "eligibleCount": 0,
+      "judgeScore": 0.2,
+      "judgeNotes": "No eligible winner; fairness low by definition."
     },
     {
       "id": 33,
@@ -523,7 +589,9 @@
       "policyReasons": [
         "Order total $6970 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 1
+      "eligibleCount": 1,
+      "judgeScore": 0.75,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-b policy=REQUIRE_APPROVAL savingsPct=12.8"
     },
     {
       "id": 34,
@@ -540,7 +608,9 @@
       "policyReasons": [
         "Order total $6831 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 3
+      "eligibleCount": 3,
+      "judgeScore": 0.7,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-c policy=REQUIRE_APPROVAL savingsPct=5.9"
     },
     {
       "id": 35,
@@ -557,7 +627,9 @@
       "policyReasons": [
         "Order total $9317.75 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 4
+      "eligibleCount": 4,
+      "judgeScore": 0.8,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-d policy=REQUIRE_APPROVAL savingsPct=17.4"
     },
     {
       "id": 36,
@@ -574,7 +646,9 @@
       "policyReasons": [
         "Order total $6800 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 4
+      "eligibleCount": 4,
+      "judgeScore": 0.8,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-c policy=REQUIRE_APPROVAL savingsPct=17.6"
     },
     {
       "id": 37,
@@ -591,7 +665,9 @@
       "policyReasons": [
         "Order total $11487.75 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 1
+      "eligibleCount": 1,
+      "judgeScore": 0.65,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-d policy=REQUIRE_APPROVAL savingsPct=9.7"
     },
     {
       "id": 38,
@@ -608,7 +684,9 @@
       "policyReasons": [
         "Order total $12068 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 1
+      "eligibleCount": 1,
+      "judgeScore": 0.75,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-d policy=REQUIRE_APPROVAL savingsPct=10.2"
     },
     {
       "id": 39,
@@ -625,7 +703,9 @@
       "policyReasons": [
         "Order total $12640.75 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 1
+      "eligibleCount": 1,
+      "judgeScore": 0.75,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-d policy=REQUIRE_APPROVAL savingsPct=10.7"
     },
     {
       "id": 40,
@@ -642,7 +722,9 @@
       "policyReasons": [
         "Order total $11408 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 2
+      "eligibleCount": 2,
+      "judgeScore": 0.8,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-a policy=REQUIRE_APPROVAL savingsPct=12.4"
     },
     {
       "id": 41,
@@ -654,7 +736,9 @@
       "policyReasons": [
         "No offer met budget and deadline"
       ],
-      "eligibleCount": 0
+      "eligibleCount": 0,
+      "judgeScore": 0.2,
+      "judgeNotes": "No eligible winner; fairness low by definition."
     },
     {
       "id": 42,
@@ -669,7 +753,9 @@
       "savingsPct": 23.3,
       "policy": "ALLOW",
       "policyReasons": [],
-      "eligibleCount": 2
+      "eligibleCount": 2,
+      "judgeScore": 0.95,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-a policy=ALLOW savingsPct=23.3"
     },
     {
       "id": 43,
@@ -684,7 +770,9 @@
       "savingsPct": 17.4,
       "policy": "ALLOW",
       "policyReasons": [],
-      "eligibleCount": 1
+      "eligibleCount": 1,
+      "judgeScore": 0.85,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-b policy=ALLOW savingsPct=17.4"
     },
     {
       "id": 44,
@@ -699,7 +787,9 @@
       "savingsPct": 18.1,
       "policy": "ALLOW",
       "policyReasons": [],
-      "eligibleCount": 2
+      "eligibleCount": 2,
+      "judgeScore": 0.9,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-b policy=ALLOW savingsPct=18.1"
     },
     {
       "id": 45,
@@ -716,7 +806,9 @@
       "policyReasons": [
         "Order total $2694.5 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 3
+      "eligibleCount": 3,
+      "judgeScore": 0.8,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-b policy=REQUIRE_APPROVAL savingsPct=18.7"
     },
     {
       "id": 46,
@@ -733,7 +825,9 @@
       "policyReasons": [
         "Order total $3560 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 3
+      "eligibleCount": 3,
+      "judgeScore": 0.8,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-a policy=REQUIRE_APPROVAL savingsPct=15.2"
     },
     {
       "id": 47,
@@ -750,7 +844,9 @@
       "policyReasons": [
         "Order total $5221 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 4
+      "eligibleCount": 4,
+      "judgeScore": 0.7,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-d policy=REQUIRE_APPROVAL savingsPct=5.4"
     },
     {
       "id": 48,
@@ -767,7 +863,9 @@
       "policyReasons": [
         "Order total $3672.5 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 4
+      "eligibleCount": 4,
+      "judgeScore": 0.8,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-c policy=REQUIRE_APPROVAL savingsPct=14.4"
     },
     {
       "id": 49,
@@ -784,7 +882,9 @@
       "policyReasons": [
         "Order total $5952.25 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 1
+      "eligibleCount": 1,
+      "judgeScore": 0.75,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-d policy=REQUIRE_APPROVAL savingsPct=14.5"
     },
     {
       "id": 50,
@@ -801,7 +901,9 @@
       "policyReasons": [
         "Order total $6528 exceeds approval threshold $2500"
       ],
-      "eligibleCount": 1
+      "eligibleCount": 1,
+      "judgeScore": 0.75,
+      "judgeNotes": "JUDGE_V0_heuristic: winner=seller-d policy=REQUIRE_APPROVAL savingsPct=15"
     }
   ]
 }

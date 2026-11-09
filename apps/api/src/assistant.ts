@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { chat } from "ai";
+import { chatWithTools, type ChatMessage, type ToolCall } from "ai";
+import { getPayPalToolkit } from "./paypal-toolkit";
 
 export const assistantRouter = Router();
 
@@ -31,26 +32,49 @@ assistantRouter.post("/chat", async (req, res) => {
   const context = typeof req.body?.context === "string" ? req.body.context.trim().slice(0, 4000) : "";
 
   try {
-    const result = await chat("buyer", [
+    const toolkit = getPayPalToolkit("assistant");
+    const tools = toolkit.getTools();
+
+    const messages: ChatMessage[] = [
       {
         role: "system",
         content: [
           "You are ProcureAI's buying assistant for an owner-controlled procurement workspace.",
-          "Help clarify requirements, compare supplier trade-offs, and explain authorize-then-capture payments.",
-          "Never claim you can capture PayPal funds yourself. Owner must confirm delivery before capture.",
-          "Keep answers concise and practical. Prefer USD and clear next steps.",
+          "You can call PayPal Agent Toolkit tools for sandbox invoices, order lookup, dispute list/get, shipments, and transactions.",
+          "Never call accept_dispute_claim — that requires a separate owner-approved API action.",
+          "Never claim you can capture procurement holds yourself. Owner confirms delivery before capture.",
+          "For client invoicing, prefer create_invoice then send_invoice when the user asks to bill a sandbox client.",
+          "Keep answers concise. Prefer USD and clear next steps.",
           context ? `Current workspace context:\n${context}` : "",
         ].filter(Boolean).join("\n"),
       },
-      ...safeHistory.map((turn) => ({ role: turn.role, content: turn.content })),
+      ...safeHistory.map((turn) => ({ role: turn.role as "user" | "assistant", content: turn.content })),
       { role: "user", content: message },
-    ]);
+    ];
+
+    const result = await chatWithTools(
+      "buyer",
+      messages,
+      tools,
+      async (call: ToolCall) => {
+        const toolResult = await toolkit.handleToolCall(call);
+        return typeof toolResult.content === "string"
+          ? toolResult.content
+          : JSON.stringify(toolResult.content);
+      },
+      { maxSteps: 5, timeoutMs: 90_000 },
+    );
 
     return res.json({
-      reply: result.content,
+      reply: result.content || (result.toolTrace.length
+        ? `Completed PayPal Toolkit steps: ${result.toolTrace.map((t) => t.name).join(", ")}`
+        : "No reply generated."),
       model: result.model,
       usage: result.usage,
       latencyMs: result.latencyMs,
+      toolkitSteps: result.steps,
+      toolkitTrace: result.toolTrace,
+      toolkit: "paypal-agent-toolkit/openai",
     });
   } catch (err) {
     console.error("[assistant] chat failed", err);

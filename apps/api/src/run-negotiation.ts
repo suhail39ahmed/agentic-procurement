@@ -1,6 +1,7 @@
 import {
   claimNegotiationRun,
   getNegotiationForOwner,
+  listSupplierReputation,
   updateNegotiationRun,
   type Negotiation,
   type NegotiationPriority,
@@ -60,6 +61,14 @@ export async function runNegotiation(ownerId: string, id: string): Promise<void>
   };
 
   try {
+    let reputation: Record<string, { onTimeScore?: number; disputeScore?: number; priceHonestyScore?: number }> = {};
+    try {
+      const rows = await listSupplierReputation();
+      reputation = Object.fromEntries(rows.map((row) => [row.supplierId, row]));
+    } catch {
+      // reputation table may not be migrated yet on older deploys
+    }
+
     const result = await negotiate(
       toRfq(claimed),
       sellers,
@@ -68,6 +77,7 @@ export async function runNegotiation(ownerId: string, id: string): Promise<void>
         persistLive([...liveEvents]);
       },
       priorityWeights[claimed.priority],
+      reputation,
     );
     await persistChain;
     const serialized = JSON.parse(JSON.stringify(result));

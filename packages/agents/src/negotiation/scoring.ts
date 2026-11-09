@@ -25,10 +25,17 @@ export function normalizeWeights(weights: Weights): Weights {
   return { price: share, speed: Math.round((1 - share) * 100) / 100 };
 }
 
+export type ReputationLookup = Record<string, {
+  onTimeScore?: number;
+  disputeScore?: number;
+  priceHonestyScore?: number;
+}>;
+
 export function scoreOffers(
   rfq: RfqMessage,
   offers: OfferMessage[],
-  weights: Weights = DEFAULT_WEIGHTS
+  weights: Weights = DEFAULT_WEIGHTS,
+  reputation: ReputationLookup = {},
 ): ScoredOffer[] {
   if (offers.length === 0) return [];
 
@@ -46,7 +53,15 @@ export function scoreOffers(
       const speedScore = normalize(offer.leadTimeDays, minLead, maxLead);
       const meetsDeadline = offer.leadTimeDays <= rfq.neededByDays;
       const withinBudget = offer.unitPrice <= rfq.maxUnitPrice;
-      const score = Math.round((weights.price * priceScore + weights.speed * speedScore) * 1000) / 1000;
+      const rep = reputation[offer.from];
+      const reputationBoost = rep
+        ? 0.1 * (
+          ((rep.onTimeScore ?? 0.5) + (rep.disputeScore ?? 0.5) + (rep.priceHonestyScore ?? 0.5)) / 3
+        )
+        : 0;
+      const score = Math.round(
+        (weights.price * priceScore + weights.speed * speedScore + reputationBoost) * 1000,
+      ) / 1000;
       return { offer, score, priceScore, speedScore, meetsDeadline, withinBudget };
     })
     .sort((a, b) => {

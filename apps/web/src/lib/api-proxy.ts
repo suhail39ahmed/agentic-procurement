@@ -16,16 +16,16 @@ export async function proxyToApi(
     return NextResponse.json({ error: "Server configuration is missing" }, { status: 503 });
   }
 
-  const { timeoutMs = 30_000, headers, ...rest } = init;
   try {
     const response = await fetch(new URL(path, config.baseUrl), {
-      ...rest,
+      ...init,
       headers: {
         "x-owner-key": config.ownerKey,
-        ...(headers ?? {}),
+        ...(init.body ? { "content-type": "application/json" } : {}),
+        ...init.headers,
       },
       cache: "no-store",
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: AbortSignal.timeout(init.timeoutMs ?? 60_000),
     });
     const text = await response.text();
     return new NextResponse(text, {
@@ -33,7 +33,7 @@ export async function proxyToApi(
       headers: { "content-type": response.headers.get("content-type") ?? "application/json" },
     });
   } catch (err) {
-    console.error("[web] api proxy failed", path, err);
+    console.error(`[web] proxy ${path} failed`, err);
     return NextResponse.json({ error: "Upstream API unavailable" }, { status: 502 });
   }
 }

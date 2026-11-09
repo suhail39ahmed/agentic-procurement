@@ -2,7 +2,9 @@
   "name": "agents",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "demo": "tsx src/demos/demo.ts",
     "seller-demo": "tsx src/demos/seller-demo.ts",
@@ -16,9 +18,10 @@
     "test:persistence": "tsx src/tests/persistence.test.ts"
   },
   "dependencies": {
+    "@paypal/agent-toolkit": "^1.11.0",
     "ai": "workspace:*",
-    "paypal": "workspace:*",
     "db": "workspace:*",
+    "paypal": "workspace:*",
     "zod": "^4.6.6"
   },
   "devDependencies": {
