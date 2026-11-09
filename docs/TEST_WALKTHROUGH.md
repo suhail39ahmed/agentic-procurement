@@ -17,7 +17,7 @@ Use this RFQ so the story is clear for the video and for you:
 | **Needed within** | 30 days |
 | **Priority** | Lowest cost |
 
-**Why this:** total can stay under the $250 auto-allow band if unit prices stay near budget; sellers will counter; you get a real AG Grid comparison.
+**Why this:** sellers counter on chairs; Channel3 sticky-note RFQs stay under the **$20** auto-allow band; chair checkouts hit **REQUIRE_APPROVAL** (>$20).
 
 *(Optional later: Channel3 “office sticky notes” for a catalog-sourced RFQ — fine for a second run.)*
 
@@ -128,11 +128,11 @@ Do this only after Part 3 succeeded and you have an eligible winner.
 
 ---
 
-## Part 7 — Human approval (>$250) — optional
+## Part 7 — Human approval (>$20) — optional
 
 | Step | You do | You should see |
 |---|---|---|
-| 7.1 | New RFQ with total clearly **over $250** (e.g. qty 12 × max $180 = $2160 potential) | Negotiation may complete, but payment path hits **REQUIRE_APPROVAL** — not auto-pay |
+| 7.1 | Checkout a chair RFQ (total clearly **over $20**) | Policy **REQUIRE_APPROVAL** then owner approve → Pay becomes available |
 | 7.2 | Confirm money does **not** move without owner approval | No silent capture |
 
 ---

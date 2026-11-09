@@ -41,11 +41,11 @@ If A1 fails on hosted: confirm Render **API** has `AZURE_AI_ENDPOINT`, `AZURE_AI
 | S2.3 | **Authorize hold** | Order status **HELD** (not captured) |
 | S2.4 | Mark shipped → **Confirm delivery / capture** | Status **CAPTURED** |
 
-### S3 — Human approval (>$250)
+### S3 — Human approval (>$20)
 
 | Case | Steps | Pass if |
 |---|---|---|
-| S3.1 | Queue RFQ whose total can exceed **$250** (qty × max unit) | Policy **REQUIRE_APPROVAL** — does **not** auto-pay |
+| S3.1 | Checkout RFQ whose order total exceeds **$20** (qty × unit) | Policy **REQUIRE_APPROVAL** — owner gate before pay |
 | S3.2 | Approve as owner (UI/API approval path) | Only then mandate / checkout can proceed |
 
 ### S4 — Payables
