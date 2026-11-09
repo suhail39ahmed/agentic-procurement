@@ -81,10 +81,10 @@ You run a small business buying supplies.
    - Quantity `1` (or more), max unit about `$180`, needed within `30` days.  
 3. **Review** → **Queue negotiation**.  
 4. When offers are ready, open **Supplier offers** → **Checkout**.  
-5. System asks for **owner approval** because the total is over **$20**.  
-6. Approve as the owner, then continue PayPal approve → hold.
+5. On **Payments**, you should see **Owner approval required** (not PayPal yet) because the total is over **$20**.  
+6. Click **Approve as owner**, then PayPal approve → hold.
 
-**You should see:** Payment does not silently go through without your approval.
+**You should see:** No PayPal buttons until you approve. A ~$90–$100 order must stop at owner approval first.
 
 ---
 

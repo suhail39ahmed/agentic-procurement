@@ -369,6 +369,15 @@ export default function Dashboard() {
     captureId?: string;
     tracking?: { carrier: string; number: string };
   } | null>(null);
+  const [pendingOwnerApproval, setPendingOwnerApproval] = useState<{
+    negotiationId: string;
+    approvalId: string;
+    orderTotal: number;
+    unitPrice: number;
+    supplierId: string;
+    reasons: string[];
+    threshold: number;
+  } | null>(null);
   const [search, setSearch] = useState("");
   const [offerSearch, setOfferSearch] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -1233,7 +1242,7 @@ export default function Dashboard() {
       return;
     }
     setOrderBusy(true);
-    setNotice("Creating PayPal authorize order from the winning offer…");
+    setNotice("Checking policy and creating checkout…");
     try {
       const response = await fetch(`/api/negotiations/${encodeURIComponent(activeNegotiationId)}/checkout`, {
         method: "POST",
@@ -1246,11 +1255,38 @@ export default function Dashboard() {
         approveUrl?: string;
         amount?: string;
         supplierId?: string;
+        needsOwnerApproval?: boolean;
+        note?: string;
+        policy?: string;
+        approval?: {
+          approvalId: string;
+          orderTotal: number;
+          unitPrice: number;
+          supplierId: string;
+          reasons: string[];
+          threshold: number;
+        };
       };
-      if (!response.ok) {
+      if (!response.ok && response.status !== 202) {
         setNotice(payload.error ?? `Checkout failed (${response.status}).`);
         return;
       }
+      if (payload.needsOwnerApproval && payload.approval) {
+        setPendingOwnerApproval({
+          negotiationId: activeNegotiationId,
+          approvalId: payload.approval.approvalId,
+          orderTotal: payload.approval.orderTotal,
+          unitPrice: payload.approval.unitPrice,
+          supplierId: payload.approval.supplierId,
+          reasons: payload.approval.reasons,
+          threshold: payload.approval.threshold,
+        });
+        setActiveOrder(null);
+        setNotice(payload.note ?? `Owner approval required — total above $${payload.approval.threshold}.`);
+        setView("Payments & orders");
+        return;
+      }
+      setPendingOwnerApproval(null);
       setActiveOrder({
         orderId: payload.orderId ?? "",
         status: payload.status ?? "APPROVED",
@@ -1259,10 +1295,65 @@ export default function Dashboard() {
         amount: payload.amount,
         supplierId: payload.supplierId,
       });
-      setNotice("Checkout created. Use Pay with PayPal (popup) as the sandbox buyer, then we authorize the hold.");
+      setNotice(
+        payload.policy === "ALLOW"
+          ? "Auto-allowed (≤ threshold). Use Pay with PayPal as the sandbox buyer — hold follows approve."
+          : "Checkout created. Use Pay with PayPal (popup) as the sandbox buyer, then we authorize the hold.",
+      );
       setView("Payments & orders");
     } catch {
       setNotice("Checkout failed. Check API/PayPal sandbox configuration.");
+    } finally {
+      setOrderBusy(false);
+    }
+  }
+
+  async function decideOwnerCheckout(approve: boolean) {
+    if (!pendingOwnerApproval || orderBusy) return;
+    setOrderBusy(true);
+    setNotice(approve ? "Recording owner approval…" : "Recording owner denial…");
+    try {
+      const response = await fetch(
+        `/api/negotiations/${encodeURIComponent(pendingOwnerApproval.negotiationId)}/checkout/owner-decide`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ approve }),
+        },
+      );
+      const payload = await response.json().catch(() => ({})) as {
+        error?: string;
+        denied?: boolean;
+        note?: string;
+        orderId?: string;
+        status?: string;
+        paypalOrderId?: string;
+        approveUrl?: string;
+        amount?: string;
+        supplierId?: string;
+      };
+      if (!response.ok) {
+        setNotice(payload.error ?? `Owner decision failed (${response.status}).`);
+        return;
+      }
+      if (payload.denied) {
+        setPendingOwnerApproval(null);
+        setNotice(payload.note ?? "Owner denied — no PayPal checkout.");
+        return;
+      }
+      setPendingOwnerApproval(null);
+      setActiveOrder({
+        orderId: payload.orderId ?? "",
+        status: payload.status ?? "APPROVED",
+        paypalOrderId: payload.paypalOrderId ?? paypalOrderIdFromApproveUrl(payload.approveUrl),
+        approveUrl: payload.approveUrl,
+        amount: payload.amount,
+        supplierId: payload.supplierId,
+      });
+      setNotice("Owner approved. Use Pay with PayPal as the sandbox buyer — hold follows approve.");
+      setView("Payments & orders");
+    } catch {
+      setNotice("Owner decision failed.");
     } finally {
       setOrderBusy(false);
     }
@@ -1494,7 +1585,7 @@ export default function Dashboard() {
                       <li>Channel3 = live catalog prices (not Postgres). Postgres stores the RFQ only after Queue.</li>
                       <li>Sellers scale offers to your max unit price — sticky-note ceilings and chair budgets both work.</li>
                       <li><em>Eligible = Yes</em> means within budget and needed-by days. Checkout uses the best eligible winner.</li>
-                      <li>Order total ≤ <em>$20</em> → auto ALLOW. Above <em>$20</em> → REQUIRE_APPROVAL before Pay.</li>
+                      <li>Order total ≤ <em>$20</em> → auto ALLOW (no owner click). Above <em>$20</em> → Payments shows <em>Approve as owner</em> before PayPal.</li>
                       <li>Authorize holds funds; capture only after ship + owner confirm. AI never captures alone.</li>
                       <li>Old Supplier offers rows are frozen snapshots — always open a <em>new</em> SUCCEEDED negotiation after deploys.</li>
                     </ul>
@@ -2157,7 +2248,7 @@ export default function Dashboard() {
             <p className={s.flowCaption}>Live sandbox lifecycle · AI never captures by itself</p>
             <ol className={s.paymentFlow}>
               {[
-                { title: "Owner approval", detail: "Checkout issues mandate + PayPal order", active: Boolean(activeOrder) },
+                { title: "Owner approval", detail: "Required when total > $20; ≤$20 auto-allows", active: Boolean(activeOrder) || Boolean(pendingOwnerApproval) },
                 { title: "Funds held", detail: "Authorized, not captured", active: activeOrder?.status === "HELD" || activeOrder?.status === "SHIPPED" || activeOrder?.status === "CAPTURED" },
                 { title: "Seller ships", detail: "Carrier and tracking recorded", active: activeOrder?.status === "SHIPPED" || activeOrder?.status === "CAPTURED" },
                 { title: "Owner confirms", detail: "Capture after delivery", active: activeOrder?.status === "CAPTURED" },
@@ -2166,6 +2257,35 @@ export default function Dashboard() {
                 <div><strong>{step.title}</strong><small>{step.detail}{step.active ? " · done/current" : ""}</small></div>
               </li>)}
             </ol>
+
+            {view === "Payments & orders" && pendingOwnerApproval && (
+              <div className={s.reviewPanel}>
+                <div className={s.sectionHeader}>
+                  <div>
+                    <h3>Owner approval required</h3>
+                    <p className={s.description}>
+                      Order total ${pendingOwnerApproval.orderTotal.toFixed(2)} is above the ${pendingOwnerApproval.threshold} auto-allow threshold.
+                      Approve to create the PayPal hold order, or deny to stop.
+                    </p>
+                  </div>
+                  <span className={s.pending}>PENDING</span>
+                </div>
+                <dl className={s.summaryList}>
+                  <div><dt>Supplier</dt><dd>{pendingOwnerApproval.supplierId}</dd></div>
+                  <div><dt>Unit price</dt><dd>${pendingOwnerApproval.unitPrice.toFixed(2)}</dd></div>
+                  <div><dt>Order total</dt><dd>${pendingOwnerApproval.orderTotal.toFixed(2)} USD</dd></div>
+                  <div><dt>Policy</dt><dd>{pendingOwnerApproval.reasons.join("; ") || "Above approval threshold"}</dd></div>
+                </dl>
+                <div className={s.reviewActions}>
+                  <button type="button" className={s.secondary} disabled={orderBusy} onClick={() => void decideOwnerCheckout(false)}>
+                    Deny
+                  </button>
+                  <button type="button" className={s.primary} disabled={orderBusy} onClick={() => void decideOwnerCheckout(true)}>
+                    Approve as owner <ArrowRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {view === "Payments & orders" && (
               <div className={s.paymentInbox}>
@@ -2312,7 +2432,7 @@ export default function Dashboard() {
               </div>
             )}
 
-            {view === "Payments & orders" && !activeOrder && paymentNeedsAttention.length === 0 && <div className={s.empty}>
+            {view === "Payments & orders" && !activeOrder && !pendingOwnerApproval && paymentNeedsAttention.length === 0 && <div className={s.empty}>
               <span className={s.emptyIcon}><Package size={26} /></span><h3>No open payment work</h3>
               <p>Checkout a winning offer from Supplier offers, or resume an APPROVED row from Negotiations.</p>
             </div>}

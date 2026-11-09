@@ -40,6 +40,16 @@ type CheckoutState = {
   lastStatus?: string;
 };
 
+type PendingOwnerApproval = {
+  approvalId: string;
+  orderTotal: number;
+  unitPrice: number;
+  supplierId: string;
+  reasons: string[];
+  status: "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
+  threshold: number;
+};
+
 function requireOwner(req: { header: (name: string) => string | undefined }): string | null {
   const ownerKey = process.env.OWNER_API_KEY;
   const ownerId = process.env.OWNER_ID;
@@ -108,8 +118,108 @@ async function mergeCheckout(row: Negotiation, ownerId: string, checkout: Checko
     id: row.id,
     ownerId,
     status: row.status,
-    result: { ...base, checkout },
+    result: { ...base, checkout, pendingOwnerApproval: undefined },
   });
+}
+
+function pendingFromResult(result: unknown): PendingOwnerApproval | null {
+  if (!result || typeof result !== "object") return null;
+  const pending = (result as { pendingOwnerApproval?: unknown }).pendingOwnerApproval;
+  if (!pending || typeof pending !== "object") return null;
+  const p = pending as Partial<PendingOwnerApproval>;
+  if (!p.approvalId || p.orderTotal == null || !p.supplierId) return null;
+  return p as PendingOwnerApproval;
+}
+
+async function mergePendingApproval(
+  row: Negotiation,
+  ownerId: string,
+  pending: PendingOwnerApproval | null,
+): Promise<void> {
+  const base = row.result && typeof row.result === "object" ? row.result as Record<string, unknown> : {};
+  await updateNegotiationRun({
+    id: row.id,
+    ownerId,
+    status: row.status,
+    result: { ...base, pendingOwnerApproval: pending ?? undefined },
+  });
+}
+
+async function completeCheckoutWithApproval(
+  row: Negotiation,
+  ownerId: string,
+  approval: ApprovalRequest | undefined,
+) {
+  const ranking = rankingFromResult(row.result);
+  const winner = batna(ranking);
+  if (!winner) throw new Error("No eligible winning offer to checkout");
+  const rfq = rfqFromNegotiation(row);
+  const decision = evaluatePolicy(rfq, winner);
+  if (decision.outcome === "DENY") {
+    throw new Error(decision.reasons.join("; "));
+  }
+  if (decision.outcome === "REQUIRE_APPROVAL") {
+    if (!approval || approval.status !== "APPROVED") {
+      throw new Error("Owner approval required before PayPal checkout");
+    }
+  }
+
+  const mandateToken = await issueMandate(rfq.rfqId, decision, approval);
+  const expected = {
+    rfqId: rfq.rfqId,
+    supplierId: decision.supplierId,
+    amount: decision.orderTotal.toFixed(2),
+  };
+  const intent = await createPaymentOrder(mandateToken, expected);
+
+  let order = createOrder({
+    id: intent.mandate.jti,
+    rfqId: rfq.rfqId,
+    supplierId: decision.supplierId,
+    amount: decision.orderTotal,
+    currency: "USD",
+    paypalOrderId: intent.orderId,
+  });
+  if (approval) {
+    order = transition(order, "REQUIRE_APPROVAL", "policy-engine");
+    order = transition(order, "APPROVE", approval.decidedBy ?? ownerActor(ownerId));
+  } else {
+    order = transition(order, "APPROVE", "policy-engine");
+  }
+  await saveOrder(order);
+
+  const checkout: CheckoutState = {
+    mandateToken,
+    paypalOrderId: intent.orderId,
+    approveUrl: intent.approveUrl,
+    orderId: order.id,
+    amount: expected.amount,
+    supplierId: decision.supplierId,
+    rfqId: rfq.rfqId,
+    mandate: intent.mandate,
+    approvalId: approval?.id,
+    lastStatus: order.status,
+  };
+  await mergeCheckout(row, ownerId, checkout);
+
+  return {
+    negotiationId: row.id,
+    orderId: order.id,
+    status: order.status,
+    paypalOrderId: intent.orderId,
+    approveUrl: intent.approveUrl,
+    amount: expected.amount,
+    supplierId: decision.supplierId,
+    winner: {
+      supplier: (winner.offer as OfferMessage).from,
+      unitPrice: winner.offer.unitPrice,
+      leadTimeDays: winner.offer.leadTimeDays,
+      score: winner.score,
+    },
+    policy: decision.outcome,
+    reuse: false,
+    note: "Owner approved (or auto-allowed). Use Pay with PayPal, then funds go on hold.",
+  };
 }
 
 checkoutRouter.post("/negotiations/:id/checkout", async (req, res) => {
@@ -139,6 +249,17 @@ checkoutRouter.post("/negotiations/:id/checkout", async (req, res) => {
       });
     }
 
+    const existingPending = pendingFromResult(row.result);
+    if (existingPending?.status === "PENDING") {
+      return res.status(202).json({
+        negotiationId: row.id,
+        needsOwnerApproval: true,
+        policy: "REQUIRE_APPROVAL",
+        approval: existingPending,
+        note: `Order total $${existingPending.orderTotal.toFixed(2)} is above $${existingPending.threshold} — owner must approve before PayPal.`,
+      });
+    }
+
     const ranking = rankingFromResult(row.result);
     const winner = batna(ranking);
     if (!winner) return res.status(409).json({ error: "No eligible winning offer to checkout" });
@@ -149,66 +270,77 @@ checkoutRouter.post("/negotiations/:id/checkout", async (req, res) => {
       return res.status(409).json({ error: decision.reasons.join("; "), policy: decision.outcome });
     }
 
-    let approval: ApprovalRequest | undefined;
     if (decision.outcome === "REQUIRE_APPROVAL") {
-      approval = await requestApproval(rfq, winner, decision);
-      approval = await decide(approval.id, ownerActor(ownerId), true, "Approved from dashboard checkout");
+      const approval = await requestApproval(rfq, winner, decision);
+      const pending: PendingOwnerApproval = {
+        approvalId: approval.id,
+        orderTotal: decision.orderTotal,
+        unitPrice: winner.offer.unitPrice,
+        supplierId: decision.supplierId,
+        reasons: decision.reasons,
+        status: "PENDING",
+        threshold: Number(process.env.POLICY_APPROVAL_THRESHOLD ?? 20),
+      };
+      await mergePendingApproval(row, ownerId, pending);
+      return res.status(202).json({
+        negotiationId: row.id,
+        needsOwnerApproval: true,
+        policy: "REQUIRE_APPROVAL",
+        approval: pending,
+        note: `Order total $${decision.orderTotal.toFixed(2)} exceeds $${pending.threshold} — approve as owner before PayPal checkout.`,
+      });
     }
 
-    const mandateToken = await issueMandate(rfq.rfqId, decision, approval);
-    const expected = {
-      rfqId: rfq.rfqId,
-      supplierId: decision.supplierId,
-      amount: decision.orderTotal.toFixed(2),
-    };
-    const intent = await createPaymentOrder(mandateToken, expected);
-
-    let order = createOrder({
-      id: intent.mandate.jti,
-      rfqId: rfq.rfqId,
-      supplierId: decision.supplierId,
-      amount: decision.orderTotal,
-      currency: "USD",
-      paypalOrderId: intent.orderId,
-    });
-    order = transition(order, approval ? "REQUIRE_APPROVAL" : "APPROVE", "policy-engine");
-    if (approval) order = transition(order, "APPROVE", approval.decidedBy ?? ownerActor(ownerId));
-    await saveOrder(order);
-
-    const checkout: CheckoutState = {
-      mandateToken,
-      paypalOrderId: intent.orderId,
-      approveUrl: intent.approveUrl,
-      orderId: order.id,
-      amount: expected.amount,
-      supplierId: decision.supplierId,
-      rfqId: rfq.rfqId,
-      mandate: intent.mandate,
-      approvalId: approval?.id,
-      lastStatus: order.status,
-    };
-    await mergeCheckout(row, ownerId, checkout);
-
-    return res.status(201).json({
-      negotiationId: row.id,
-      orderId: order.id,
-      status: order.status,
-      paypalOrderId: intent.orderId,
-      approveUrl: intent.approveUrl,
-      amount: expected.amount,
-      supplierId: decision.supplierId,
-      winner: {
-        supplier: (winner.offer as OfferMessage).from,
-        unitPrice: winner.offer.unitPrice,
-        leadTimeDays: winner.offer.leadTimeDays,
-        score: winner.score,
-      },
-      policy: decision.outcome,
-      reuse: false,
-      note: "Approve with the in-app PayPal button (popup), then Authorize hold — or use approveUrl as fallback.",
-    });
+    const payload = await completeCheckoutWithApproval(row, ownerId, undefined);
+    return res.status(201).json(payload);
   } catch (err) {
     console.error("[checkout] create failed", err);
+    return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+checkoutRouter.post("/negotiations/:id/checkout/owner-decide", async (req, res) => {
+  const ownerId = requireOwner(req);
+  if (!ownerId) return res.sendStatus(404);
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: "Database unavailable" });
+
+  const approve = req.body?.approve === true;
+  const note = typeof req.body?.note === "string" ? req.body.note.slice(0, 300) : undefined;
+
+  try {
+    const row = await getNegotiationForOwner(ownerId, req.params.id);
+    if (!row) return res.sendStatus(404);
+    const pending = pendingFromResult(row.result);
+    if (!pending || pending.status !== "PENDING") {
+      return res.status(409).json({ error: "No pending owner approval for this negotiation" });
+    }
+
+    const decided = await decide(
+      pending.approvalId,
+      ownerActor(ownerId),
+      approve,
+      note ?? (approve ? "Owner approved from dashboard" : "Owner denied from dashboard"),
+    );
+
+    if (!approve) {
+      await mergePendingApproval(row, ownerId, { ...pending, status: "REJECTED" });
+      return res.json({
+        negotiationId: row.id,
+        needsOwnerApproval: false,
+        denied: true,
+        approval: { ...pending, status: "REJECTED" as const },
+        note: "Owner denied — PayPal checkout was not created.",
+      });
+    }
+
+    const payload = await completeCheckoutWithApproval(row, ownerId, decided);
+    return res.status(201).json({
+      ...payload,
+      needsOwnerApproval: false,
+      ownerApproved: true,
+    });
+  } catch (err) {
+    console.error("[checkout] owner-decide failed", err);
     return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
 });
