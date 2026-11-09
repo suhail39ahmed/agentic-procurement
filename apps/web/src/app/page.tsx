@@ -380,6 +380,7 @@ export default function Dashboard() {
   const [streamStatus, setStreamStatus] = useState("");
   const [boundStreamKey, setBoundStreamKey] = useState("");
   const briefRef = useRef<HTMLTextAreaElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLButtonElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -706,6 +707,7 @@ export default function Dashboard() {
         return;
       }
       setChatMessages((current) => [...current, { role: "assistant", content: payload.reply! }]);
+      requestAnimationFrame(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }));
     } catch {
       setChatError("Assistant unreachable. Is the API running with Azure AI env vars?");
     } finally {
@@ -1457,7 +1459,7 @@ export default function Dashboard() {
               </div>
               <div className={s.assistantBody}>
                 {chatMessages.length === 0 ? (
-                  <>
+                  <div className={s.assistantEmpty}>
                     <div className={s.orb}><Bot size={31} /></div>
                     <h3>Less back-and-forth.<br />More informed decisions.</h3>
                     <p>Ask about briefs, supplier trade-offs, or the authorize → capture payment path.</p>
@@ -1466,7 +1468,7 @@ export default function Dashboard() {
                         <div key={text}><Check size={13} /><span>{text}</span></div>
                       )}
                     </div>
-                  </>
+                  </div>
                 ) : (
                   <div className={s.chatLog} aria-live="polite">
                     {chatMessages.map((turn, index) => (
@@ -1475,6 +1477,7 @@ export default function Dashboard() {
                         <p>{turn.content}</p>
                       </div>
                     ))}
+                    <div ref={chatEndRef} />
                   </div>
                 )}
                 {chatError && <p className={s.fieldError} role="alert">{chatError}</p>}
