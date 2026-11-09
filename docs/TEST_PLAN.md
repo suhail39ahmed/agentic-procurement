@@ -92,11 +92,13 @@ Negative case:
 - [ ] **Draft response** stores agent draft; **Approve accept_dispute_claim** requires draft + `{approved:true}`
 - [ ] `pnpm --filter paypal mcp` starts MCP server (stdio) with sandbox token
 
-## 5d. Partners (Automation)
+## 5d. Partners + payables smoke
 
-- [ ] Channel3 enrich (or “not configured” notice if no key)
+- [ ] Overview: Channel3 **Use for RFQ** fills brief ≤$2 → Review → **Queue negotiation** (sellers see Channel3 product RFQ)
+- [ ] Automation: Channel3 enrich also loads Overview RFQ
 - [ ] Bryntum timeline shows delivery / replenish / dues
-- [ ] KERNEL fetch page text (direct fallback without key)
+- [ ] KERNEL fetch → opens **Payables** with page text → **Extract** (or paste sample invoice text with no URL)
+- [ ] Payables: Extract → Match (PO/receipt ≈ $1.50) → Payout · optional Client invoice
 
 
 ---

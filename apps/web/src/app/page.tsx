@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "rea
 import {
   ArrowRight, ArrowUpRight, Bot, Check, ChevronRight,
   CreditCard, FileText, Layers3, LayoutDashboard,
-  Maximize2, Menu, Minimize2, Package, Plus,
+  Maximize2, Menu, Minimize2, Package, PackageSearch, Plus,
   RefreshCw, Search, Send, ShieldCheck, Sparkles, Wallet, X,
 } from "lucide-react";
 import { AgGridReact } from "ag-grid-react";
@@ -369,6 +369,9 @@ export default function Dashboard() {
   const [offerSearch, setOfferSearch] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [notice, setNotice] = useState(paypalBoot.notice);
+  const [channel3Busy, setChannel3Busy] = useState(false);
+  const [channel3Query, setChannel3Query] = useState("office sticky notes pack");
+  const [payablesSeed, setPayablesSeed] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -737,6 +740,62 @@ export default function Dashboard() {
     setPendingDraft(null);
     setNotice("Demo request loaded. Review draft, then Queue negotiation to run buyer/seller agents.");
     requestAnimationFrame(() => briefRef.current?.focus());
+  }
+
+  /** Channel3 catalog → Overview RFQ fields (sellers negotiate this brief after Queue). */
+  async function enrichRfqFromChannel3(queryOverride?: string) {
+    const query = (queryOverride ?? channel3Query).trim();
+    if (!query || channel3Busy) return;
+    setChannel3Busy(true);
+    try {
+      const response = await fetch("/api/sponsors/channel3/search", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query, maxPrice: 2 }),
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        error?: string;
+        note?: string;
+        configured?: boolean;
+        suggestion?: {
+          brief: string;
+          quantity: number;
+          maxUnitPrice: string;
+          neededByDays: number;
+          priority?: Priority;
+        } | null;
+      };
+      if (!response.ok) {
+        setNotice(payload.error ?? "Channel3 search failed.");
+        return;
+      }
+      if (!payload.configured) {
+        setNotice(payload.note ?? "CHANNEL3_API_KEY not set on the API.");
+        return;
+      }
+      if (!payload.suggestion) {
+        setNotice(payload.note ?? "No Channel3 products under $2 for that query — try another.");
+        return;
+      }
+      setFields({
+        brief: payload.suggestion.brief,
+        priority: "balanced",
+        quantity: String(payload.suggestion.quantity),
+        maxUnitPrice: payload.suggestion.maxUnitPrice,
+        currency: "USD",
+        neededByDays: String(payload.suggestion.neededByDays),
+      });
+      setFieldErrors({});
+      setComposerMode("compose");
+      setPendingDraft(null);
+      setView("Overview");
+      setNotice(
+        `${payload.note ?? "Channel3 hit"} · RFQ loaded. Review draft → Queue negotiation so sellers quote this product.`,
+      );
+      requestAnimationFrame(() => briefRef.current?.focus());
+    } finally {
+      setChannel3Busy(false);
+    }
   }
 
   async function seedDemoWorkspace() {
@@ -1201,13 +1260,35 @@ export default function Dashboard() {
               </h2>
               <p className={s.description}>
                 {composerMode === "compose"
-                  ? "Set priority, quantity, budget, and deadline. Review before saving a local draft."
-                  : "Edit anything that looks off. Saving keeps this draft in the browser only."}
+                  ? "Use Channel3 to pick a real catalog product (≤$2), or type a brief. Review → Queue negotiation sends that RFQ to seller AIs."
+                  : "Edit anything that looks off. Queue negotiation is what sellers actually receive."}
               </p>
 
               {composerMode === "compose" ? (
                 <form onSubmit={reviewDraft} className={s.briefForm} noValidate>
-                  <label htmlFor={`${formId}-brief`}>Your procurement brief</label>
+                  <div className={s.field}>
+                    <label htmlFor={`${formId}-channel3`}>Channel3 product search (≤$2)</label>
+                    <div className={s.budgetRow}>
+                      <input
+                        id={`${formId}-channel3`}
+                        value={channel3Query}
+                        onChange={(event) => setChannel3Query(event.target.value)}
+                        placeholder="office sticky notes pack"
+                        disabled={channel3Busy}
+                      />
+                      <button
+                        type="button"
+                        className={s.secondary}
+                        disabled={channel3Busy || !channel3Query.trim()}
+                        title="Search Channel3 and fill this RFQ for sellers"
+                        onClick={() => void enrichRfqFromChannel3()}
+                      >
+                        <PackageSearch size={15} /> {channel3Busy ? "Searching…" : "Use for RFQ"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <label htmlFor={`${formId}-brief`}>Your procurement brief (sent to sellers)</label>
                   <textarea
                     ref={briefRef}
                     id={`${formId}-brief`}
@@ -1643,24 +1724,31 @@ export default function Dashboard() {
               <StretchPanel setNotice={setNotice} />
               <SponsorsPanel
                 setNotice={setNotice}
-                onChannel3Suggestion={(fields) => {
+                onChannel3Suggestion={(next) => {
                   setFields({
-                    brief: fields.brief,
-                    priority: fields.priority,
-                    quantity: fields.quantity,
-                    maxUnitPrice: fields.maxUnitPrice,
-                    currency: fields.currency,
-                    neededByDays: fields.neededByDays,
+                    brief: next.brief,
+                    priority: next.priority,
+                    quantity: next.quantity,
+                    maxUnitPrice: next.maxUnitPrice,
+                    currency: next.currency,
+                    neededByDays: next.neededByDays,
                   });
                   setComposerMode("compose");
-                  setNotice("Channel3 suggestion loaded into the Overview composer (≤$2).");
+                  setPendingDraft(null);
+                  setView("Overview");
+                  setNotice("Channel3 RFQ loaded on Overview — Review draft → Queue negotiation for sellers.");
+                }}
+                onKernelInvoiceText={(text) => {
+                  setPayablesSeed(text);
+                  setView("Payables");
+                  setNotice("KERNEL page text loaded in Payables — click Extract invoice.");
                 }}
               />
             </>
           )}
 
           {view === "Payables" && (
-            <PayablesPanel setNotice={setNotice} />
+            <PayablesPanel setNotice={setNotice} seedText={payablesSeed} />
           )}
 
           {(view === "Overview" || view === "Payments & orders") && <section className={`${s.card} ${s.paymentCard}`}>

@@ -31,8 +31,11 @@ Total due: 1.50 USD
 
 export function PayablesPanel({
   setNotice,
+  seedText,
 }: {
   setNotice: (value: string) => void;
+  /** When set (e.g. from KERNEL fetch), replace the extract textarea. */
+  seedText?: string | null;
 }) {
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState(SAMPLE_INVOICE);
@@ -63,6 +66,12 @@ export function PayablesPanel({
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (typeof seedText === "string" && seedText.trim()) {
+      setText(seedText.trim().slice(0, 20_000));
+    }
+  }, [seedText]);
 
   async function extract() {
     setBusy(true);
@@ -182,7 +191,10 @@ export function PayablesPanel({
             <span className={s.iconTile}><FileText size={20} /></span>
             <div>
               <h2>Supplier invoice extract</h2>
-              <p className={s.description}>Paste invoice text → LLM extract → store. Demo cap ≤ $2.</p>
+              <p className={s.description}>
+                Paste invoice text (or load via Automation → KERNEL) → Extract → Match → Payout. Demo cap ≤ $2.
+                Sample text below works without a URL.
+              </p>
             </div>
           </div>
           <button type="button" className={s.secondary} disabled={busy} title="Reload extracted invoices" onClick={() => void refresh()}>

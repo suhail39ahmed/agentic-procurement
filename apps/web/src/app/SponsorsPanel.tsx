@@ -15,6 +15,7 @@ type TimelineEvent = {
 export function SponsorsPanel({
   setNotice,
   onChannel3Suggestion,
+  onKernelInvoiceText,
 }: {
   setNotice: (value: string) => void;
   onChannel3Suggestion?: (fields: {
@@ -25,6 +26,7 @@ export function SponsorsPanel({
     neededByDays: string;
     priority: "balanced";
   }) => void;
+  onKernelInvoiceText?: (text: string) => void;
 }) {
   const [status, setStatus] = useState<Record<string, boolean | number | null>>({});
   const [query, setQuery] = useState("office sticky notes pack");
@@ -106,7 +108,12 @@ export function SponsorsPanel({
         setNotice(payload.error ?? "KERNEL fetch failed.");
         return;
       }
-      setNotice(`${payload.note ?? "Fetched"} · ${payload.source} · ${payload.text?.slice(0, 80) ?? ""}…`);
+      if (payload.text && onKernelInvoiceText) {
+        onKernelInvoiceText(payload.text);
+        setNotice(`${payload.note ?? "Fetched"} · opened Payables with page text for extract.`);
+      } else {
+        setNotice(`${payload.note ?? "Fetched"} · ${payload.source} · ${payload.text?.slice(0, 80) ?? ""}…`);
+      }
     } finally {
       setBusy(false);
     }
@@ -119,9 +126,10 @@ export function SponsorsPanel({
           <div className={s.inlineTitle}>
             <span className={s.iconTile}><PackageSearch size={20} /></span>
             <div>
-              <h2>Channel3 catalog enrich</h2>
+              <h2>Channel3 → RFQ for sellers</h2>
               <p className={s.description}>
-                Structured product search (≤$2). {status.channel3 ? "API key live." : "Set CHANNEL3_API_KEY to activate."}
+                Search catalog (≤$2), load Overview RFQ, then Queue negotiation so sellers quote that product.{" "}
+                {status.channel3 ? "API key live." : "Set CHANNEL3_API_KEY to activate."}
               </p>
             </div>
           </div>
@@ -142,9 +150,10 @@ export function SponsorsPanel({
           <div className={s.inlineTitle}>
             <span className={s.iconTile}><Globe size={20} /></span>
             <div>
-              <h2>KERNEL invoice page fetch</h2>
+              <h2>KERNEL → Payables extract</h2>
               <p className={s.description}>
-                Browser/agent fetch → text for extract. {status.kernel ? "Key present." : "Optional KERNEL_API_KEY."}
+                Fetch a public invoice page, then open Payables with that text ready to Extract.{" "}
+                {status.kernel ? "Key present." : "Optional KERNEL_API_KEY (direct fetch still works)."}
               </p>
             </div>
           </div>

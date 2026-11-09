@@ -39,18 +39,25 @@ sponsorsRouter.post("/channel3/search", async (req, res) => {
   try {
     const result = await searchChannel3(query, Math.min(maxPrice, cap));
     const suggestion = result.products[0];
+    const unit = suggestion?.price != null
+      ? Math.min(suggestion.price, cap)
+      : Math.min(2, cap);
+    const retailer = suggestion?.retailer ? ` (retailer: ${suggestion.retailer})` : "";
+    const productRef = suggestion?.productId ? ` Channel3 id ${suggestion.productId}.` : "";
     return res.json({
       ...result,
       suggestion: suggestion
         ? {
-          brief: `Source ${suggestion.title} via Channel3 catalog (sandbox enrich).`,
+          // This brief is what buyer/seller agents negotiate against after Queue negotiation.
+          brief: `RFQ: supply 1× "${suggestion.title}"${retailer}. Match or beat unit price ≤ $${unit.toFixed(2)} USD. Prefer in-stock, ship within 14 days.${productRef}`.slice(0, 500),
           quantity: 1,
-          maxUnitPrice: suggestion.price != null
-            ? Math.min(suggestion.price, cap).toFixed(2)
-            : Math.min(2, cap).toFixed(2),
+          maxUnitPrice: unit.toFixed(2),
           currency: "USD",
           neededByDays: 14,
-          priority: "balanced",
+          priority: "balanced" as const,
+          productTitle: suggestion.title,
+          retailer: suggestion.retailer ?? null,
+          productId: suggestion.productId ?? null,
         }
         : null,
     });
