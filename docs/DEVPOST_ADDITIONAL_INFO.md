@@ -51,7 +51,7 @@ PayPal developer platform (sandbox):
 • Orders API with intent=AUTHORIZE — create checkout after a winning offer; buyer approves on PayPal.
 • Authorization hold — funds held until delivery is confirmed.
 • Captures — owner-gated capture after ship/confirm.
-• Webhooks (verified) — project CAPTURE/AUTHORIZE/refund/dispute events into a replay-safe order ledger; also drive the Bryntum rescheduler agent.
+• Webhooks (verified) — project CAPTURE/AUTHORIZE/refund/dispute events into a replay-safe order ledger; Overview Bryntum shows live payment checkpoints.
 • Payouts REST — supplier payout after three-way match on the payables track.
 • PayPal Agent Toolkit (+ MCP) — assistant tools for sandbox invoices (create/send), disputes list/get, owner-gated accept_dispute_claim, order lookup.
 
@@ -96,7 +96,7 @@ No login required for the hosted demo. Sandbox only.
 
 Quick path (≈2 min):
 1) https://agentic-procurement-web.onrender.com (cold start may take ~30–60s on free Render).
-2) Overview → Channel3 “Use for RFQ” (or type a brief) → Review → Queue negotiation.
+2) Overview → Channel3 “Use market price → Review” (or Seed / type a brief) → Queue negotiation.
 3) Supplier offers → AG Grid ranks; optional Checkout → PayPal sandbox approve → Authorize hold.
 4) Payables → Extract sample invoice → Match → optional Payout.
 5) Overview → Bryntum Gantt (live checkpoints). Automation → KERNEL fetch → Payables.

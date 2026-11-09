@@ -13,11 +13,11 @@ Order totals above the **policy approval threshold** require human approval befo
 ## 60-second smoke (minimum)
 
 1. Open the hosted web URL.
-2. **Overview** → Channel3 **Use for RFQ** (or type a brief) → **Review draft** → **Queue negotiation**.
-3. Wait for status **SUCCEEDED** → **Supplier offers** → inspect AG Grid ranks.
-4. (Optional money path) **Checkout winning offer** → complete PayPal sandbox approve → **Authorize hold**.
-5. **Payables** → keep sample invoice text → **Extract** → **Match**.
-6. **Overview** → Bryntum Gantt shows completed + live negotiation checkpoints (hover dots for status).
+2. **Overview** → Channel3 **Use market price → Review** (or Seed / type a brief) → **Queue negotiation**.
+3. Wait for status **SUCCEEDED** → **Supplier offers** on that **new** row → AG Grid ranks.
+4. (Optional money path) **Checkout winning offer** → PayPal sandbox approve → **Authorize hold**.
+5. **Payables** → sample invoice → **Extract** → **Match**.
+6. **Overview** → Bryntum Gantt shows **live** payment checkpoints (hover status dots).
 
 ---
 
@@ -26,7 +26,7 @@ Order totals above the **policy approval threshold** require human approval befo
 | Step | Where | What to expect |
 |---|---|---|
 | A1 | Overview | Dual-track cards: Marketplace + Payables |
-| A2 | Channel3 **Use for RFQ** | Brief fills from catalog (needs `CHANNEL3_API_KEY` on API) |
+| A2 | Channel3 **Use market price → Review** | Brief fills from catalog (needs `CHANNEL3_API_KEY` on API) |
 | A3 | Queue negotiation | Buyer/seller agents run; SSE stream shows messages |
 | A4 | Supplier offers | AG Grid ranks offers; eligible winner highlighted |
 | A5 | Checkout | PayPal AUTHORIZE order created; approve as sandbox buyer |
@@ -58,10 +58,10 @@ Order totals above the **policy approval threshold** require human approval befo
 | Step | Where | What to expect |
 |---|---|---|
 | C1 | Overview | Bryntum **Gantt Enterprise** chart loads |
-| C2 | After Queue / Capture | Checkpoints appear for completed + in-flight negotiations |
+| C2 | After Authorize / Capture | Checkpoints appear for those checkouts |
 | C3 | Hover status dots | Tooltip shows milestone / payment status |
 
-Live PayPal webhooks (`PAYMENT.CAPTURE.*`, refunds, disputes) still feed the schedule agent; Automation is KERNEL → Payables only.
+Automation is **KERNEL → Payables** only (no Bryntum simulate playground).
 
 ---
 

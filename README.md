@@ -81,7 +81,7 @@ flowchart TB
   CAP -.-> BG
 ```
 
-Legend: **solid** = primary money / negotiation path · **dotted** = enrichment & payment-driven reschedule.
+Legend: **solid** = primary money / negotiation path · **dotted** = enrichment & payment checkpoints.
 
 **Key design decisions and trade-offs**
 
@@ -110,18 +110,18 @@ Legend: **solid** = primary money / negotiation path · **dotted** = enrichment 
 - Postgres migrations live in `packages/db/migrations/` (including `0000_rollback.sql` for disposable DBs only — never run against Render prod). Run `0003_ap_toolkit.sql` for dispute drafts / AP tables.
 - CI: `.github/workflows/ci.yml` (typecheck/lint/build + secret scan).
 - API refuses to start unless `PAYPAL_ENV=sandbox` and `MANDATE_SECRET` is set.
-- Dashboard: negotiation SSE feed, AG Grid `applyTransaction`, Payables panel (extract/match/payout/client invoice), Automation (FX/replenish/Slack/forecast) + partner panels.
-- E2E checklist: `docs/TEST_PLAN.md`.
+- Dashboard: negotiation SSE feed, AG Grid, Payments inbox (nested Needs attention / Recently captured), Payables, Automation (stretch + KERNEL), Overview Bryntum live payment Gantt.
+- Demo path: `docs/TESTING_SCENARIOS.md` · full checklist: `docs/TEST_PLAN.md` · Devpost: `docs/DEVPOST_SUBMISSION.md`.
 - Hackathon / sponsor tools used:
   - **PayPal** sandbox REST + Checkout AUTHORIZE, webhooks, Agent Toolkit/MCP
   - **AG Grid** Community (live grids)
   - **Render** web + API + Workflows package
   - **Channel3** catalog enrich (`CHANNEL3_API_KEY`, env-gated)
-  - **Bryntum Gantt Enterprise** — agent reschedules milestones on PayPal capture/refund/dispute (`NEXT_PUBLIC_BRYNTUM_LICENSE_KEY` / `VITE_BRYNTUM_LICENSE_KEY` on web)
-  - **KERNEL** invoice page fetch bridge (`KERNEL_API_KEY`, env-gated)
+  - **Bryntum Gantt Enterprise** — Overview live authorize/capture checkpoints (`NEXT_PUBLIC_BRYNTUM_LICENSE_KEY` / `VITE_BRYNTUM_LICENSE_KEY` on web)
+  - **KERNEL** invoice page fetch (`KERNEL_API_KEY`, env-gated) via Automation → Payables
   - Slack approvals stretch (`SLACK_WEBHOOK_URL`)
 
-**Judge path:** Overview → track cards → Seed negotiation **or** Open Payables.
+**Judge path:** Overview → Channel3 / Seed → Queue → Offers → Checkout → Payables; Bryntum on Overview.
 
 ---
 

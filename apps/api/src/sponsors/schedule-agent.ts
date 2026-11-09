@@ -359,64 +359,13 @@ export type WorkspacePaymentRow = {
 };
 
 /**
- * Overview Gantt: demo history + live negotiation payment checkpoints
- * (APPROVED / HELD / SHIPPED / CAPTURED). Not the simulate playground.
+ * Overview Gantt: live negotiation payment checkpoints only
+ * (APPROVED / HELD / SHIPPED / CAPTURED). No dummy history.
  */
 export function buildOverviewSchedule(rows: WorkspacePaymentRow[]) {
   const tasks: ScheduleTask[] = [];
   const deps: ScheduleDependency[] = [];
   const log: AgentLogEntry[] = [];
-
-  // Stable dummy history so the Overview always has completed context for judges.
-  const demoCompleted: ScheduleTask[] = [
-    {
-      id: "demo-auth",
-      name: "Demo · Authorize hold (office chairs)",
-      startDate: isoDay(-10),
-      endDate: isoDay(-9),
-      duration: 1,
-      flag: "ok",
-      statusLabel: "AUTHORIZED",
-      type: "authorize",
-      note: "Sandbox history · completed authorize",
-      eventColor: colorFor("ok"),
-      manuallyScheduled: true,
-    },
-    {
-      id: "demo-cap",
-      name: "Demo · Capture complete (office chairs)",
-      startDate: isoDay(-7),
-      endDate: isoDay(-6),
-      duration: 1,
-      flag: "ok",
-      statusLabel: "CAPTURED",
-      type: "capture",
-      note: "Sandbox history · owner confirmed delivery",
-      eventColor: colorFor("ok"),
-      manuallyScheduled: true,
-    },
-    {
-      id: "demo-notes",
-      name: "Demo · Sticky notes capture",
-      startDate: isoDay(-4),
-      endDate: isoDay(-3),
-      duration: 1,
-      flag: "ok",
-      statusLabel: "CAPTURED",
-      type: "capture",
-      note: "Sandbox history · Channel3 RFQ path",
-      eventColor: colorFor("ok"),
-      manuallyScheduled: true,
-    },
-  ];
-  tasks.push(...demoCompleted);
-  deps.push({ id: "demo-d1", fromTask: "demo-auth", toTask: "demo-cap" });
-  log.push({
-    at: new Date(Date.now() - 3 * dayMs).toISOString(),
-    signal: "demo_history",
-    action: "Loaded dummy completed authorize → capture for Overview",
-    taskIds: ["demo-auth", "demo-cap", "demo-notes"],
-  });
 
   const ranked = [...rows]
     .filter((r) => ["APPROVED", "HELD", "SHIPPED", "CAPTURED"].includes(r.paymentStatus))
@@ -543,13 +492,16 @@ export function buildOverviewSchedule(rows: WorkspacePaymentRow[]) {
   return {
     provider: "bryntum-gantt-enterprise",
     mode: "overview" as const,
-    note: "Overview plan mixes demo completed milestones with live negotiation payment checkpoints.",
+    note:
+      ranked.length > 0
+        ? "Live negotiation payment checkpoints (authorize → capture)."
+        : "No checkout payments yet — Queue an RFQ, checkout, then Authorize hold to populate this plan.",
     tasks,
     dependencies: deps,
     agentLog: log.slice(0, 12),
     projectStartDate,
     projectEndDate,
-    liveCount: ranked.length,
-    completedCount: ranked.filter((r) => r.paymentStatus === "CAPTURED").length + 2,
+    liveCount: ranked.filter((r) => r.paymentStatus !== "CAPTURED").length,
+    completedCount: ranked.filter((r) => r.paymentStatus === "CAPTURED").length,
   };
 }

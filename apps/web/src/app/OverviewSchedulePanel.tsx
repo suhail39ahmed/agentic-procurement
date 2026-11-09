@@ -57,10 +57,11 @@ export function OverviewSchedulePanel({ setNotice }: { setNotice: (value: string
         <div className={s.inlineTitle}>
           <span className={s.iconTile}><CalendarDays size={20} /></span>
           <div>
-            <h2>Payment plan · completed + open</h2>
+            <h2>Payment plan · live checkouts</h2>
             <p className={s.description}>
-              Status dots: green = done, orange = needs action, blue = on hold. Hover a bar for APPROVED / CAPTURED detail.
-              {schedule?.liveCount != null ? ` · ${schedule.liveCount} live · ~${schedule.completedCount ?? 0} completed` : ""}
+              {schedule?.note ?? "Authorize → capture checkpoints from real negotiations."}
+              {" "}Status dots: green = done, orange = needs action, blue = on hold.
+              {schedule?.liveCount != null ? ` · ${schedule.liveCount} open · ${schedule.completedCount ?? 0} captured` : ""}
             </p>
           </div>
         </div>
@@ -69,12 +70,18 @@ export function OverviewSchedulePanel({ setNotice }: { setNotice: (value: string
         </button>
       </div>
 
-      <BryntumGanttPanel
-        tasks={tasks}
-        dependencies={dependencies}
-        projectStartDate={schedule?.projectStartDate}
-        projectEndDate={schedule?.projectEndDate}
-      />
+      {tasks.length === 0 ? (
+        <p className={s.tableNote}>
+          No payment checkpoints yet. After Checkout → Authorize hold (and capture), bars appear here from live negotiations.
+        </p>
+      ) : (
+        <BryntumGanttPanel
+          tasks={tasks}
+          dependencies={dependencies}
+          projectStartDate={schedule?.projectStartDate}
+          projectEndDate={schedule?.projectEndDate}
+        />
+      )}
     </section>
   );
 }

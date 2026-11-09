@@ -765,7 +765,7 @@ export default function Dashboard() {
       }
       const data = await response.json() as { items?: NegotiationRecord[] };
       const items = Array.isArray(data.items) ? data.items : [];
-      setNegotiations(items);
+      setNegotiations(items.slice(0, 20));
       setNegotiationsError("");
 
       const focusId = activeIdRef.current

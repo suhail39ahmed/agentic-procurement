@@ -1,13 +1,11 @@
 # ProcureAI — careful test walkthrough
 
 **URL:** https://agentic-procurement-web.onrender.com  
-Hard-refresh first (`Ctrl+Shift+R`). If the page hangs, wait ~60s (Render cold start) and refresh once.
+Hard-refresh first (`Ctrl+Shift+R`). Cold start may need ~60s + one refresh.
 
 ---
 
-## What we are sourcing (start here)
-
-Use this RFQ so the story is clear for the video and for you:
+## What to source (for video)
 
 | Field | Value |
 |---|---|
@@ -17,131 +15,82 @@ Use this RFQ so the story is clear for the video and for you:
 | **Needed within** | 30 days |
 | **Priority** | Lowest cost |
 
-**Why this:** sellers counter on chairs; Channel3 sticky-note RFQs stay under the **$20** auto-allow band; chair checkouts hit **REQUIRE_APPROVAL** (>$20).
+Chair checkouts are **>$20** → REQUIRE_APPROVAL. For auto-allow, use Channel3 sticky notes / low unit ceilings (total ≤ $20).
 
-*(Optional later: Channel3 “office sticky notes” for a catalog-sourced RFQ — fine for a second run.)*
-
----
-
-## Part 0 — Site is alive (1 min)
-
-| Step | You do | You should see |
-|---|---|---|
-| 0.1 | Open the URL | Overview with dual-track cards (Marketplace + Payables) |
-| 0.2 | Look at Buying assistant badge | **Ready** (not Not connected) |
-| 0.3 | Optional: open API health | `status: ok`, `paypalEnv: sandbox` |
+**Important:** Supplier offers are frozen when you Queue. Open a **new** negotiation after deploys — old rows will not re-price.
 
 ---
 
-## Part 1 — Buying assistant (2 min)
+## Part 0 — Alive
 
 | Step | You do | You should see |
 |---|---|---|
-| 1.1 | In Buying assistant type: `Say hi` → Send | Badge **Thinking…** then **Ready**; short hello in the chat |
-| 1.2 | Ask: `How does authorize then capture work?` | Short answer: hold → ship → owner confirms → capture. Page should **not** jump to top |
-| 1.3 | Ask: `What should we source today?` | Can suggest chairs / RFQ; keep it short |
-
-**Pass:** replies stay short; no huge markdown tables; scroll stays on the assistant card.
+| 0.1 | Open URL | Overview · Marketplace + Payables |
+| 0.2 | Buying assistant badge | **Ready** |
+| 0.3 | Optional API health | `status: ok`, `paypalEnv: sandbox` |
 
 ---
 
-## Part 2 — Create the RFQ (what we are sourcing)
-
-### Path A — Seed (fastest)
+## Part 1 — Buying assistant
 
 | Step | You do | You should see |
 |---|---|---|
-| 2A.1 | Click **Seed demo** / load demo brief if shown | Composer fills with chair (or sample) brief |
-| 2A.2 | Or click the example chip for chairs | Brief: *12 ergonomic desk chairs…* |
-
-### Path B — Type it yourself
-
-| Step | You do | You should see |
-|---|---|---|
-| 2B.1 | Overview → **Your procurement brief** | Empty composer |
-| 2B.2 | Paste: `12 ergonomic desk chairs. Prefer durable mesh backs and 5-year warranty.` | Text in textarea |
-| 2B.3 | Priority: **Lowest cost** | Selected |
-| 2B.4 | Quantity `12`, Max unit `180`, Currency **USD**, Needed within `30` | Fields filled |
-| 2B.5 | **Review draft** | Summary of brief / qty / $180 / 30 days |
-
-### Path C — Channel3 (live catalog → RFQ ceiling)
-
-Channel3 results are **not** stored in Postgres. Each Search calls Channel3’s API. Postgres only stores the RFQ/negotiation **after** you Queue.
-
-| Step | You do | You should see |
-|---|---|---|
-| 2C.1 | Overview → search `office sticky notes pack` → **Search** | Dropdown of products with **prices** (and retailer when available) |
-| 2C.2 | Pick one → **Use market price → Review** | Jumps straight to Review; brief says “match or beat Channel3 market unit price ≤ $X” |
-| 2C.3 | **Queue negotiation** | RFQ saved in Postgres; sellers compete against that market ceiling |
+| 1.1 | `Say hi` → Send | Short hello |
+| 1.2 | `How does authorize then capture work?` | Hold → ship → owner capture |
 
 ---
 
-## Part 3 — Negotiate with sellers
+## Part 2 — RFQ
 
-| Step | You do | You should see |
-|---|---|---|
-| 3.1 | On review screen → **Queue negotiation** | Notice that negotiation was queued; appears under Requests / feed |
-| 3.2 | Wait 30–90s (refresh / watch status) | Status moves toward **SUCCEEDED** (may show RUNNING first) |
-| 3.3 | Open **Supplier offers** | AG Grid with seller-a/b/c/d style rows: price, lead time, score, eligible |
-| 3.4 | Watch live stream (SSE) | Buyer/seller messages scrolling |
-| 3.5 | Ask assistant: `Which offer should I pick?` | Short pick of **best eligible** seller + one tradeoff |
+**Path A — Seed:** **Seed demo (1 click)** → chairs brief queues.
 
-**Pass:** at least one **eligible** offer if budget/deadline allow; grid updates without full page reload.
+**Path B — Type:** fill brief / qty / max / days → **Review draft**.
+
+**Path C — Channel3:** search → pick product → **Use market price → Review** → Queue. Catalog is live Channel3 API (not Postgres); Postgres stores the RFQ only after Queue.
 
 ---
 
-## Part 4 — PayPal checkout (sandbox money path)
-
-Do this only after Part 3 succeeded and you have an eligible winner.
+## Part 3 — Negotiate
 
 | Step | You do | You should see |
 |---|---|---|
-| 4.1 | **Checkout winning offer** | Checkout created; PayPal approve link |
-| 4.2 | Open approve link → log in as **PayPal sandbox personal** buyer → complete purchase | Redirect / return to app |
-| 4.3 | Back in app → **Authorize hold** | Order **HELD** (funds held, **not** captured) |
-| 4.4 | (Optional) Mark shipped → **Confirm delivery / capture** | Order **CAPTURED** |
-
-**Fail if:** capture works before approve, or assistant claims it captured for you.
+| 3.1 | **Queue negotiation** | Row in Requests / Negotiations |
+| 3.2 | Wait → **SUCCEEDED** | Open that row in **Supplier offers** |
+| 3.3 | AG Grid + SSE | Prices, lead times, Eligible |
 
 ---
 
-## Part 5 — Payables (AP track)
+## Part 4 — PayPal
 
 | Step | You do | You should see |
 |---|---|---|
-| 5.1 | Sidebar → **Payables** | Sample invoice text already there |
-| 5.2 | **Extract invoice** | Extracted amount/vendor; success notice |
-| 5.3 | Set PO + receipt to the **same** amount as invoice → **Match** | **MATCHED** |
-| 5.4 | (Optional) **Payout** to sandbox seller email | Payout submitted *or* clear sandbox message |
-| 5.5 | (Optional) Client invoice create/send | Toolkit invoice id / sent note |
+| 4.1 | **Checkout winning offer** | Payments active order / inbox |
+| 4.2 | Sandbox buyer approve | Popup or approve URL |
+| 4.3 | **Authorize hold** | **HELD** |
+| 4.4 | Ship → capture | **CAPTURED**; nested Payments queues update |
 
 ---
 
-## Part 6 — Bryntum schedule (Overview)
+## Part 5 — Payables
+
+**Payables** → Extract sample → Match (PO/receipt = invoice amount) → optional Payout / client invoice.
+
+---
+
+## Part 6 — Bryntum + KERNEL
 
 | Step | You do | You should see |
 |---|---|---|
-| 6.1 | **Overview** | Bryntum Gantt with completed + live negotiation checkpoints |
-| 6.2 | Hover a status dot | Tooltip with milestone / payment status |
-| 6.3 | Queue a new RFQ or capture an order | Chart refreshes with new checkpoints |
+| 6.1 | **Overview** Gantt | Live checkpoints only (no dummy bars) |
+| 6.2 | Hover status dots | Payment status tooltip |
+| 6.3 | **Automation** → KERNEL fetch | Opens Payables with page text |
 
 ---
 
-## Part 7 — Human approval (>$20) — optional
+## Recording order (~15 min rehearsal → ≤3 min cut)
 
-| Step | You do | You should see |
-|---|---|---|
-| 7.1 | Checkout a chair RFQ (total clearly **over $20**) | Policy **REQUIRE_APPROVAL** then owner approve → Pay becomes available |
-| 7.2 | Confirm money does **not** move without owner approval | No silent capture |
-
----
-
-## Suggested order for a first full pass (~15 min)
-
-1. Part 0 → Part 1 (assistant)  
-2. Part 2 Path B (chairs RFQ) → Part 3 (negotiate + offers)  
-3. Part 4 through Authorize hold  
-4. Part 5 extract + match  
-5. Part 6 Bryntum simulate late capture  
-
-Then record the same path for the Devpost video.
+1. Part 0–1  
+2. Channel3 or Seed → Queue → Offers  
+3. Checkout → Authorize (mention >$20 approval if chairs)  
+4. Payables extract + match  
+5. Overview Gantt + one KERNEL fetch  

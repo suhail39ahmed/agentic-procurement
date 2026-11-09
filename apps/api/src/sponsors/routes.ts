@@ -111,7 +111,7 @@ sponsorsRouter.get("/schedule", (req, res) => {
   return res.json(getScheduleSnapshot());
 });
 
-/** Overview: demo history + live negotiation payment milestones (no simulate). */
+/** Overview: live negotiation payment milestones only. */
 sponsorsRouter.get("/schedule/overview", async (req, res) => {
   const ownerId = requireOwner(req);
   if (!ownerId) return res.sendStatus(404);

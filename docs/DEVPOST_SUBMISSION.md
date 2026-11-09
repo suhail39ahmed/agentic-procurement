@@ -13,7 +13,7 @@ ProcureAI — Agentic Procurement & Payables
 **Elevator pitch** (≤200 chars)
 
 ```
-Buyer & seller AIs negotiate; PayPal authorize→capture after delivery. Dual-track marketplace + AP extract/match/payout, Channel3 RFQs, KERNEL invoices, Bryntum Gantt rescheduling on payment events.
+Buyer & seller AIs negotiate; PayPal authorize→capture after delivery. Dual-track marketplace + AP extract/match/payout, Channel3 RFQs, KERNEL invoices, Bryntum live payment Gantt.
 ```
 
 **Hosted demo URL**
@@ -51,13 +51,13 @@ https://github.com/suhail39ahmed/agentic-procurement
 1. Paste supplier invoice text (or fetch a page via **KERNEL**) → LLM extract.
 2. Three-way match (PO / receipt / invoice).
 3. **PayPal Payouts** when MATCHED; client invoices via Agent Toolkit.
-4. **Bryntum Gantt**: an agent watches PayPal capture / refund / dispute signals and moves or flags authorize → delivery → capture → payout milestones (demo buttons + live webhooks).
+4. **Bryntum Gantt** on Overview shows live authorize → capture checkpoints from real checkouts (PayPal webhooks keep payment state honest).
 
 ### Safety
-LLMs write messages; **code** decides money. Policy ALLOW / REQUIRE_APPROVAL / DENY, HMAC mandates, authorize-then-capture, idempotent PayPal calls.
+LLMs write messages; **code** decides money. Policy ALLOW / REQUIRE_APPROVAL / DENY (threshold **$20**), HMAC mandates, authorize-then-capture, idempotent PayPal calls.
 
 ### Try it
-Open the hosted URL above → Overview → Channel3 **Use market price → Review** → Queue negotiation (Bryntum schedule is on Overview). Open **Payables** or **Automation** → KERNEL for invoice fetch.
+Open the hosted URL above → Overview → Channel3 **Use market price → Review** → Queue negotiation. Bryntum is on Overview. **Payables** for extract/match; **Automation** → KERNEL for invoice page fetch.
 
 Local setup: see README **Quick start** (`pnpm install`, copy `.env.example`, sandbox PayPal + Azure AI).
 
@@ -73,7 +73,7 @@ Local setup: see README **Quick start** (`pnpm install`, copy `.env.example`, sa
 | **Render** | Hosted web + API, Postgres, Workflows package |
 | **Channel3** | Catalog search → RFQ brief sellers negotiate |
 | **KERNEL** | Invoice/page fetch → Payables extract |
-| **Bryntum Gantt Enterprise** | Payment-aware milestone Gantt + agent rescheduler |
+| **Bryntum Gantt Enterprise** | Overview payment plan — live authorize/capture checkpoints |
 | **Slack** (optional stretch) | Approval cards via webhook |
 | Next.js, Express, Drizzle/Postgres, pnpm monorepo | App stack |
 

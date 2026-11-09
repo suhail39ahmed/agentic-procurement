@@ -1,91 +1,87 @@
-# ProcureAI — testing scenarios & cases
+# ProcureAI — demo & test scenarios
 
 **Demo:** https://agentic-procurement-web.onrender.com  
 **API:** https://agentic-procurement-api.onrender.com/health  
 
-Free Render may cold-start 30–60s — wait and refresh once.
+Free Render may cold-start 30–60s — wait and refresh once. Hard-refresh (`Ctrl+Shift+R`) before recording.
+
+**Policy:** order total ≤ **$20** auto-allow; above **$20** → REQUIRE_APPROVAL before Pay.
+
+---
+
+## Demo video path (≈3 min)
+
+1. **Overview** — dual-track + Buying assistant `Say hi`
+2. Channel3 search → **Use market price → Review** → **Queue negotiation** (or Seed demo chairs)
+3. **Supplier offers** — AG Grid ranks; open a **new** SUCCEEDED row (not old snapshots)
+4. **Checkout** → PayPal sandbox approve → **Authorize hold** → ship → capture
+5. **Payables** — Extract sample → Match
+6. **Overview** Bryntum Gantt — live checkpoints; hover status dots
+7. **Automation** — KERNEL fetch only (opens Payables)
 
 ---
 
 ## Buying assistant
 
-Hosted probe returns a real reply when Azure + PayPal Toolkit are configured on the **API**.
-
 | # | Steps | Expected |
 |---|---|---|
-| A1 | Overview → Buying assistant → type `Say hi` → Send | Badge **Thinking…** then **Ready**; assistant reply appears |
-| A2 | Ask `How does authorize then capture work?` | Explains hold → ship → owner confirm → capture; does **not** claim it can capture alone |
-| A3 | Ask `Create a $45 sandbox invoice for client-agentic@personal.example.com` | May call PayPal Toolkit create/send invoice; concise next step |
-| A4 | Stop API / break Azure key (local only) | Error text + badge **Not connected** |
-
-If A1 fails on hosted: confirm Render **API** has `AZURE_AI_ENDPOINT`, `AZURE_AI_API_KEY`, `AZURE_AI_DEPLOYMENT_STRONG`, `AZURE_AI_DEPLOYMENT_FAST`, plus PayPal sandbox keys. Web needs `API_BASE_URL` + `OWNER_API_KEY`.
+| A1 | Overview → Buying assistant → `Say hi` → Send | **Thinking…** then **Ready**; short reply |
+| A2 | Ask `How does authorize then capture work?` | Hold → ship → owner confirm → capture; does **not** capture alone |
+| A3 | Ask for a ~$45 sandbox client invoice | May call Toolkit create/send; concise next step |
 
 ---
 
-## Scenario pack (run in order)
+## Scenario pack
 
-### S1 — Marketplace negotiate (no PayPal money yet)
-
-| Case | Steps | Pass if |
-|---|---|---|
-| S1.1 | Overview → Channel3 **Use for RFQ** *or* type a brief (e.g. chairs) → Review → **Queue negotiation** | Negotiation appears; status moves toward SUCCEEDED |
-| S1.2 | Open **Supplier offers** | AG Grid shows ranked offers; SSE chat has buyer/seller lines |
-| S1.3 | Pick succeeded negotiation in the selector | Brief/budget match what you queued |
-
-### S2 — PayPal authorize hold (optional money path)
+### S1 — Marketplace negotiate
 
 | Case | Steps | Pass if |
 |---|---|---|
-| S2.1 | From offers → **Checkout winning offer** | Approve URL / order created |
-| S2.2 | Open approve link as **PayPal sandbox personal** buyer → Pay Now | Return to app; notice about buyer approved |
-| S2.3 | **Authorize hold** | Order status **HELD** (not captured) |
-| S2.4 | Mark shipped → **Confirm delivery / capture** | Status **CAPTURED** |
+| S1.1 | Overview → Channel3 **Use market price → Review** *or* Seed / type brief → **Queue** | Status → SUCCEEDED |
+| S1.2 | **Supplier offers** on that new row | Ranked offers + SSE chat |
+| S1.3 | Sticky-note / low budget RFQ | Sellers scale near ceiling; eligible winner possible |
+
+### S2 — PayPal authorize → capture
+
+| Case | Steps | Pass if |
+|---|---|---|
+| S2.1 | **Checkout winning offer** | Order / PayPal buttons or approve URL |
+| S2.2 | Sandbox buyer approves | Status ready for hold |
+| S2.3 | **Authorize hold** | **HELD** (not captured) |
+| S2.4 | Mark shipped → **Confirm delivery & capture** | **CAPTURED**; Payments inbox updates |
 
 ### S3 — Human approval (>$20)
 
 | Case | Steps | Pass if |
 |---|---|---|
-| S3.1 | Checkout RFQ whose order total exceeds **$20** (qty × unit) | Policy **REQUIRE_APPROVAL** — owner gate before pay |
-| S3.2 | Approve as owner (UI/API approval path) | Only then mandate / checkout can proceed |
+| S3.1 | Checkout chair (or any total > $20) | REQUIRE_APPROVAL before pay |
+| S3.2 | Owner approve | Pay / checkout can proceed |
 
 ### S4 — Payables
 
 | Case | Steps | Pass if |
 |---|---|---|
-| S4.1 | **Payables** → Extract (sample text prefilled) | Invoice stored with amount/vendor |
-| S4.2 | Match with PO/receipt = invoice amount | **MATCHED** |
-| S4.3 | Payout (sandbox seller email) | Payout batch submitted *or* clear sandbox error |
-| S4.4 | Client invoice ~$45 | Toolkit create/send succeeds |
+| S4.1 | **Payables** → Extract (sample prefilled) | Vendor / amount extracted |
+| S4.2 | Match PO/receipt = invoice | **MATCHED** |
+| S4.3 | Optional Payout / client invoice | Sandbox success or clear error |
 
-### S5 — KERNEL → extract
-
-| Case | Steps | Pass if |
-|---|---|---|
-| S5.1 | Automation → paste a **public** URL → Fetch | Opens Payables with page text |
-| S5.2 | Extract | Fields extracted or clear parse error |
-
-### S6 — Bryntum payment rescheduler
+### S5 — KERNEL
 
 | Case | Steps | Pass if |
 |---|---|---|
-| S6.1 | Automation → Gantt visible | Milestones: authorize / delivery / capture / payout |
-| S6.2 | **Simulate late capture** | Capture/payout move or flag **late** |
-| S6.3 | **Simulate refund** / **dispute** | Flags update; agent log shows action |
-| S6.4 | **Reset plan** | Baseline restored |
+| S5.1 | **Automation** → public URL → Fetch | Opens Payables with page text |
+| S5.2 | Extract | Fields or clear parse error |
 
-### S7 — Safety smoke
+### S6 — Bryntum (Overview only)
 
 | Case | Steps | Pass if |
 |---|---|---|
-| S7.1 | Try capture before PayPal approve | Clear error; no capture |
-| S7.2 | API `/health` | `{"status":"ok","paypalEnv":"sandbox"}` |
+| S6.1 | **Overview** after checkout activity | Gantt shows live authorize/capture checkpoints |
+| S6.2 | Hover a status dot | Tooltip with payment status |
 
----
+### S7 — Safety
 
-## Suggested 10-minute recording order
-
-1. Overview + assistant **Say hi** (A1)  
-2. Channel3 → Queue → offers (S1)  
-3. Checkout → sandbox approve → Authorize (S2.1–S2.3)  
-4. Payables extract + match (S4.1–S4.2)  
-5. Bryntum simulate late capture (S6.2)  
+| Case | Steps | Pass if |
+|---|---|---|
+| S7.1 | Capture before PayPal approve | Error; no capture |
+| S7.2 | API `/health` | `ok` + `paypalEnv: sandbox` |
