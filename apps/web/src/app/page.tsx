@@ -1454,20 +1454,52 @@ export default function Dashboard() {
                   {processHelpOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 </button>
                 {processHelpOpen && (
-                  <div className={s.processHelpPanel}>
-                    <strong>Marketplace path</strong>
+                  <div className={s.processHelpPanel} role="region" aria-label="How to use ProcureAI">
+                    <strong>What this product is</strong>
+                    <p>
+                      Dual-track sandbox demo. <em>Marketplace</em> = buyer AI negotiates with seller AIs, then PayPal
+                      authorize→capture. <em>Payables</em> = extract supplier invoices, three-way match, payout.
+                      LLMs write messages; <em>code + policy + PayPal</em> move money.
+                    </p>
+
+                    <strong>Market norms (what “good” looks like)</strong>
+                    <ul>
+                      <li>Channel3 = live catalog prices (not Postgres). Postgres stores the RFQ only after Queue.</li>
+                      <li>Sellers scale offers to your max unit price — sticky-note ceilings and chair budgets both work.</li>
+                      <li><em>Eligible = Yes</em> means within budget and needed-by days. Checkout uses the best eligible winner.</li>
+                      <li>Order total ≤ <em>$20</em> → auto ALLOW. Above <em>$20</em> → REQUIRE_APPROVAL before Pay.</li>
+                      <li>Authorize holds funds; capture only after ship + owner confirm. AI never captures alone.</li>
+                      <li>Old Supplier offers rows are frozen snapshots — always open a <em>new</em> SUCCEEDED negotiation after deploys.</li>
+                    </ul>
+
+                    <strong>What to click — marketplace</strong>
                     <ol>
-                      <li>Channel3 search or write a brief → Review → Queue</li>
-                      <li>Supplier offers rank in AG Grid (open a new SUCCEEDED row)</li>
-                      <li>Checkout → PayPal approve → Authorize hold</li>
-                      <li>Mark shipped → Confirm delivery &amp; capture</li>
+                      <li><em>Overview</em> → Channel3 search (e.g. sticky notes) → pick product → <em>Use market price → Review</em> → <em>Queue negotiation</em>. Or <em>Load demo request</em> / track card <em>Start negotiation demo</em> for chairs.</li>
+                      <li>Wait until status <em>SUCCEEDED</em> (Requests / Negotiations grid). Click <em>Offers</em> on that row.</li>
+                      <li>Check AG Grid: unit price, delivery days, match score, Eligible. Live SSE shows buyer/seller counters.</li>
+                      <li><em>Checkout winning offer</em> → <em>Payments</em> → PayPal popup (sandbox buyer) → <em>Authorize hold</em>.</li>
+                      <li>Needs attention: <em>Ship</em> → <em>Capture</em>. Captured: open <em>Recently captured → View</em> (inline details only).</li>
+                      <li>Overview Bryntum Gantt: one bar per live checkout; hover status dots (green done / orange action / blue hold).</li>
                     </ol>
-                    <strong>Payables path</strong>
+
+                    <strong>What to click — payables &amp; automation</strong>
                     <ol>
-                      <li>Payables → Extract invoice → Match → Payout</li>
-                      <li>Automation → KERNEL fetch can open Payables with page text</li>
+                      <li><em>Payables</em> → sample text → <em>Extract</em> → set PO/receipt = invoice amount → <em>Match</em> → optional <em>Payout</em>.</li>
+                      <li><em>Automation</em> → KERNEL URL → <em>Fetch page text</em> (opens Payables). Stretch tools are optional.</li>
+                      <li>Buying assistant (Overview): ask “how does authorize then capture work?” — advice only, no silent pay.</li>
                     </ol>
-                    <p>Totals ≤ $20 auto-allow; above $20 need owner approval. Agents negotiate — PayPal holds money.</p>
+
+                    <strong>What to check before recording</strong>
+                    <ul>
+                      <li>Hard-refresh after deploy. Free Render may need 30–60s cold start.</li>
+                      <li>API health shows <em>ok</em> + <em>paypalEnv: sandbox</em>. Assistant badge <em>Ready</em>.</li>
+                      <li>PayPal: use a sandbox personal buyer for approve. Never live credentials.</li>
+                      <li>Do not capture before approve. Do not expect old Authorize-hold demo rows to re-price.</li>
+                    </ul>
+
+                    <p className={s.processHelpFoot}>
+                      Sidebar map: Overview · Requests · Supplier offers · Payments · Payables · Automation.
+                    </p>
                   </div>
                 )}
               </div>
