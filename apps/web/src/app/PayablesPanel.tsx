@@ -320,7 +320,7 @@ export function PayablesPanel({
       </section>
 
       <section className={`${s.card} ${s.stretchCard}`}>
-        <DisputePanel notice="" setNotice={setNotice} />
+        <DisputePanel setNotice={setNotice} />
       </section>
     </div>
   );
