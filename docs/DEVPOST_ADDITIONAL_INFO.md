@@ -99,7 +99,7 @@ Quick path (≈2 min):
 2) Overview → Channel3 “Use for RFQ” (or type a brief) → Review → Queue negotiation.
 3) Supplier offers → AG Grid ranks; optional Checkout → PayPal sandbox approve → Authorize hold.
 4) Payables → Extract sample invoice → Match → optional Payout.
-5) Automation → Bryntum → “Simulate late capture” / refund / dispute → Reset plan.
+5) Overview → Bryntum Gantt (live checkpoints). Automation → KERNEL fetch → Payables.
 
 Full checklist: see uploaded JUDGE_TEST_GUIDE.md (also in repo at docs/JUDGE_TEST_GUIDE.md).
 API health: https://agentic-procurement-api.onrender.com/health

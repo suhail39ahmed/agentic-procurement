@@ -57,7 +57,7 @@ https://github.com/suhail39ahmed/agentic-procurement
 LLMs write messages; **code** decides money. Policy ALLOW / REQUIRE_APPROVAL / DENY, HMAC mandates, authorize-then-capture, idempotent PayPal calls.
 
 ### Try it
-Open the hosted URL above → Overview → Channel3 **Use market price → Review** → Queue negotiation, or open **Payables** / **Automation** for KERNEL + Bryntum.
+Open the hosted URL above → Overview → Channel3 **Use market price → Review** → Queue negotiation (Bryntum schedule is on Overview). Open **Payables** or **Automation** → KERNEL for invoice fetch.
 
 Local setup: see README **Quick start** (`pnpm install`, copy `.env.example`, sandbox PayPal + Azure AI).
 
@@ -94,7 +94,8 @@ Local setup: see README **Quick start** (`pnpm install`, copy `.env.example`, sa
 1. **0:00–0:20** Hosted URL + dual-track Overview  
 2. **0:20–1:10** Channel3 → RFQ → Queue → AG Grid offers → Checkout → PayPal approve → Authorize  
 3. **1:10–2:00** Payables: extract sample → match → payout mention  
-4. **2:00–2:40** Automation: Bryntum Simulate late capture / refund  
+4. **2:00–2:40** Overview Bryntum Gantt + Automation KERNEL → Payables  
+
 5. **2:40–3:00** Safety line: agents negotiate, policy + PayPal hold money  
 
 Do **not** use copyrighted music or third-party trademarks beyond fair product logos you have rights to show.

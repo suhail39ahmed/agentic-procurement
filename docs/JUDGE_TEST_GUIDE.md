@@ -17,7 +17,7 @@ Order totals above the **policy approval threshold** require human approval befo
 3. Wait for status **SUCCEEDED** → **Supplier offers** → inspect AG Grid ranks.
 4. (Optional money path) **Checkout winning offer** → complete PayPal sandbox approve → **Authorize hold**.
 5. **Payables** → keep sample invoice text → **Extract** → **Match**.
-6. **Automation** → Bryntum Gantt → **Simulate late capture** (bars should move/flag) → **Reset plan**.
+6. **Overview** → Bryntum Gantt shows completed + live negotiation checkpoints (hover dots for status).
 
 ---
 
@@ -53,15 +53,15 @@ Order totals above the **policy approval threshold** require human approval befo
 
 ---
 
-## Track C — Bryntum agent rescheduler
+## Track C — Bryntum schedule (Overview)
 
 | Step | Where | What to expect |
 |---|---|---|
-| C1 | Automation | Bryntum **Gantt Enterprise** chart loads |
-| C2 | Simulate late capture / fail / refund / dispute | Milestones move or flag (late/failed/refunded/disputed) |
-| C3 | Reset plan | Baseline authorize → delivery → capture → payout restored |
+| C1 | Overview | Bryntum **Gantt Enterprise** chart loads |
+| C2 | After Queue / Capture | Checkpoints appear for completed + in-flight negotiations |
+| C3 | Hover status dots | Tooltip shows milestone / payment status |
 
-Live PayPal webhooks (`PAYMENT.CAPTURE.*`, refunds, disputes) call the same agent path as the simulate buttons.
+Live PayPal webhooks (`PAYMENT.CAPTURE.*`, refunds, disputes) still feed the schedule agent; Automation is KERNEL → Payables only.
 
 ---
 

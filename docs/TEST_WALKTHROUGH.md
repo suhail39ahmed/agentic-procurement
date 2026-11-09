@@ -117,14 +117,13 @@ Do this only after Part 3 succeeded and you have an eligible winner.
 
 ---
 
-## Part 6 — Bryntum rescheduler
+## Part 6 — Bryntum schedule (Overview)
 
 | Step | You do | You should see |
 |---|---|---|
-| 6.1 | **Automation** | Bryntum Gantt with authorize / delivery / capture / payout |
-| 6.2 | **Simulate late capture** | Bars move or flag **late**; agent log line |
-| 6.3 | **Simulate refund** or **dispute** | Flags change |
-| 6.4 | **Reset plan** | Baseline milestones restored |
+| 6.1 | **Overview** | Bryntum Gantt with completed + live negotiation checkpoints |
+| 6.2 | Hover a status dot | Tooltip with milestone / payment status |
+| 6.3 | Queue a new RFQ or capture an order | Chart refreshes with new checkpoints |
 
 ---
 
