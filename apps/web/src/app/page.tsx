@@ -309,8 +309,31 @@ function validateFields(fields: RequestFields): { errors: FieldErrors; draft?: O
   };
 }
 
+function readPaypalReturnBoot(): { view: View; notice: string; clearQuery: boolean } {
+  if (typeof window === "undefined") {
+    return { view: "Overview", notice: "", clearQuery: false };
+  }
+  const paypal = new URLSearchParams(window.location.search).get("paypal");
+  if (paypal === "approved") {
+    return {
+      view: "Payments & orders",
+      notice: "PayPal sandbox buyer approved. Click Authorize hold to place funds on hold.",
+      clearQuery: true,
+    };
+  }
+  if (paypal === "cancelled") {
+    return {
+      view: "Payments & orders",
+      notice: "PayPal checkout was cancelled. Re-open the approve link to try again.",
+      clearQuery: true,
+    };
+  }
+  return { view: "Overview", notice: "", clearQuery: false };
+}
+
 export default function Dashboard() {
-  const [view, setView] = useState<View>("Overview");
+  const [paypalBoot] = useState(readPaypalReturnBoot);
+  const [view, setView] = useState<View>(paypalBoot.view);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [fields, setFields] = useState<RequestFields>(emptyFields);
   const [composerMode, setComposerMode] = useState<ComposerMode>("compose");
@@ -337,13 +360,14 @@ export default function Dashboard() {
   const [search, setSearch] = useState("");
   const [offerSearch, setOfferSearch] = useState("");
   const [expanded, setExpanded] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState(paypalBoot.notice);
   const [chatInput, setChatInput] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatError, setChatError] = useState("");
   const [streamLines, setStreamLines] = useState<StreamLine[]>([]);
   const [streamStatus, setStreamStatus] = useState("");
+  const [boundStreamKey, setBoundStreamKey] = useState("");
   const briefRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLButtonElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -547,14 +571,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     void loadNegotiations();
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("paypal") === "approved") {
-      setView("Payments & orders");
-      setNotice("PayPal sandbox buyer approved. Click Authorize hold to place funds on hold.");
-      window.history.replaceState({}, "", "/");
-    } else if (params.get("paypal") === "cancelled") {
-      setView("Payments & orders");
-      setNotice("PayPal checkout was cancelled. Re-open the approve link to try again.");
+    if (paypalBoot.clearQuery) {
       window.history.replaceState({}, "", "/");
     }
     return () => {
@@ -573,20 +590,26 @@ export default function Dashboard() {
   }, [feedRows]);
 
   const activeStreamStatus = activeNegotiation?.status;
+  const streamSessionKey = `${activeNegotiationId ?? ""}:${activeStreamStatus ?? ""}`;
+  if (boundStreamKey !== streamSessionKey) {
+    setBoundStreamKey(streamSessionKey);
+    setStreamLines([]);
+    setStreamStatus(
+      activeStreamStatus === "QUEUED"
+        || activeStreamStatus === "RUNNING"
+        || activeStreamStatus === "SUCCEEDED"
+        ? activeStreamStatus
+        : "",
+    );
+  }
 
   useEffect(() => {
     eventSourceRef.current?.close();
     eventSourceRef.current = null;
-    if (!activeNegotiationId) {
-      setStreamLines([]);
-      setStreamStatus("");
-      return;
-    }
+    if (!activeNegotiationId) return;
     if (activeStreamStatus !== "QUEUED" && activeStreamStatus !== "RUNNING" && activeStreamStatus !== "SUCCEEDED") {
       return;
     }
-    setStreamLines([]);
-    setStreamStatus(activeStreamStatus ?? "connecting");
     const source = new EventSource(`/api/negotiations/${encodeURIComponent(activeNegotiationId)}/events`);
     eventSourceRef.current = source;
     source.onmessage = (message) => {

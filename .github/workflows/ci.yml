@@ -19,7 +19,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: node scripts/scan-secrets.mjs
-      - run: pnpm --dir apps/web exec tsc --noEmit
+      - run: pnpm --dir apps/web exec tsc --noEmit -p tsconfig.json
       - run: pnpm --dir apps/web lint
       - run: pnpm --dir apps/web build
         env:
@@ -40,4 +40,4 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: node scripts/scan-secrets.mjs
-      - run: pnpm --dir apps/api exec tsc --noEmit
+      - run: pnpm --dir apps/api exec tsc --noEmit -p tsconfig.json

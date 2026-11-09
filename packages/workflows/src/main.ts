@@ -8,7 +8,7 @@ task({ name: "ping" }, function ping(_ctx: TaskContext): string {
 task(
   {
     name: "negotiate",
-    retry: { maxRetries: 0 },
+    retry: { maxRetries: 0, waitDurationMs: 1_000 },
     timeoutSeconds: 600,
   },
   async function negotiateTask(_ctx: TaskContext, input: unknown) {
