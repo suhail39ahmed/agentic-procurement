@@ -1,8 +1,10 @@
 # Agentic Procurement
 
-![Agentic Procurement: agents that negotiate, then pay safely](docs/cover.jpg)
+![ProcureAI — agents negotiate, PayPal pays safely](docs/procureai-devpost-cover.jpg)
 
-**AI agents that negotiate, buy and pay on PayPal: agentic procurement and payables for small businesses.**
+**ProcureAI** — AI agents that negotiate, buy and pay on PayPal: agentic procurement and payables for small businesses.
+
+**Hosted demo:** https://agentic-procurement-web.onrender.com · **Devpost pack:** [`docs/DEVPOST_SUBMISSION.md`](docs/DEVPOST_SUBMISSION.md)
 
 **Two tracks in one product:** (1) **Agent-to-agent marketplace** — buyer AI negotiates with seller AIs, scores offers, then PayPal authorize→capture. (2) **AI procurement & payables** — extract supplier invoices, three-way match, payouts, client invoicing, disputes.
 
@@ -39,23 +41,49 @@ I designed this so that **agents can negotiate, but money only moves through cod
 
 **Architecture**
 
+![ProcureAI architecture — solid money path, dotted events/enrichment](docs/procureai-architecture.jpg)
+
 ```mermaid
-flowchart LR
-    O[Owner RFQ<br/>items, max price, deadline] --> B[Buyer agent<br/>BATNA, up to 3 rounds]
-    B <--> S[Seller agents]
-    B --> SC[Deterministic scoring<br/>intent weights: price / speed]
-    SC --> PE{Policy engine}
-    PE -- DENY --> X[Stop + reasons]
-    PE -- REQUIRE_APPROVAL --> H[Human approval<br/>audit trail]
-    PE -- ALLOW --> M[Signed mandate<br/>HMAC, 15 min, single use]
-    H --> M
-    M --> PP[PayPal: create order<br/>authorize = funds held]
-    PP --> SH[Seller ships<br/>tracking]
-    SH --> C[Delivery confirmed<br/>capture]
-    PP -. expiry sweep .-> V[Void / reauthorize]
-    C -. refund .-> R[Refund]
-    WH[PayPal webhooks<br/>verified, rate-limited] --> L[(Order ledger<br/>replay-safe, disputes)]
+flowchart TB
+  subgraph Owner["Owner · Next.js on Render"]
+    UI[Dashboard · AG Grid]
+    C3[Channel3 RFQ enrich]
+    KN[KERNEL invoice fetch]
+    BG[Bryntum Gantt]
+  end
+
+  subgraph Agents["Azure AI agents"]
+    B[Buyer agent]
+    S[Seller agents]
+    EX[Invoice extractor]
+  end
+
+  subgraph Govern["Deterministic control plane"]
+    SC[Scoring]
+    PE{Policy}
+    M[HMAC mandate]
+  end
+
+  subgraph PayPal["PayPal sandbox"]
+    AUTH[AUTHORIZE hold]
+    CAP[CAPTURE]
+    PO[Payouts]
+    WH[Webhooks]
+  end
+
+  UI --> C3 -.->|catalog ≤$2| B
+  UI --> B
+  B <--> S
+  B --> SC --> PE
+  PE -->|ALLOW / approved| M --> AUTH --> CAP
+  AUTH -.->|ship then confirm| CAP
+  KN -.-> EX --> PO
+  WH -.->|ledger + disputes| L[(Order ledger)]
+  WH -.->|late / fail / refund / dispute| BG
+  CAP -.-> BG
 ```
+
+Legend: **solid** = primary money / negotiation path · **dotted** = enrichment & payment-driven reschedule.
 
 **Key design decisions and trade-offs**
 
