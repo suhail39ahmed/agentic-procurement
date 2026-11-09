@@ -367,21 +367,27 @@ export function buildOverviewSchedule(rows: WorkspacePaymentRow[]) {
   const deps: ScheduleDependency[] = [];
   const log: AgentLogEntry[] = [];
 
+  // One row per negotiation (dedupe by id). One Gantt bar per status — not Authorized+Captured pairs.
+  const seen = new Set<string>();
   const ranked = [...rows]
     .filter((r) => ["APPROVED", "HELD", "SHIPPED", "CAPTURED"].includes(r.paymentStatus))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .filter((r) => {
+      if (seen.has(r.id)) return false;
+      seen.add(r.id);
+      return true;
+    })
     .slice(0, 8);
 
   for (const row of ranked) {
     const short = row.brief.replace(/\s+/g, " ").trim().slice(0, 42);
     const label = short.length < row.brief.trim().length ? `${short}…` : short;
     const base = row.updatedAt.slice(0, 10) || isoDay(0);
-    const authId = `live-auth-${row.id.slice(0, 8)}`;
-    const capId = `live-cap-${row.id.slice(0, 8)}`;
+    const taskId = `live-${row.paymentStatus.toLowerCase()}-${row.id}`;
 
     if (row.paymentStatus === "APPROVED") {
       tasks.push({
-        id: authId,
+        id: taskId,
         name: `Awaiting approve · ${label}`,
         startDate: base,
         endDate: addDays(base, 1),
@@ -397,28 +403,14 @@ export function buildOverviewSchedule(rows: WorkspacePaymentRow[]) {
         at: row.updatedAt,
         signal: "APPROVED",
         action: `Checkout open — needs PayPal approve / Authorize hold · ${label}`,
-        taskIds: [authId],
+        taskIds: [taskId],
       });
       continue;
     }
 
-    tasks.push({
-      id: authId,
-      name: `Authorized · ${label}`,
-      startDate: addDays(base, -2),
-      endDate: addDays(base, -1),
-      duration: 1,
-      flag: "ok",
-      statusLabel: "AUTHORIZED",
-      type: "authorize",
-      note: `Authorize hold complete · ${row.id.slice(0, 8)}`,
-      eventColor: colorFor("ok"),
-      manuallyScheduled: true,
-    });
-
     if (row.paymentStatus === "HELD") {
       tasks.push({
-        id: capId,
+        id: taskId,
         name: `On hold · ship next · ${label}`,
         startDate: base,
         endDate: addDays(base, 1),
@@ -434,11 +426,14 @@ export function buildOverviewSchedule(rows: WorkspacePaymentRow[]) {
         at: row.updatedAt,
         signal: "HELD",
         action: `Authorize hold complete — awaiting ship · ${label}`,
-        taskIds: [authId, capId],
+        taskIds: [taskId],
       });
-    } else if (row.paymentStatus === "SHIPPED") {
+      continue;
+    }
+
+    if (row.paymentStatus === "SHIPPED") {
       tasks.push({
-        id: capId,
+        id: taskId,
         name: `Shipped · capture next · ${label}`,
         startDate: base,
         endDate: addDays(base, 1),
@@ -454,30 +449,30 @@ export function buildOverviewSchedule(rows: WorkspacePaymentRow[]) {
         at: row.updatedAt,
         signal: "SHIPPED",
         action: `Shipped — awaiting owner capture · ${label}`,
-        taskIds: [authId, capId],
+        taskIds: [taskId],
       });
-    } else {
-      tasks.push({
-        id: capId,
-        name: `Captured · ${label}`,
-        startDate: base,
-        endDate: addDays(base, 1),
-        duration: 1,
-        flag: "ok",
-        statusLabel: "CAPTURED",
-        type: "capture",
-        note: `Negotiation payment complete · ${label}`,
-        eventColor: colorFor("ok"),
-        manuallyScheduled: true,
-      });
-      log.unshift({
-        at: row.updatedAt,
-        signal: "CAPTURED",
-        action: `Negotiation payment complete · ${label}`,
-        taskIds: [authId, capId],
-      });
+      continue;
     }
-    deps.push({ id: `d-${row.id.slice(0, 8)}`, fromTask: authId, toTask: capId });
+
+    tasks.push({
+      id: taskId,
+      name: `Captured · ${label}`,
+      startDate: base,
+      endDate: addDays(base, 1),
+      duration: 1,
+      flag: "ok",
+      statusLabel: "CAPTURED",
+      type: "capture",
+      note: `Negotiation payment complete · ${label}`,
+      eventColor: colorFor("ok"),
+      manuallyScheduled: true,
+    });
+    log.unshift({
+      at: row.updatedAt,
+      signal: "CAPTURED",
+      action: `Negotiation payment complete · ${label}`,
+      taskIds: [taskId],
+    });
   }
 
   const projectStartDate = tasks.reduce(

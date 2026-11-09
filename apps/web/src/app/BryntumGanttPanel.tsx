@@ -73,6 +73,7 @@ export function BryntumGanttPanel({
       viewPreset: "weekAndDayLetter",
       barMargin: 8,
       rowHeight: 42,
+      // Must use type:"name" once — a plain name field makes Bryntum inject a second Name column.
       columns: [
         {
           text: " ",
@@ -90,8 +91,7 @@ export function BryntumGanttPanel({
             return `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};box-shadow:0 0 0 2px ${color}33"></span>`;
           },
         },
-        // Plain column (not type:"name") — avoids Bryntum's grey tree/leaf icons next to labels.
-        { field: "name", width: 260, text: "Milestone", htmlEncode: true },
+        { type: "name", field: "name", width: 280, text: "Milestone" },
         { type: "startdate", width: 110 },
         { type: "enddate", width: 110 },
       ],
