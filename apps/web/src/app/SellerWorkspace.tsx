@@ -191,7 +191,8 @@ export function SellerWorkspace({
               <div>
                 <h2>PayPal → Seller inbox</h2>
                 <p className={s.description}>
-                  Static seller queue. No “open case”, no draft, no capture. Accept refunds the buyer.
+                  Seller options only: review the claim, then <strong>Accept (refund buyer)</strong>.
+                  That creates a PayPal refund payment the Buyer sees under Payments.
                 </p>
               </div>
               <button type="button" className={s.secondary} disabled={busy} onClick={() => void refresh()}>

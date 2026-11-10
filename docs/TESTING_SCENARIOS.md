@@ -113,20 +113,26 @@ Buyer / Supervisor desk          PayPal            Seller desk (separate app chr
   |<-- Refund received ------------|<-- closed -----------|
 ```
 
-### Buyer or Supervisor (`buyer` / `buyer` or `supervisor` / `supervisor`)
-1. Finish capture on any order → **Recently captured**.
-2. **Raise dispute** on that row → case appears under **Disputes**.
-3. Wait for Seller accept → **Refund received**.
+### Full path
+`Buy → Pay → Ship → Capture → Dispute?`
 
-### Seller desk (`seller` / `seller`)
-4. Switch to **Seller desk** — green/dark seller product (no RFQ / Payments / Payables nav).
-5. **Needs accept** → **Accept claim (refund buyer)**.
+- **Yes** → Raise with PayPal → Seller desk Accept → Buyer sees **PayPal refund payment**
+- **No** or **48h** with no raise → **healthy** (dispute option gone)
 
-| Product | Raise on captured | Buy path | Accept refund |
+### Buyer or Supervisor
+1. Capture → **Recently captured** shows **Dispute? (48h window)**.
+2. **Yes — Raise with PayPal** → case under **Disputes**.
+3. Or **No — all good / healthy** (or wait 48h).
+4. After Seller accept → **PayPal refund payments** nest + refund card in Disputes.
+
+### Seller desk
+5. Separate product (no buy nav) → **Accept claim (refund buyer)** only.
+
+| Product | Dispute Yes/No | Buy path | Accept → PayPal refund |
 |---|---|---|---|
-| Buyer | Yes | Yes | No |
-| Supervisor | Yes (same desk) | Yes + over-$20 | No |
-| Seller desk | No | No | Yes |
+| Buyer | Yes (48h) | Yes | Sees refund payment |
+| Supervisor | Yes (same desk) | Yes + over-$20 | Sees refund payment |
+| Seller desk | No | No | Creates refund |
 
 ---
 

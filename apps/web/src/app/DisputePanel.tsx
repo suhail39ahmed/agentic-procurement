@@ -25,6 +25,15 @@ export type DisputeInboundSeed = {
   token: number;
 };
 
+/** PayPal refund payment row shown after Seller accepts. */
+export type PaypalRefundPayment = {
+  disputeId: string;
+  amount?: string;
+  orderId?: string | null;
+  status: string;
+  acceptedBy?: string;
+};
+
 type CapturedClaim = {
   disputeId: string;
   reason: string;
@@ -60,10 +69,12 @@ export function DisputePanel({
   setNotice,
   demoRole = null,
   inboundSeed = null,
+  onRefundsChange,
 }: {
   setNotice: (value: string) => void;
   demoRole?: DemoRole | null;
   inboundSeed?: DisputeInboundSeed | null;
+  onRefundsChange?: (refunds: PaypalRefundPayment[]) => void;
 }) {
   const isSeller = demoRole === "seller";
   const isBuyerSide = !isSeller;
@@ -111,6 +122,26 @@ export function DisputePanel({
   const latestRefund = closedItems.find(
     (item) => item.status.toUpperCase() === "REFUND_RECEIVED" || item.status.toUpperCase() === "RESOLVED",
   ) ?? null;
+
+  const refundPayments = useMemo(
+    () => closedItems
+      .filter((item) => {
+        const status = item.status.toUpperCase();
+        return status === "REFUND_RECEIVED" || status === "RESOLVED" || status === "ACCEPTED";
+      })
+      .map((item): PaypalRefundPayment => ({
+        disputeId: item.disputeId,
+        amount: item.amount,
+        orderId: item.orderId,
+        status: "REFUND · COMPLETED",
+        acceptedBy: item.acceptApprovedBy,
+      })),
+    [closedItems],
+  );
+
+  useEffect(() => {
+    onRefundsChange?.(refundPayments);
+  }, [refundPayments, onRefundsChange]);
 
   async function refresh() {
     const response = await fetch("/api/disputes", { cache: "no-store" });
@@ -431,11 +462,17 @@ export function DisputePanel({
 
       {latestRefund && (
         <div className={s.agentCaptureCard} style={{ marginBottom: 12 }} role="status">
-          <p className={s.agentCaptureBanner}>Refund received</p>
+          <p className={s.agentCaptureBanner}>PayPal refund payment</p>
+          <dl className={s.summaryList}>
+            <div><dt>Type</dt><dd>REFUND (back to buyer)</dd></div>
+            <div><dt>Status</dt><dd>COMPLETED</dd></div>
+            <div><dt>Dispute</dt><dd>{latestRefund.disputeId}</dd></div>
+            {latestRefund.amount && <div><dt>Amount</dt><dd>${latestRefund.amount} USD</dd></div>}
+            {latestRefund.orderId && <div><dt>Order</dt><dd>{latestRefund.orderId}</dd></div>}
+            {latestRefund.acceptApprovedBy && <div><dt>Accepted by</dt><dd>{latestRefund.acceptApprovedBy}</dd></div>}
+          </dl>
           <p className={s.description} style={{ margin: 0 }}>
-            {latestRefund.disputeId}
-            {latestRefund.amount ? ` · $${latestRefund.amount}` : ""}
-            {" · "}Seller accepted the PayPal claim — funds back to you.
+            Seller accepted on the Seller desk — this is the PayPal refund payment you should see returned.
           </p>
         </div>
       )}
@@ -538,15 +575,15 @@ export function DisputePanel({
                 </div>
                 {latestRefund ? (
                   <div className={s.agentCaptureCard}>
-                    <p className={s.agentCaptureBanner}>Refund received</p>
+                    <p className={s.agentCaptureBanner}>PayPal refund payment · COMPLETED</p>
                     <p className={s.description} style={{ margin: 0 }}>
                       {latestRefund.disputeId}
                       {latestRefund.amount ? ` · $${latestRefund.amount}` : ""}
-                      {latestRefund.acceptApprovedBy ? ` · accepted by ${latestRefund.acceptApprovedBy}` : ""}
+                      {latestRefund.acceptApprovedBy ? ` · ${latestRefund.acceptApprovedBy}` : ""}
                     </p>
                   </div>
                 ) : (
-                  <p className={s.tableNote}>Appears automatically after Seller accepts the PayPal claim (Refresh or wait ~4s).</p>
+                  <p className={s.tableNote}>After Seller accepts, a PayPal refund payment appears here (Refresh or wait ~4s).</p>
                 )}
               </div>
             </div>
@@ -578,7 +615,7 @@ export function DisputePanel({
               <div className={s.empty}>
                 <span className={s.emptyIcon}><UserRound size={26} /></span>
                 <h3>No open disputes</h3>
-                <p>Capture an order, or click Open &amp; raise to PayPal.</p>
+                <p>After capture: Dispute? Yes → Raise with PayPal. No or 48h → healthy.</p>
               </div>
             )}
           </div>
@@ -589,7 +626,7 @@ export function DisputePanel({
         open={closedOpen}
         setOpen={setClosedOpen}
         items={closedItems}
-        emptyHint="After Seller accepts, Refund received cases appear here."
+        emptyHint="PayPal refund payments appear here after Seller accepts."
         buyerView
       />
 
