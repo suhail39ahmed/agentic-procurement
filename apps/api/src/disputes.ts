@@ -106,13 +106,10 @@ Item:        ${itemLine}
 
 Opened by:   BUYER (procurement company)
 Channel:     PayPal Customer Disputes
-Outcome if Seller accepts:
-  Dispute closes in BUYER's favor → refund of captured funds
-  (not an extra payment)
-
-Next steps in ProcureAI:
-  1) Buyer — AI drafts the dispute statement (evidence for this case)
-  2) Seller — Approve accept_dispute_claim (PayPal Agent Toolkit)
+Flow:
+  1) Buyer raises claim → PayPal
+  2) PayPal notifies Seller (Seller inbox)
+  3) Seller accepts → Buyer refund received
 `;
 }
 
@@ -184,7 +181,7 @@ disputesRouter.post("/simulate", async (req, res) => {
       captureId: captureId ?? null,
       supplierId,
       emailText,
-      note: "Buyer opened a PayPal dispute case vs the seller. Draft the statement as Buyer, then Seller accepts (refund path).",
+      note: "Buyer raised a claim to PayPal. After raise, PayPal notifies the Seller; Seller accept → Buyer refund received.",
     });
   } catch (err) {
     console.error("[disputes] simulate failed", err);
@@ -200,7 +197,7 @@ disputesRouter.post("/:id/draft", async (req, res) => {
   const demoRole = String(req.header("x-demo-role") ?? "").toLowerCase();
   if (demoRole === "seller") {
     return res.status(403).json({
-      error: "Seller views claims but Buyer drafts the claim wording.",
+      error: "Seller cannot raise claims — Buyer raises to PayPal.",
       requiredRole: "buyer",
       currentRole: demoRole,
     });
@@ -216,7 +213,7 @@ disputesRouter.post("/:id/draft", async (req, res) => {
         content:
           "You write a short PayPal dispute statement for a BUYER (procurement company). "
           + "Goods from the supplier were not as negotiated after capture. "
-          + "This text is evidence attached to the PayPal dispute case — not an email to the seller. "
+          + "This text is filed with PayPal; PayPal then notifies the Seller. "
           + "Be factual and firm. Request refund / remedy. Do not invent tracking numbers. "
           + "Return plain text only (no markdown).",
       },
@@ -224,18 +221,29 @@ disputesRouter.post("/:id/draft", async (req, res) => {
         role: "user",
         content: JSON.stringify({
           claim: local,
-          instruction: "Draft the dispute statement for this PayPal case. Seller will later accept_dispute_claim.",
+          instruction: "File the dispute statement with PayPal. PayPal will notify the Seller.",
         }),
       },
     ], { timeoutMs: 45_000 });
 
     await saveDisputeDraft(req.params.id, drafted.content.trim());
+    await upsertLocalDispute({
+      disputeId: req.params.id,
+      reason: local.reason,
+      amount: local.amount,
+      status: "RAISED_TO_PAYPAL",
+      orderId: local.orderId,
+      captureId: local.captureId,
+      openedAt: local.openedAt,
+    });
     const updated = await getLocalDispute(req.params.id);
     return res.json({
       disputeId: req.params.id,
+      status: "RAISED_TO_PAYPAL",
       agentDraft: updated?.agentDraft,
       agentDraftAt: updated?.agentDraftAt,
       model: drafted.model,
+      note: "Raised to PayPal — PayPal will send this dispute to the Seller.",
     });
   } catch (err) {
     console.error("[disputes] draft failed", err);
@@ -298,7 +306,7 @@ disputesRouter.post("/:id/accept", async (req, res) => {
       disputeId: req.params.id,
       reason: local.reason,
       amount: local.amount,
-      status: "RESOLVED",
+      status: "REFUND_RECEIVED",
       orderId: local.orderId,
       captureId: local.captureId,
       openedAt: local.openedAt,
@@ -312,10 +320,10 @@ disputesRouter.post("/:id/accept", async (req, res) => {
       toolkitError,
       toolkitNote:
         toolkitError
-          ? "Seller accepted in ProcureAI. Toolkit accept may fail for demo claim ids that are not live PayPal disputes — local claim is still RESOLVED."
-          : "Seller accepted via PayPal Agent Toolkit accept_dispute_claim.",
+          ? "Seller accepted in ProcureAI. Toolkit accept may fail for demo claim ids — Buyer still shows Refund received locally."
+          : "Seller accepted via PayPal. Buyer status: Refund received.",
       approvedBy: `seller:${ownerId}`,
-      status: "RESOLVED",
+      status: "REFUND_RECEIVED",
     });
   } catch (err) {
     console.error("[disputes] seller accept failed", err);

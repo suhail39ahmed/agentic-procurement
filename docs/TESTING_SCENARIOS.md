@@ -100,24 +100,33 @@ You run a small business buying supplies.
 
 ---
 
-## Story D — “PayPal dispute → Seller refunds”
+## Story D — “Raise to PayPal → Seller → Refund received”
 
-**Goal:** Two different windows. Buyer opens + drafts. Seller only accepts (refund).
+**Goal:** Buyer raises to PayPal → PayPal sends to Seller → Seller accepts → Buyer sees Refund received.
+
+```
+Buyer                  PayPal                 Seller
+  |                      |                      |
+  |-- Raise claim ------>|                      |
+  |   (Raised to PayPal) |-- notify ----------->|
+  |                      |                      |-- Accept (refund)
+  |<-- Refund received --|<-- claim closed -----|
+```
 
 ### Buyer window (`buyer` / `buyer`)
-1. Finish capture (or click **Open PayPal dispute**).  
-2. See **Buyer window · My PayPal disputes**: case opens → AI fields → **Draft dispute statement**.  
-3. Banner says switch to Seller. **No Accept button** on Buyer.
+1. Capture (or **Open & raise to PayPal**).
+2. Step 1: **Raised to PayPal** (case card + fields).
+3. Step 2: **Raise to PayPal (notify Seller)**.
+4. Step 3 waits → after Seller accept: **Refund received**.
 
 ### Seller window (`seller` / `seller`)
-4. Sidebar → **Seller**. UI changes to **Seller window · Incoming disputes**.  
-5. Only cases with a Buyer statement appear under **Needs your accept**.  
-6. **Accept claim (refund buyer)** → Closed.
+5. Sidebar → **Seller** → **From PayPal** / **PayPal sent you**.
+6. **Accept claim (refund buyer)** → switch back to Buyer for Refund received.
 
-| Window | Can open case? | Can draft? | Can accept? |
+| Window | Raise to PayPal | PayPal inbox | Accept → refund |
 |---|---|---|---|
-| Buyer | Yes | Yes | No |
-| Seller | No | No | Yes (refund) |
+| Buyer | Yes | No | Sees Refund received |
+| Seller | No | Yes | Yes |
 | Supervisor | (buy path) | — | No |
 
 ---
