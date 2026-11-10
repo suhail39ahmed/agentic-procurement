@@ -416,28 +416,16 @@ export function DisputePanel({
       <div className={s.sectionHeader}>
         <div>
           <h3 className={s.disputeRoleTitle}>
-            <UserRound size={18} aria-hidden /> Buyer window · Raise to PayPal
+            <UserRound size={18} aria-hidden />
+            {demoRole === "owner" ? "Supervisor" : "Buyer"} · My disputes
           </h3>
           <p className={s.description}>
-            You raise the claim to PayPal. PayPal sends it to the Seller. When they accept, you see <strong>Refund received</strong>.
+            Start from <strong>Recently captured → Raise dispute</strong> on any completed order.
+            PayPal notifies the Seller desk. When they accept, you see <strong>Refund received</strong>.
           </p>
         </div>
         <div className={s.reviewActions}>
           <button type="button" className={s.secondary} disabled={busy} onClick={() => void refresh()}>Refresh</button>
-          <button
-            type="button"
-            className={s.primary}
-            disabled={busy}
-            onClick={() => void openPaypalDispute({
-              orderId: inboundSeed?.orderId,
-              amount: inboundSeed?.amount,
-              supplierId: inboundSeed?.supplierId,
-              brief: inboundSeed?.brief,
-              captureId: inboundSeed?.captureId,
-            })}
-          >
-            {busy && inboundPhase === "waiting" ? "Opening…" : "Open & raise to PayPal"}
-          </button>
         </div>
       </div>
 
@@ -483,7 +471,7 @@ export function DisputePanel({
                 {caseVisible && caseText ? (
                   <pre className={s.shipInboxBody} aria-live="polite">{caseText}</pre>
                 ) : inboundPhase !== "waiting" ? (
-                  <p className={s.tableNote}>After capture, or click <strong>Open &amp; raise to PayPal</strong>.</p>
+                  <p className={s.tableNote}>Use <strong>Recently captured → Raise dispute</strong> on any completed order.</p>
                 ) : null}
                 {capturedClaim && (
                   <div className={s.agentCaptureCard} style={{ marginTop: 10 }}>

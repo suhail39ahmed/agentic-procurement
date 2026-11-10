@@ -14,14 +14,14 @@ export const DEMO_ACCOUNTS = {
     name: "Buyer · Purchasing",
     username: "buyer",
     password: "buyer",
-    blurb: "Buy path: RFQ → PayPal → ship email → capture. Opens disputes when goods are wrong. Cannot approve spend or accept claims.",
+    blurb: "Buyer product: RFQ → PayPal → ship → capture → Raise dispute on any captured order. Cannot approve spend or accept claims.",
   },
   owner: {
     role: "owner" as const,
     name: "Supervisor · Approvals",
     username: "supervisor",
     password: "supervisor",
-    blurb: "Same buy path + over-$20 spend approve. Does not accept seller-side dispute claims.",
+    blurb: "Buyer product + over-$20 spend approve. Same capture desk; does not use the Seller desk.",
     aliases: ["owner"] as const,
   },
   seller: {
@@ -29,7 +29,7 @@ export const DEMO_ACCOUNTS = {
     name: "Seller · Fulfillment",
     username: "seller",
     password: "seller",
-    blurb: "Supplier view for disputes only. Sees buyer claims and can Approve accept_dispute_claim via PayPal Toolkit.",
+    blurb: "Separate Seller product: PayPal-forwarded claims only. No RFQ/checkout/capture. Accept = refund buyer.",
   },
 } as const;
 

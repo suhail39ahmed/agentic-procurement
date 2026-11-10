@@ -19,6 +19,7 @@ import Link from "next/link";
 import { StretchPanel } from "./StretchPanel";
 import { PayablesPanel } from "./PayablesPanel";
 import { DisputePanel, type DisputeInboundSeed } from "./DisputePanel";
+import { SellerWorkspace } from "./SellerWorkspace";
 import { SponsorsPanel } from "./SponsorsPanel";
 import { OverviewSchedulePanel } from "./OverviewSchedulePanel";
 import { PayPalApproveButtons, paypalOrderIdFromApproveUrl } from "./PayPalApproveButtons";
@@ -448,6 +449,8 @@ export default function Dashboard() {
   const [disputeInbound, setDisputeInbound] = useState<DisputeInboundSeed | null>(null);
   const [disputesOpen, setDisputesOpen] = useState(true);
   const [raiseDisputeBusy, setRaiseDisputeBusy] = useState(false);
+  /** Negotiation ids that already started a dispute from Recently captured */
+  const [raisedDisputeIds, setRaisedDisputeIds] = useState<string[]>([]);
   const disputePanelRef = useRef<HTMLDivElement | null>(null);
   const [headerTab, setHeaderTab] = useState<"preview" | "help">("preview");
   const processHelpOpen = headerTab === "help";
@@ -1885,6 +1888,7 @@ export default function Dashboard() {
         }
       }
 
+      setRaisedDisputeIds((prev) => (prev.includes(row.id) ? prev : [...prev, row.id]));
       setDisputeInbound({
         token: Date.now(),
         orderId,
@@ -1918,7 +1922,7 @@ export default function Dashboard() {
               <div>
                 <h1>ProcureAI demo login</h1>
                 <p className={s.description}>
-                  Three roles: Buyer buys &amp; raises claims · Supervisor approves over-$20 spend · Seller accepts disputes.
+                  Three products: <strong>Buyer</strong> buys &amp; raises disputes · <strong>Supervisor</strong> approves over-$20 · <strong>Seller</strong> gets a separate desk for PayPal claims.
                 </p>
               </div>
             </div>
@@ -1978,6 +1982,20 @@ export default function Dashboard() {
     );
   }
 
+  // Seller is a separate product — not the Buyer/Supervisor marketplace chrome.
+  if (isSeller) {
+    return (
+      <SellerWorkspace
+        session={demoSession}
+        notice={notice}
+        setNotice={setNotice}
+        onSwitchToBuyer={() => signInAs("buyer")}
+        onSwitchToSupervisor={() => signInAs("owner")}
+        onSignOut={signOutDemo}
+      />
+    );
+  }
+
   return (
     <div className={s.app}>
       <a className={s.skip} href="#workspace-main">Skip to workspace</a>
@@ -1988,10 +2006,10 @@ export default function Dashboard() {
           <span>Procure<span className={s.brandAI}>AI</span><small>AGENTIC PROCUREMENT</small></span>
           </Link>
         <div className={s.workspace}>
-          <span className={s.avatar}>{isOwner ? "S" : isSeller ? "Se" : "B"}</span>
+          <span className={s.avatar}>{isOwner ? "S" : "B"}</span>
           <div>
             {demoSession.name}
-            <small>{isOwner ? "Supervisor session" : isSeller ? "Seller session" : "Buyer session"}</small>
+            <small>{isOwner ? "Supervisor session" : "Buyer session"}</small>
           </div>
           <ShieldCheck size={17} />
         </div>
@@ -2013,15 +2031,11 @@ export default function Dashboard() {
             <p>Payment authorization and capture remain separate, guarded actions.</p>
           </div>
           <div className={s.profile}>
-            <span className={s.avatar}>{isOwner ? "S" : isSeller ? "Se" : "B"}</span>
+            <span className={s.avatar}>{isOwner ? "S" : "B"}</span>
             <div>
-              {isOwner ? "Supervisor" : isSeller ? "Seller" : "Buyer"}
+              {isOwner ? "Supervisor" : "Buyer"}
               <small>
-                {isOwner
-                  ? "Over-$20 spend approve"
-                  : isSeller
-                    ? "Dispute accept only"
-                    : "Buy + raise claims"}
+                {isOwner ? "Over-$20 spend approve" : "Buy + raise disputes on captured orders"}
               </small>
             </div>
             <button type="button" className={s.textButton} title="Sign out of demo role" onClick={signOutDemo}>
@@ -2031,8 +2045,8 @@ export default function Dashboard() {
           <div className={s.roleSwitch}>
             <button
               type="button"
-              className={!isOwner && !isSeller ? s.primary : s.secondary}
-              disabled={!isOwner && !isSeller}
+              className={!isOwner ? s.primary : s.secondary}
+              disabled={!isOwner}
               onClick={() => signInAs("buyer")}
             >
               Buyer
@@ -2047,11 +2061,11 @@ export default function Dashboard() {
             </button>
             <button
               type="button"
-              className={isSeller ? s.primary : s.secondary}
-              disabled={isSeller}
+              className={s.secondary}
               onClick={() => signInAs("seller")}
+              title="Opens the separate Seller desk"
             >
-              Seller
+              Seller desk
             </button>
           </div>
         </div>
@@ -3083,16 +3097,28 @@ export default function Dashboard() {
                                     <p>CAPTURED · max {money.format(row.maxUnitPrice)}</p>
                                   </div>
                                   <div className={s.reviewActions}>
-                                    {demoRole !== "seller" && (
-                                      <button
-                                        type="button"
-                                        className={s.primary}
-                                        disabled={raiseDisputeBusy}
-                                        onClick={() => void raiseDisputeFromCaptured(row)}
-                                      >
-                                        {raiseDisputeBusy ? "Raising…" : "Raise dispute"} <ArrowRight size={14} />
-                                      </button>
-                                    )}
+                                    <button
+                                      type="button"
+                                      className={raisedDisputeIds.includes(row.id) ? s.secondary : s.primary}
+                                      disabled={raiseDisputeBusy}
+                                      onClick={() => {
+                                        if (raisedDisputeIds.includes(row.id)) {
+                                          setDisputesOpen(true);
+                                          requestAnimationFrame(() => {
+                                            disputePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                          });
+                                          setNotice("That capture already has a dispute — opened Disputes.");
+                                          return;
+                                        }
+                                        void raiseDisputeFromCaptured(row);
+                                      }}
+                                    >
+                                      {raiseDisputeBusy
+                                        ? "Raising…"
+                                        : raisedDisputeIds.includes(row.id)
+                                          ? "View in Disputes"
+                                          : "Raise dispute"} <ArrowRight size={14} />
+                                    </button>
                                     <button
                                       type="button"
                                       className={s.textButton}
@@ -3139,21 +3165,30 @@ export default function Dashboard() {
                                           )}
                                           {capturedPreview.captureId && <div><dt>Capture</dt><dd>{capturedPreview.captureId}</dd></div>}
                                         </dl>
-                                        {demoRole !== "seller" && (
-                                          <div className={s.reviewActions} style={{ marginTop: 12 }}>
-                                            <button
-                                              type="button"
-                                              className={s.primary}
-                                              disabled={raiseDisputeBusy}
-                                              onClick={() => void raiseDisputeFromCaptured(row)}
-                                            >
-                                              Raise dispute to PayPal <ArrowRight size={15} />
-                                            </button>
-                                            <p className={s.summaryNote} style={{ margin: 0 }}>
-                                              Opens under <strong>Disputes</strong> below — PayPal then notifies the Seller.
-                                            </p>
-                                          </div>
-                                        )}
+                                        <div className={s.reviewActions} style={{ marginTop: 12 }}>
+                                          <button
+                                            type="button"
+                                            className={raisedDisputeIds.includes(row.id) ? s.secondary : s.primary}
+                                            disabled={raiseDisputeBusy}
+                                            onClick={() => {
+                                              if (raisedDisputeIds.includes(row.id)) {
+                                                setDisputesOpen(true);
+                                                requestAnimationFrame(() => {
+                                                  disputePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                                });
+                                                return;
+                                              }
+                                              void raiseDisputeFromCaptured(row);
+                                            }}
+                                          >
+                                            {raisedDisputeIds.includes(row.id)
+                                              ? "View in Disputes"
+                                              : "Raise dispute to PayPal"} <ArrowRight size={15} />
+                                          </button>
+                                          <p className={s.summaryNote} style={{ margin: 0 }}>
+                                            Any captured order can start a dispute → lands under <strong>Disputes</strong>. Seller desk is a separate product.
+                                          </p>
+                                        </div>
                                       </>
                                     )}
                                   </div>

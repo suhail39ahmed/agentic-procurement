@@ -100,34 +100,33 @@ You run a small business buying supplies.
 
 ---
 
-## Story D — “Raise to PayPal → Seller → Refund received”
+## Story D — “Raise to PayPal → Seller desk → Refund received”
 
-**Goal:** Buyer raises to PayPal → PayPal sends to Seller → Seller accepts → Buyer sees Refund received.
+**Goal:** Different products per role. Any captured order can raise a dispute. Seller desk is separate (not the buy chrome).
 
 ```
-Buyer                  PayPal                 Seller
-  |                      |                      |
-  |-- Raise claim ------>|                      |
-  |   (Raised to PayPal) |-- notify ----------->|
-  |                      |                      |-- Accept (refund)
-  |<-- Refund received --|<-- claim closed -----|
+Buyer / Supervisor desk          PayPal            Seller desk (separate app chrome)
+  |                                |                      |
+  |-- Raise dispute (captured) --->|                      |
+  |   under Disputes               |-- notify ----------->|
+  |                                |                      |-- Accept (refund)
+  |<-- Refund received ------------|<-- closed -----------|
 ```
 
-### Buyer window (`buyer` / `buyer`)
-1. After **Confirm delivery & capture**, open **Recently captured**.
-2. Click **Raise dispute** (not auto — you choose).
-3. Case opens under the **Disputes** nest (Raised to PayPal → PayPal notifies Seller).
-4. After Seller accept: **Refund received** on Buyer.
+### Buyer or Supervisor (`buyer` / `buyer` or `supervisor` / `supervisor`)
+1. Finish capture on any order → **Recently captured**.
+2. **Raise dispute** on that row → case appears under **Disputes**.
+3. Wait for Seller accept → **Refund received**.
 
-### Seller window (`seller` / `seller`)
-5. Sidebar → **Seller** → **From PayPal** / **PayPal sent you**.
-6. **Accept claim (refund buyer)** → switch back to Buyer for Refund received.
+### Seller desk (`seller` / `seller`)
+4. Switch to **Seller desk** — green/dark seller product (no RFQ / Payments / Payables nav).
+5. **Needs accept** → **Accept claim (refund buyer)**.
 
-| Window | Raise to PayPal | PayPal inbox | Accept → refund |
+| Product | Raise on captured | Buy path | Accept refund |
 |---|---|---|---|
-| Buyer | Yes | No | Sees Refund received |
-| Seller | No | Yes | Yes |
-| Supervisor | (buy path) | — | No |
+| Buyer | Yes | Yes | No |
+| Supervisor | Yes (same desk) | Yes + over-$20 | No |
+| Seller desk | No | No | Yes |
 
 ---
 
