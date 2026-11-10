@@ -84,7 +84,7 @@ Negative case:
 - [ ] Match with PO/receipt `$1.50` → MATCHED
 - [ ] Payout to sandbox seller email
 - [ ] Create & send client invoice `$1.50`
-- [ ] Disputes: simulate → draft → owner-approved accept
+- [ ] Disputes: capture/Replay buyer claim → inbox email (~4s) → agent captures fields → draft → Supervisor accept
 
 ## 5c. PayPal Agent Toolkit surfaces
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowRight, ChevronDown, ChevronRight, ShieldCheck } from "lucide-react";
 import s from "./dashboard.module.css";
 
 type LocalDispute = {
@@ -32,6 +32,11 @@ type CapturedClaim = {
   eventType: string;
 };
 
+function isClosedStatus(status: string): boolean {
+  const value = status.toUpperCase();
+  return value === "RESOLVED" || value === "CLOSED" || value === "ACCEPTED";
+}
+
 export function DisputePanel({
   setNotice,
   demoRole = null,
@@ -48,8 +53,31 @@ export function DisputePanel({
   const [inboundPhase, setInboundPhase] = useState<"idle" | "waiting" | "received" | "reading" | "done">("idle");
   const [inboundEmail, setInboundEmail] = useState("");
   const [capturedClaim, setCapturedClaim] = useState<CapturedClaim | null>(null);
+  const [openSectionOpen, setOpenSectionOpen] = useState(true);
+  const [closedSectionOpen, setClosedSectionOpen] = useState(false);
   const inboundTokenRef = useRef(0);
   const lastSeedTokenRef = useRef(0);
+
+  const openItems = useMemo(
+    () => items.filter((item) => !isClosedStatus(item.status)),
+    [items],
+  );
+  const closedItems = useMemo(
+    () => items.filter((item) => isClosedStatus(item.status)),
+    [items],
+  );
+
+  const activeOpen = useMemo(() => {
+    if (selected) {
+      const match = openItems.find((item) => item.disputeId === selected);
+      if (match) return match;
+    }
+    if (capturedClaim) {
+      const match = openItems.find((item) => item.disputeId === capturedClaim.disputeId);
+      if (match) return match;
+    }
+    return openItems[openItems.length - 1] ?? null;
+  }, [openItems, selected, capturedClaim]);
 
   async function refresh() {
     const response = await fetch("/api/disputes", { cache: "no-store" });
@@ -84,6 +112,8 @@ export function DisputePanel({
   }) {
     const token = ++inboundTokenRef.current;
     setBusy(true);
+    setOpenSectionOpen(true);
+    setClosedSectionOpen(false);
     setInboundPhase("waiting");
     setInboundEmail("");
     setCapturedClaim(null);
@@ -111,7 +141,6 @@ export function DisputePanel({
         reason?: string;
         amount?: string;
         orderId?: string | null;
-        note?: string;
       };
       if (!response.ok) {
         setInboundPhase("idle");
@@ -123,7 +152,7 @@ export function DisputePanel({
       setInboundEmail(payload.emailText ?? "");
       setInboundPhase("received");
       setSelected(payload.disputeId ?? null);
-      setNotice(`Email received — PayPal dispute webhook. AI agent is reading the claim…`);
+      setNotice("Email received — PayPal dispute webhook. AI agent is reading the claim…");
 
       await new Promise((resolve) => setTimeout(resolve, 1400));
       if (token !== inboundTokenRef.current) return;
@@ -145,7 +174,7 @@ export function DisputePanel({
       await refresh();
       setInboundPhase("done");
       setNotice(
-        `Email received ✓ · Agent captured ${claim.disputeId} (${claim.reason}${claim.amount ? ` · $${claim.amount}` : ""}). Draft a response next.`,
+        `Email received ✓ · Agent captured ${claim.disputeId}. Draft a response in Open → step 3.`,
       );
     } catch {
       if (token === inboundTokenRef.current) {
@@ -172,6 +201,7 @@ export function DisputePanel({
   async function draft(id: string) {
     setBusy(true);
     setSelected(id);
+    setOpenSectionOpen(true);
     try {
       const response = await fetch(`/api/disputes/${encodeURIComponent(id)}/draft`, { method: "POST" });
       const payload = await response.json().catch(() => ({})) as { error?: string };
@@ -207,11 +237,16 @@ export function DisputePanel({
         return;
       }
       setNotice("accept_dispute_claim invoked behind Supervisor approval.");
+      setClosedSectionOpen(true);
       await refresh();
     } finally {
       setBusy(false);
     }
   }
+
+  const stepEmailDone = inboundPhase === "received" || inboundPhase === "reading" || inboundPhase === "done" || Boolean(inboundEmail);
+  const stepExtractDone = inboundPhase === "done" || Boolean(capturedClaim);
+  const stepRespondActive = stepExtractDone || Boolean(activeOpen);
 
   return (
     <div className={s.reviewPanel} style={{ marginTop: 18 }}>
@@ -219,7 +254,7 @@ export function DisputePanel({
         <div>
           <h3>Disputes</h3>
           <p className={s.description}>
-            After capture, a buyer claim arrives (~4s). AI agent reads the webhook email and captures the fields below — then Draft → Supervisor accept.
+            Open = email → AI extract → draft/accept in one window. Closed = resolved claims (collapsed).
           </p>
         </div>
         <div className={s.reviewActions}>
@@ -240,89 +275,194 @@ export function DisputePanel({
         </div>
       </div>
 
-      <div className={s.shipInbox} style={{ marginBottom: 14 }}>
-        <div className={s.shipInboxHead}>
-          <strong>Dispute inbox</strong>
-          <span className={s.pending}>
-            {inboundPhase === "waiting" && "Waiting for email…"}
-            {inboundPhase === "received" && "Email received"}
-            {inboundPhase === "reading" && "AI reading…"}
-            {inboundPhase === "done" && "Details captured"}
-            {inboundPhase === "idle" && (items.length ? "Open claims" : "Quiet")}
-          </span>
-        </div>
-        {inboundPhase === "waiting" && (
-          <p className={s.description}>Listening for buyer dispute webhook (~4s)…</p>
-        )}
-        {(inboundPhase === "received" || inboundPhase === "reading") && inboundEmail && (
-          <p className={s.agentCaptureBanner} role="status">
-            {inboundPhase === "received"
-              ? "Email received — AI agent opening the PayPal dispute message…"
-              : "AI agent extracting dispute id, reason, amount, and order…"}
-          </p>
-        )}
-        {inboundEmail ? (
-          <pre className={s.shipInboxBody} aria-live="polite">{inboundEmail}</pre>
-        ) : (
-          <p className={s.tableNote}>
-            Confirm delivery & capture on an order, or click <strong>Replay buyer claim</strong>.
-          </p>
-        )}
-        {capturedClaim && (
-          <div className={s.agentCaptureCard}>
-            <p className={s.agentCaptureBanner} role="status">
-              Details captured from email
+      <div className={s.paymentNest} style={{ marginBottom: 12 }}>
+        <button
+          type="button"
+          className={s.paymentNestToggle}
+          aria-expanded={openSectionOpen}
+          onClick={() => setOpenSectionOpen((open) => !open)}
+        >
+          {openSectionOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          <span>Open</span>
+          <em>{openItems.length}</em>
+        </button>
+        {openSectionOpen && (
+          <div className={s.paymentNestBody}>
+            <p className={s.description}>
+              One live window: 1) Email received → 2) AI extracted → 3) Agent helps respond.
             </p>
-            <dl className={s.summaryList}>
-              <div><dt>Event</dt><dd>{capturedClaim.eventType}</dd></div>
-              <div><dt>Dispute</dt><dd>{capturedClaim.disputeId}</dd></div>
-              <div><dt>Reason</dt><dd>{capturedClaim.reason}</dd></div>
-              {capturedClaim.amount && <div><dt>Amount</dt><dd>${capturedClaim.amount}</dd></div>}
-              {capturedClaim.orderId && <div><dt>Order</dt><dd>{capturedClaim.orderId}</dd></div>}
-            </dl>
+
+            <div className={s.disputeFlowWindow}>
+              <div className={s.disputeStep}>
+                <div className={s.disputeStepHead}>
+                  <span className={s.stepNumber}>1</span>
+                  <strong>Email received</strong>
+                  <span className={s.pending}>
+                    {inboundPhase === "waiting" && "Waiting…"}
+                    {inboundPhase === "received" && "Just arrived"}
+                    {inboundPhase === "reading" && "Opening…"}
+                    {(inboundPhase === "done" || (inboundPhase === "idle" && inboundEmail)) && "Received"}
+                    {inboundPhase === "idle" && !inboundEmail && "—"}
+                  </span>
+                </div>
+                {inboundPhase === "waiting" && (
+                  <p className={s.description}>Listening for PayPal CUSTOMER.DISPUTE.CREATED (~4s)…</p>
+                )}
+                {stepEmailDone && inboundEmail ? (
+                  <pre className={s.shipInboxBody} aria-live="polite">{inboundEmail}</pre>
+                ) : inboundPhase !== "waiting" ? (
+                  <p className={s.tableNote}>Capture an order or click <strong>Replay buyer claim</strong>.</p>
+                ) : null}
+              </div>
+
+              <div className={`${s.disputeStep} ${stepExtractDone ? s.disputeStepActive : ""}`}>
+                <div className={s.disputeStepHead}>
+                  <span className={s.stepNumber}>2</span>
+                  <strong>AI agent extracted</strong>
+                  <span className={s.pending}>
+                    {inboundPhase === "reading" && "Reading…"}
+                    {stepExtractDone && "Captured"}
+                    {!stepExtractDone && inboundPhase !== "reading" && "—"}
+                  </span>
+                </div>
+                {(inboundPhase === "received" || inboundPhase === "reading") && !capturedClaim && (
+                  <p className={s.agentCaptureBanner} role="status">
+                    {inboundPhase === "received"
+                      ? "Email received — AI agent opening the message…"
+                      : "AI agent extracting dispute id, reason, amount, and order…"}
+                  </p>
+                )}
+                {capturedClaim ? (
+                  <div className={s.agentCaptureCard}>
+                    <p className={s.agentCaptureBanner} role="status">Details captured from email</p>
+                    <dl className={s.summaryList}>
+                      <div><dt>Event</dt><dd>{capturedClaim.eventType}</dd></div>
+                      <div><dt>Dispute</dt><dd>{capturedClaim.disputeId}</dd></div>
+                      <div><dt>Reason</dt><dd>{capturedClaim.reason}</dd></div>
+                      {capturedClaim.amount && <div><dt>Amount</dt><dd>${capturedClaim.amount}</dd></div>}
+                      {capturedClaim.orderId && <div><dt>Order</dt><dd>{capturedClaim.orderId}</dd></div>}
+                    </dl>
+                  </div>
+                ) : (
+                  <p className={s.tableNote}>Fields appear here after the agent reads the email.</p>
+                )}
+              </div>
+
+              <div className={`${s.disputeStep} ${stepRespondActive ? s.disputeStepActive : ""}`}>
+                <div className={s.disputeStepHead}>
+                  <span className={s.stepNumber}>3</span>
+                  <strong>AI helps respond</strong>
+                  <span className={s.pending}>
+                    {activeOpen?.agentDraft ? "Draft ready" : stepRespondActive ? "Needs draft" : "—"}
+                  </span>
+                </div>
+                {activeOpen ? (
+                  <>
+                    <p className={s.description}>
+                      {activeOpen.disputeId} · {activeOpen.status}
+                      {activeOpen.amount ? ` · $${activeOpen.amount}` : ""}
+                      {activeOpen.orderId ? ` · order ${activeOpen.orderId}` : ""}
+                    </p>
+                    {activeOpen.agentDraft ? (
+                      <div className={s.agentCaptureCard}>
+                        <p className={s.agentCaptureBanner}>Agent draft</p>
+                        <p className={s.description} style={{ margin: 0 }}>{activeOpen.agentDraft}</p>
+                      </div>
+                    ) : (
+                      <p className={s.tableNote}>Ask the agent to draft a seller response, then Supervisor accepts.</p>
+                    )}
+                    <div className={s.reviewActions}>
+                      <button type="button" className={s.secondary} disabled={busy} onClick={() => void draft(activeOpen.disputeId)}>
+                        Draft response <ArrowRight size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        className={s.primary}
+                        disabled={busy || !isOwner || !activeOpen.agentDraft || Boolean(activeOpen.acceptApprovedBy)}
+                        onClick={() => void accept(activeOpen.disputeId)}
+                      >
+                        {isOwner ? "Approve accept_dispute_claim" : "Supervisor login required"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className={s.tableNote}>No open claim yet — finish steps 1–2 first.</p>
+                )}
+              </div>
+            </div>
+
+            {openItems.length > 1 && (
+              <div className={s.disputeOtherOpen}>
+                <p className={s.description}>Other open claims</p>
+                <ul className={s.draftList}>
+                  {openItems
+                    .filter((item) => item.disputeId !== activeOpen?.disputeId)
+                    .map((item) => (
+                      <li key={item.disputeId}>
+                        <div className={s.iconTile}><ShieldCheck size={19} /></div>
+                        <div>
+                          <strong>{item.disputeId}</strong>
+                          <p>{item.reason}{item.amount ? ` · $${item.amount}` : ""}</p>
+                          <button type="button" className={s.textButton} onClick={() => { setSelected(item.disputeId); setOpenSectionOpen(true); }}>
+                            Work this claim <ArrowRight size={14} />
+                          </button>
+                        </div>
+                        <span className={s.draftBadge}>{item.status}</span>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            )}
+
+            {openItems.length === 0 && inboundPhase === "idle" && !inboundEmail && (
+              <div className={s.empty}>
+                <span className={s.emptyIcon}><ShieldCheck size={26} /></span>
+                <h3>No open disputes</h3>
+                <p>Capture an order or Replay buyer claim to start the Open flow.</p>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {items.length === 0 ? (
-        <div className={s.empty}>
-          <span className={s.emptyIcon}><ShieldCheck size={26} /></span>
-          <h3>No open disputes</h3>
-          <p>Capture an order (or Replay buyer claim) to receive a PayPal dispute email in this inbox.</p>
-        </div>
-      ) : (
-        <ul className={s.draftList}>
-          {items.map((item) => (
-            <li key={item.disputeId} className={selected === item.disputeId ? s.paymentQueueSelected : undefined}>
-              <div className={s.iconTile}><ShieldCheck size={19} /></div>
-              <details className={s.draftDetail} open={selected === item.disputeId}>
-                <summary>{item.disputeId} · {item.status}</summary>
-                <p>
-                  {item.reason}
-                  {item.amount ? ` · $${item.amount}` : ""}
-                  {item.orderId ? ` · order ${item.orderId}` : ""}
-                </p>
-                {item.agentDraft && <p><strong>Draft:</strong> {item.agentDraft}</p>}
-                {item.acceptApprovedBy && <p>Accepted by {item.acceptApprovedBy}</p>}
-                <div className={s.reviewActions}>
-                  <button type="button" className={s.textButton} disabled={busy} onClick={() => void draft(item.disputeId)}>
-                    Draft response <ArrowRight size={15} />
-                  </button>
-                  <button
-                    type="button"
-                    className={s.textButton}
-                    disabled={busy || !isOwner || !item.agentDraft || Boolean(item.acceptApprovedBy)}
-                    onClick={() => void accept(item.disputeId)}
-                  >
-                    {isOwner ? "Approve accept_dispute_claim" : "Supervisor login required"} <ArrowRight size={15} />
-                  </button>
-                </div>
-              </details>
-              <span className={s.draftBadge}>{item.status}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className={s.paymentNest}>
+        <button
+          type="button"
+          className={s.paymentNestToggle}
+          aria-expanded={closedSectionOpen}
+          onClick={() => setClosedSectionOpen((open) => !open)}
+        >
+          {closedSectionOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          <span>Closed</span>
+          <em>{closedItems.length}</em>
+        </button>
+        {closedSectionOpen && (
+          <div className={s.paymentNestBody}>
+            {closedItems.length === 0 ? (
+              <p className={s.tableNote}>No resolved disputes yet — they land here after Supervisor accept.</p>
+            ) : (
+              <ul className={s.draftList}>
+                {closedItems.map((item) => (
+                  <li key={item.disputeId}>
+                    <div className={s.iconTile}><ShieldCheck size={19} /></div>
+                    <details className={s.draftDetail}>
+                      <summary>{item.disputeId} · {item.status}</summary>
+                      <p>
+                        {item.reason}
+                        {item.amount ? ` · $${item.amount}` : ""}
+                        {item.orderId ? ` · order ${item.orderId}` : ""}
+                      </p>
+                      {item.agentDraft && <p><strong>Draft:</strong> {item.agentDraft}</p>}
+                      {item.acceptApprovedBy && <p>Accepted by {item.acceptApprovedBy}</p>}
+                    </details>
+                    <span className={s.draftBadge}>{item.status}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
