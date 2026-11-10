@@ -140,7 +140,10 @@ export function DisputePanel({
   );
 
   useEffect(() => {
-    onRefundsChange?.(refundPayments);
+    const timer = window.setTimeout(() => {
+      onRefundsChange?.(refundPayments);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [refundPayments, onRefundsChange]);
 
   async function refresh() {

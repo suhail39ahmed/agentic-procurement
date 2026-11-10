@@ -1,8 +1,14 @@
-/** After capture, Buyer has 48h to raise a PayPal dispute — else order is healthy. */
+/** After capture: Satisfied, leave open, or raise with PayPal (window expires at 48h). */
 
 export const DISPUTE_WINDOW_MS = 48 * 60 * 60 * 1000;
 
-export type CaptureDisputeDecision = "pending" | "disputed" | "healthy" | "expired";
+export type CaptureDisputeDecision =
+  | "pending"
+  | "open"
+  | "disputed"
+  | "satisfied"
+  | "healthy"
+  | "expired";
 
 export type CaptureDisputeRecord = {
   negotiationId: string;
@@ -30,6 +36,14 @@ function readAll(): Record<string, CaptureDisputeRecord> {
 
 function writeAll(map: Record<string, CaptureDisputeRecord>): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+}
+
+export function isTerminalCaptureDecision(decision: CaptureDisputeDecision): boolean {
+  return decision === "satisfied" || decision === "healthy" || decision === "expired" || decision === "disputed";
+}
+
+export function canStillDecide(decision: CaptureDisputeDecision): boolean {
+  return decision === "pending" || decision === "open";
 }
 
 export function upsertCaptureWindow(input: Omit<CaptureDisputeRecord, "decision"> & {
@@ -72,11 +86,11 @@ export function listCaptureWindows(): CaptureDisputeRecord[] {
   return Object.values(readAll());
 }
 
-/** Apply 48h expiry; returns updated record if decision flipped to expired. */
+/** Apply 48h expiry only while still open/pending. */
 export function refreshCaptureExpiry(negotiationId: string, now = Date.now()): CaptureDisputeRecord | null {
   const map = readAll();
   const existing = map[negotiationId];
-  if (!existing || existing.decision !== "pending") return existing ?? null;
+  if (!existing || !canStillDecide(existing.decision)) return existing ?? null;
   const capturedMs = Date.parse(existing.capturedAt);
   if (!Number.isFinite(capturedMs)) return existing;
   if (now - capturedMs >= DISPUTE_WINDOW_MS) {

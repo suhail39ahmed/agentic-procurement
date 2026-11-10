@@ -114,16 +114,17 @@ Buyer / Supervisor desk          PayPal            Seller desk (separate app chr
 ```
 
 ### Full path
-`Buy → Pay → Ship → Capture → Dispute?`
+`Buy → Pay → Ship → Capture → Satisfied / Leave open / Raise`
 
-- **Yes** → Raise with PayPal → Seller desk Accept → Buyer sees **PayPal refund payment**
-- **No** or **48h** with no raise → **healthy** (dispute option gone)
+- **Satisfied — received** → order healthy, no dispute
+- **Leave open** → still can raise or mark satisfied later
+- **Raise with PayPal** → Seller desk Accept → Buyer **PayPal refund payment**
+- **48h** with no raise while open → auto **healthy**
 
 ### Buyer or Supervisor
-1. Capture → **Recently captured** shows **Dispute? (48h window)**.
-2. **Yes — Raise with PayPal** → case under **Disputes**.
-3. Or **No — all good / healthy** (or wait 48h).
-4. After Seller accept → **PayPal refund payments** nest + refund card in Disputes.
+1. Capture → **Recently captured** shows Satisfied / Leave open / Raise with PayPal.
+2. Raise → case under **Disputes**.
+3. After Seller accept → **PayPal refund payments**.
 
 ### Seller desk
 5. Separate product (no buy nav) → **Accept claim (refund buyer)** only.

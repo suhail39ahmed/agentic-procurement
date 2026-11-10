@@ -22,6 +22,7 @@ import { DisputePanel, type DisputeInboundSeed, type PaypalRefundPayment } from 
 import { SellerWorkspace } from "./SellerWorkspace";
 import {
   DISPUTE_WINDOW_MS,
+  canStillDecide,
   formatRemaining,
   getCaptureWindow,
   listCaptureWindows,
@@ -463,8 +464,9 @@ export default function Dashboard() {
   const [raiseDisputeBusy, setRaiseDisputeBusy] = useState(false);
   const [captureWindows, setCaptureWindows] = useState<Record<string, CaptureDisputeRecord>>({});
   const [paypalRefunds, setPaypalRefunds] = useState<PaypalRefundPayment[]>([]);
-  const [nowTick, setNowTick] = useState(() => Date.now());
+  const [nowTick, setNowTick] = useState(0);
   const disputePanelRef = useRef<HTMLDivElement | null>(null);
+  const disputeInboundTokenRef = useRef(0);
 
   function reloadCaptureWindows() {
     const map: Record<string, CaptureDisputeRecord> = {};
@@ -472,6 +474,12 @@ export default function Dashboard() {
       map[row.negotiationId] = refreshCaptureExpiry(row.negotiationId) ?? row;
     }
     setCaptureWindows(map);
+  }
+
+  function scheduleReloadCaptureWindows() {
+    window.setTimeout(() => {
+      reloadCaptureWindows();
+    }, 0);
   }
   const [headerTab, setHeaderTab] = useState<"preview" | "help">("preview");
   const processHelpOpen = headerTab === "help";
@@ -1033,7 +1041,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (!demoSession) return;
     void loadNegotiations();
-    reloadCaptureWindows();
+    scheduleReloadCaptureWindows();
     if (paypalBoot.clearQuery) {
       window.history.replaceState({}, "", "/");
     }
@@ -1047,29 +1055,39 @@ export default function Dashboard() {
   // Tick + expire 48h dispute windows on captured orders
   useEffect(() => {
     if (!demoSession || isSellerRole(demoSession.role)) return;
+    const boot = window.setTimeout(() => {
+      setNowTick(Date.now());
+      reloadCaptureWindows();
+    }, 0);
     const id = window.setInterval(() => {
       setNowTick(Date.now());
       reloadCaptureWindows();
     }, 30_000);
-    return () => window.clearInterval(id);
+    return () => {
+      window.clearTimeout(boot);
+      window.clearInterval(id);
+    };
   }, [demoSession]);
 
-  // Seed a 48h pending window for captured rows that never got one (older captures)
+  // Seed a pending window for captured rows that never got one (older captures)
   useEffect(() => {
     if (!demoSession || isSellerRole(demoSession.role)) return;
-    let changed = false;
-    for (const row of paymentRecentCaptured) {
-      if (getCaptureWindow(row.id)) continue;
-      upsertCaptureWindow({
-        negotiationId: row.id,
-        capturedAt: new Date().toISOString(),
-        decision: "pending",
-        brief: row.brief,
-        amount: money.format(row.maxUnitPrice),
-      });
-      changed = true;
-    }
-    if (changed) reloadCaptureWindows();
+    const timer = window.setTimeout(() => {
+      let changed = false;
+      for (const row of paymentRecentCaptured) {
+        if (getCaptureWindow(row.id)) continue;
+        upsertCaptureWindow({
+          negotiationId: row.id,
+          capturedAt: new Date().toISOString(),
+          decision: "pending",
+          brief: row.brief,
+          amount: money.format(row.maxUnitPrice),
+        });
+        changed = true;
+      }
+      if (changed) reloadCaptureWindows();
+    }, 0);
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoSession?.role, paymentRecentCaptured.map((r) => r.id).join(",")]);
 
@@ -1879,10 +1897,10 @@ export default function Dashboard() {
           captureId: payload.captureId,
           brief: capturedBrief,
         });
-        reloadCaptureWindows();
+        scheduleReloadCaptureWindows();
       }
       setNotice(
-        "Captured. Dispute window open 48h — Yes → Raise with PayPal, or No → healthy.",
+        "Captured. Choose Satisfied (received), Leave open, or Raise with PayPal.",
       );
       await loadNegotiations();
       if (capturedId) {
@@ -1911,19 +1929,34 @@ export default function Dashboard() {
     }
   }
 
-  function markCaptureHealthy(negotiationId: string) {
+  function markCaptureSatisfied(negotiationId: string) {
     const existing = getCaptureWindow(negotiationId);
     if (!existing) {
       upsertCaptureWindow({
         negotiationId,
         capturedAt: new Date().toISOString(),
-        decision: "healthy",
+        decision: "satisfied",
       });
     } else {
-      setCaptureDecision(negotiationId, "healthy");
+      setCaptureDecision(negotiationId, "satisfied");
     }
-    reloadCaptureWindows();
-    setNotice("Marked healthy — no dispute. Order complete.");
+    scheduleReloadCaptureWindows();
+    setNotice("Satisfied — goods received. Order healthy, no dispute.");
+  }
+
+  function leaveCaptureOpen(negotiationId: string) {
+    const existing = getCaptureWindow(negotiationId);
+    if (!existing) {
+      upsertCaptureWindow({
+        negotiationId,
+        capturedAt: new Date().toISOString(),
+        decision: "open",
+      });
+    } else {
+      setCaptureDecision(negotiationId, "open");
+    }
+    scheduleReloadCaptureWindows();
+    setNotice("Left open — you can still Raise with PayPal, or mark Satisfied later (or wait 48h).");
   }
 
   async function raiseDisputeFromCaptured(row: { id: string; brief: string; payment: string; maxUnitPrice: number }) {
@@ -1943,12 +1976,12 @@ export default function Dashboard() {
         amount: money.format(row.maxUnitPrice),
       });
     }
-    reloadCaptureWindows();
-    if (windowRec.decision === "healthy" || windowRec.decision === "expired") {
+    scheduleReloadCaptureWindows();
+    if (windowRec.decision === "satisfied" || windowRec.decision === "healthy" || windowRec.decision === "expired") {
       setNotice(
         windowRec.decision === "expired"
-          ? "48h dispute window closed — order is healthy."
-          : "This capture was marked healthy — no dispute.",
+          ? "48h passed — order closed healthy."
+          : "Already Satisfied / received — no dispute.",
       );
       return;
     }
@@ -2002,9 +2035,10 @@ export default function Dashboard() {
         captureId,
         brief,
       });
-      reloadCaptureWindows();
+      scheduleReloadCaptureWindows();
+      disputeInboundTokenRef.current += 1;
       setDisputeInbound({
-        token: Date.now(),
+        token: disputeInboundTokenRef.current,
         orderId,
         amount: amount ?? money.format(row.maxUnitPrice),
         supplierId,
@@ -2257,7 +2291,7 @@ export default function Dashboard() {
                       <li><em>Eligible = Yes</em> means within budget and needed-by days. Checkout uses the best eligible winner.</li>
                       <li>Order total ≤ <em>$20</em> → auto ALLOW. Above <em>$20</em> → Supervisor approve before PayPal.</li>
                       <li>Authorize holds funds; seller email (~4s) → agent captures tracking → SHIPPED; Buyer or Supervisor can capture. AI never captures alone.</li>
-                      <li>After capture: Dispute? Yes → Raise with PayPal · No or 48h → healthy. Seller accept → PayPal refund payment.</li>
+                      <li>After capture: Satisfied / Leave open / Raise with PayPal (48h auto-close). Seller accept → PayPal refund payment.</li>
                     </ul>
 
                     <strong>What to click — marketplace</strong>
@@ -2265,7 +2299,7 @@ export default function Dashboard() {
                       <li><em>Overview</em> → Channel3 search → <em>Use market price → Review</em> → <em>Queue negotiation</em>. Or <em>Load demo request</em>.</li>
                       <li>Wait until <em>SUCCEEDED</em> → <em>Offers</em> on that row → <em>Checkout winning offer</em>.</li>
                       <li>PayPal approve → <em>HELD</em> → Inbox email → agent captures tracking → <em>SHIPPED</em> → <em>Confirm delivery &amp; capture</em>.</li>
-                      <li>Buy → pay → ship → capture → Dispute Yes/No (48h). Yes → PayPal → Seller desk → PayPal refund payment.</li>
+                      <li>Buy → pay → ship → capture → Satisfied / Leave open / Raise with PayPal → Seller desk → refund payment.</li>
                     </ol>
 
                     <strong>What to click — payables &amp; automation</strong>
@@ -3200,16 +3234,18 @@ export default function Dashboard() {
                   {recentCapturedOpen && (
                     <div className={s.paymentNestBody}>
                       <p className={s.tableNote}>
-                        After capture: <strong>Dispute?</strong> Yes → Raise with PayPal · No or 48h → healthy.
+                        After capture: <strong>Satisfied</strong> (received) · <strong>Leave open</strong> · or <strong>Raise with PayPal</strong>. Auto-closes healthy at 48h if left open.
                       </p>
                       {paymentRecentCaptured.length > 0 ? (
                         <ul className={s.paymentQueueOpen}>
                           {paymentRecentCaptured.map((row) => {
                             const expanded = expandedCapturedId === row.id;
-                            const win = captureWindows[row.id] ?? getCaptureWindow(row.id);
+                            const win = captureWindows[row.id];
                             const decision = win?.decision ?? "pending";
-                            const remain = win ? remainingDisputeMs(win.capturedAt, nowTick) : DISPUTE_WINDOW_MS;
-                            const canDecide = decision === "pending";
+                            const remain = win && nowTick > 0
+                              ? remainingDisputeMs(win.capturedAt, nowTick)
+                              : DISPUTE_WINDOW_MS;
+                            const openForAction = canStillDecide(decision);
                             return (
                               <li key={row.id} className={`${s.paymentQueueStack} ${expanded ? s.paymentQueueSelected : ""}`}>
                                 <div className={s.paymentQueueRow}>
@@ -3217,9 +3253,11 @@ export default function Dashboard() {
                                     <strong>{row.brief.slice(0, 88)}{row.brief.length > 88 ? "…" : ""}</strong>
                                     <p>
                                       CAPTURED · max {money.format(row.maxUnitPrice)}
-                                      {decision === "pending" && ` · dispute window ${formatRemaining(remain)}`}
+                                      {decision === "pending" && ` · decide (${formatRemaining(remain)} left)`}
+                                      {decision === "open" && ` · left open (${formatRemaining(remain)} left)`}
                                       {decision === "disputed" && " · disputed"}
-                                      {(decision === "healthy" || decision === "expired") && " · healthy"}
+                                      {(decision === "satisfied" || decision === "healthy") && " · Satisfied"}
+                                      {decision === "expired" && " · closed healthy (48h)"}
                                     </p>
                                   </div>
                                   <button
@@ -3233,28 +3271,40 @@ export default function Dashboard() {
                                   </button>
                                 </div>
 
-                                {canDecide && (
+                                {openForAction && (
                                   <div className={s.agentCaptureCard} style={{ marginTop: 10 }}>
-                                    <p className={s.agentCaptureBanner}>Dispute? (48h window)</p>
+                                    <p className={s.agentCaptureBanner}>
+                                      {decision === "open" ? "Still open" : "After capture"}
+                                    </p>
                                     <p className={s.description} style={{ margin: 0 }}>
-                                      Goods wrong → Yes, raise with PayPal. All good → No. If you wait {formatRemaining(remain)}, window closes healthy.
+                                      Mark <strong>Satisfied</strong> if goods are received OK, <strong>Leave open</strong> to decide later, or <strong>Raise with PayPal</strong> if something is wrong.
                                     </p>
                                     <div className={s.reviewActions} style={{ marginTop: 10 }}>
                                       <button
                                         type="button"
                                         className={s.primary}
                                         disabled={raiseDisputeBusy}
-                                        onClick={() => void raiseDisputeFromCaptured(row)}
+                                        onClick={() => markCaptureSatisfied(row.id)}
                                       >
-                                        {raiseDisputeBusy ? "Raising…" : "Yes — Raise with PayPal"} <ArrowRight size={14} />
+                                        Satisfied — received
                                       </button>
+                                      {decision !== "open" && (
+                                        <button
+                                          type="button"
+                                          className={s.secondary}
+                                          disabled={raiseDisputeBusy}
+                                          onClick={() => leaveCaptureOpen(row.id)}
+                                        >
+                                          Leave open
+                                        </button>
+                                      )}
                                       <button
                                         type="button"
                                         className={s.secondary}
                                         disabled={raiseDisputeBusy}
-                                        onClick={() => markCaptureHealthy(row.id)}
+                                        onClick={() => void raiseDisputeFromCaptured(row)}
                                       >
-                                        No — all good / healthy
+                                        {raiseDisputeBusy ? "Raising…" : "Raise with PayPal"} <ArrowRight size={14} />
                                       </button>
                                     </div>
                                   </div>
@@ -3277,11 +3327,11 @@ export default function Dashboard() {
                                   </div>
                                 )}
 
-                                {(decision === "healthy" || decision === "expired") && (
+                                {(decision === "satisfied" || decision === "healthy" || decision === "expired") && (
                                   <p className={s.summaryNote} style={{ marginTop: 8 }}>
                                     {decision === "expired"
-                                      ? "48h passed with no raise — order healthy."
-                                      : "Marked healthy — no PayPal dispute."}
+                                      ? "48h passed with no raise — closed healthy."
+                                      : "Satisfied — goods received. No PayPal dispute."}
                                   </p>
                                 )}
 
