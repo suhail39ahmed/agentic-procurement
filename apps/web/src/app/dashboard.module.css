@@ -71,11 +71,11 @@
   .loginShell { min-height: 100vh; display: grid; place-items: center; padding: 32px 20px; }
   .loginCard { width: min(920px, 100%); border: 1px solid var(--line); border-radius: 20px; background: #fff; padding: 28px; box-shadow: 0 18px 40px rgba(22, 55, 95, 0.08); display: grid; gap: 22px; }
   .loginCard h1 { font-size: 28px; letter-spacing: -.8px; color: var(--navy); margin-bottom: 6px; }
-  .loginRoleGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .loginRoleGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
   .loginForm { border-top: 1px solid var(--line); padding-top: 16px; display: grid; gap: 12px; }
-  .roleSwitch { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
-  .roleSwitch button { min-height: 36px; font-size: 11px; }
-  @media (max-width: 720px) { .loginRoleGrid { grid-template-columns: 1fr; } }
+  .roleSwitch { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 12px; }
+  .roleSwitch button { min-height: 36px; font-size: 10px; padding-inline: 6px; }
+  @media (max-width: 900px) { .loginRoleGrid { grid-template-columns: 1fr; } }
   .heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 23px; }
   .headingActions { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
   .eyebrow { font-size: 9px; font-weight: 650; letter-spacing: 1.9px; color: #6581a5; margin-bottom: 13px !important; }

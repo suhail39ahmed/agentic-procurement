@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, ChevronDown, ChevronRight, ShieldCheck } from "lucide-react";
 import s from "./dashboard.module.css";
+import type { DemoRole } from "@/lib/demo-auth";
 
 type LocalDispute = {
   disputeId: string;
@@ -20,6 +21,7 @@ export type DisputeInboundSeed = {
   amount?: string;
   supplierId?: string;
   brief?: string;
+  captureId?: string;
   /** Bump to re-trigger auto inbound after capture. */
   token: number;
 };
@@ -30,11 +32,12 @@ type CapturedClaim = {
   amount?: string;
   orderId?: string | null;
   eventType: string;
+  supplierId?: string;
 };
 
 function isClosedStatus(status: string): boolean {
   const value = status.toUpperCase();
-  return value === "RESOLVED" || value === "CLOSED" || value === "ACCEPTED";
+  return value === "RESOLVED" || value === "CLOSED" || value === "ACCEPTED" || value === "FILED";
 }
 
 export function DisputePanel({
@@ -43,10 +46,11 @@ export function DisputePanel({
   inboundSeed = null,
 }: {
   setNotice: (value: string) => void;
-  demoRole?: "buyer" | "owner" | null;
+  demoRole?: DemoRole | null;
   inboundSeed?: DisputeInboundSeed | null;
 }) {
-  const isOwner = demoRole === "owner";
+  const isSeller = demoRole === "seller";
+  const isBuyerSide = demoRole === "buyer" || demoRole === "owner" || demoRole === null;
   const [items, setItems] = useState<LocalDispute[]>([]);
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -104,12 +108,17 @@ export function DisputePanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function receiveBuyerDispute(seed?: {
+  async function openBuyerClaim(seed?: {
     orderId?: string;
     amount?: string;
     supplierId?: string;
     brief?: string;
+    captureId?: string;
   }) {
+    if (isSeller) {
+      setNotice("Seller does not open claims — switch to Buyer to raise a dispute, then come back as Seller to accept.");
+      return;
+    }
     const token = ++inboundTokenRef.current;
     setBusy(true);
     setOpenSectionOpen(true);
@@ -117,7 +126,7 @@ export function DisputePanel({
     setInboundPhase("waiting");
     setInboundEmail("");
     setCapturedClaim(null);
-    setNotice("Listening for PayPal CUSTOMER.DISPUTE.CREATED (~4s)…");
+    setNotice("Buyer opening claim against supplier (~4s)…");
     try {
       await new Promise((resolve) => setTimeout(resolve, 3800));
       if (token !== inboundTokenRef.current) return;
@@ -130,6 +139,7 @@ export function DisputePanel({
           amount: seed?.amount,
           supplierId: seed?.supplierId,
           brief: seed?.brief,
+          captureId: seed?.captureId,
           reason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
         }),
       });
@@ -141,10 +151,11 @@ export function DisputePanel({
         reason?: string;
         amount?: string;
         orderId?: string | null;
+        supplierId?: string;
       };
       if (!response.ok) {
         setInboundPhase("idle");
-        setNotice(payload.error ?? "Buyer dispute did not arrive.");
+        setNotice(payload.error ?? "Buyer claim did not open.");
         return;
       }
       if (token !== inboundTokenRef.current) return;
@@ -152,20 +163,21 @@ export function DisputePanel({
       setInboundEmail(payload.emailText ?? "");
       setInboundPhase("received");
       setSelected(payload.disputeId ?? null);
-      setNotice("Email received — PayPal dispute webhook. AI agent is reading the claim…");
+      setNotice("Claim notice ready — AI agent is reading your buyer claim…");
 
       await new Promise((resolve) => setTimeout(resolve, 1400));
       if (token !== inboundTokenRef.current) return;
 
       setInboundPhase("reading");
-      setNotice("AI agent capturing dispute id, reason, amount, and linked order…");
+      setNotice("AI agent capturing claim id, reason, amount, and supplier…");
 
       const claim: CapturedClaim = {
         disputeId: payload.disputeId ?? "unknown",
         reason: payload.reason ?? "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
         amount: payload.amount,
         orderId: payload.orderId,
-        eventType: payload.eventType ?? "CUSTOMER.DISPUTE.CREATED",
+        eventType: payload.eventType ?? "BUYER_CLAIM_OPENED",
+        supplierId: payload.supplierId,
       };
       await new Promise((resolve) => setTimeout(resolve, 900));
       if (token !== inboundTokenRef.current) return;
@@ -174,12 +186,12 @@ export function DisputePanel({
       await refresh();
       setInboundPhase("done");
       setNotice(
-        `Email received ✓ · Agent captured ${claim.disputeId}. Draft a response in Open → step 3.`,
+        `Buyer claim opened ✓ · ${claim.disputeId}. Draft as Buyer, then switch to Seller (seller / seller) to accept.`,
       );
     } catch {
       if (token === inboundTokenRef.current) {
         setInboundPhase("idle");
-        setNotice("Buyer dispute inbound failed — try Replay buyer claim.");
+        setNotice("Buyer claim failed — try Replay buyer claim.");
       }
     } finally {
       if (token === inboundTokenRef.current) setBusy(false);
@@ -189,27 +201,37 @@ export function DisputePanel({
   useEffect(() => {
     if (!inboundSeed?.token || inboundSeed.token === lastSeedTokenRef.current) return;
     lastSeedTokenRef.current = inboundSeed.token;
-    void receiveBuyerDispute({
+    void openBuyerClaim({
       orderId: inboundSeed.orderId,
       amount: inboundSeed.amount,
       supplierId: inboundSeed.supplierId,
       brief: inboundSeed.brief,
+      captureId: inboundSeed.captureId,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inboundSeed?.token]);
 
   async function draft(id: string) {
+    if (isSeller) {
+      setNotice("Switch to Buyer to draft the claim. Seller only accepts.");
+      return;
+    }
     setBusy(true);
     setSelected(id);
     setOpenSectionOpen(true);
     try {
-      const response = await fetch(`/api/disputes/${encodeURIComponent(id)}/draft`, { method: "POST" });
+      const response = await fetch(`/api/disputes/${encodeURIComponent(id)}/draft`, {
+        method: "POST",
+        headers: {
+          ...(demoRole ? { "x-demo-role": demoRole } : {}),
+        },
+      });
       const payload = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) {
         setNotice(payload.error ?? "Draft failed.");
         return;
       }
-      setNotice("Agent draft stored. Switch to Supervisor to approve accept_dispute_claim.");
+      setNotice("Buyer claim draft ready. Switch to Seller (seller / seller) → Approve accept_dispute_claim.");
       await refresh();
     } finally {
       setBusy(false);
@@ -217,8 +239,8 @@ export function DisputePanel({
   }
 
   async function accept(id: string) {
-    if (!isOwner) {
-      setNotice("Switch to Supervisor login (supervisor / supervisor) to accept a dispute claim.");
+    if (!isSeller) {
+      setNotice("Only Seller can accept. Sign in as seller / seller, then Approve accept_dispute_claim.");
       return;
     }
     setBusy(true);
@@ -229,14 +251,24 @@ export function DisputePanel({
           "content-type": "application/json",
           ...(demoRole ? { "x-demo-role": demoRole } : {}),
         },
-        body: JSON.stringify({ approved: true, note: "Supervisor approved from dashboard" }),
+        body: JSON.stringify({ approved: true, note: "Seller approved accept_dispute_claim from dashboard" }),
       });
-      const payload = await response.json().catch(() => ({})) as { error?: string };
+      const payload = await response.json().catch(() => ({})) as {
+        error?: string;
+        toolkitError?: string;
+        toolkitNote?: string;
+      };
       if (!response.ok) {
-        setNotice(payload.error ?? "Accept failed (sandbox Toolkit).");
+        setNotice(payload.error ?? "Accept failed.");
         return;
       }
-      setNotice("accept_dispute_claim invoked behind Supervisor approval.");
+      setNotice(
+        payload.toolkitNote
+        ?? "Seller accepted the buyer claim via PayPal Toolkit accept_dispute_claim.",
+      );
+      if (payload.toolkitError) {
+        setNotice(`Seller accepted in app. Toolkit note: ${payload.toolkitError}`);
+      }
       setClosedSectionOpen(true);
       await refresh();
     } finally {
@@ -252,26 +284,30 @@ export function DisputePanel({
     <div className={s.reviewPanel} style={{ marginTop: 18 }}>
       <div className={s.sectionHeader}>
         <div>
-          <h3>Disputes</h3>
+          <h3>Disputes · Buyer claim ↔ Seller accept</h3>
           <p className={s.description}>
-            Open = email → AI extract → draft/accept in one window. Closed = resolved claims (collapsed).
+            <strong>Buyer</strong> opens claim + drafts · <strong>Seller</strong> accepts via PayPal Toolkit · Supervisor is only for over-$20 spend.
+            {isSeller ? " You are Seller — accept drafted claims below." : " You are on the buyer side — open/draft, then switch to Seller."}
           </p>
         </div>
         <div className={s.reviewActions}>
           <button type="button" className={s.secondary} disabled={busy} onClick={() => void refresh()}>Refresh</button>
-          <button
-            type="button"
-            className={s.secondary}
-            disabled={busy}
-            onClick={() => void receiveBuyerDispute({
-              orderId: inboundSeed?.orderId,
-              amount: inboundSeed?.amount,
-              supplierId: inboundSeed?.supplierId,
-              brief: inboundSeed?.brief,
-            })}
-          >
-            {busy && inboundPhase === "waiting" ? "Waiting…" : "Replay buyer claim"}
-          </button>
+          {isBuyerSide && (
+            <button
+              type="button"
+              className={s.secondary}
+              disabled={busy}
+              onClick={() => void openBuyerClaim({
+                orderId: inboundSeed?.orderId,
+                amount: inboundSeed?.amount,
+                supplierId: inboundSeed?.supplierId,
+                brief: inboundSeed?.brief,
+                captureId: inboundSeed?.captureId,
+              })}
+            >
+              {busy && inboundPhase === "waiting" ? "Opening…" : "Replay buyer claim"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -289,36 +325,37 @@ export function DisputePanel({
         {openSectionOpen && (
           <div className={s.paymentNestBody}>
             <p className={s.description}>
-              One live window: 1) Email received → 2) AI extracted → 3) Agent helps respond.
+              How to run: 1) As Buyer after capture (or Replay) → claim notice → 2) AI extracts → 3) Draft as Buyer → 4) Switch to Seller → Accept.
             </p>
 
             <div className={s.disputeFlowWindow}>
               <div className={s.disputeStep}>
                 <div className={s.disputeStepHead}>
                   <span className={s.stepNumber}>1</span>
-                  <strong>Email received</strong>
+                  <strong>Buyer raises claim</strong>
                   <span className={s.pending}>
-                    {inboundPhase === "waiting" && "Waiting…"}
-                    {inboundPhase === "received" && "Just arrived"}
-                    {inboundPhase === "reading" && "Opening…"}
-                    {(inboundPhase === "done" || (inboundPhase === "idle" && inboundEmail)) && "Received"}
+                    {inboundPhase === "waiting" && "Opening…"}
+                    {(inboundPhase === "received" || inboundPhase === "reading") && "Notice ready"}
+                    {(inboundPhase === "done" || (inboundPhase === "idle" && inboundEmail)) && "Opened"}
                     {inboundPhase === "idle" && !inboundEmail && "—"}
                   </span>
                 </div>
                 {inboundPhase === "waiting" && (
-                  <p className={s.description}>Listening for PayPal CUSTOMER.DISPUTE.CREATED (~4s)…</p>
+                  <p className={s.description}>Buyer claiming goods from supplier are not as negotiated (~4s)…</p>
                 )}
                 {stepEmailDone && inboundEmail ? (
                   <pre className={s.shipInboxBody} aria-live="polite">{inboundEmail}</pre>
                 ) : inboundPhase !== "waiting" ? (
-                  <p className={s.tableNote}>Capture an order or click <strong>Replay buyer claim</strong>.</p>
+                  <p className={s.tableNote}>
+                    Capture an order as Buyer, or click <strong>Replay buyer claim</strong>.
+                  </p>
                 ) : null}
               </div>
 
               <div className={`${s.disputeStep} ${stepExtractDone ? s.disputeStepActive : ""}`}>
                 <div className={s.disputeStepHead}>
                   <span className={s.stepNumber}>2</span>
-                  <strong>AI agent extracted</strong>
+                  <strong>AI extracted (buyer tools)</strong>
                   <span className={s.pending}>
                     {inboundPhase === "reading" && "Reading…"}
                     {stepExtractDone && "Captured"}
@@ -327,33 +364,36 @@ export function DisputePanel({
                 </div>
                 {(inboundPhase === "received" || inboundPhase === "reading") && !capturedClaim && (
                   <p className={s.agentCaptureBanner} role="status">
-                    {inboundPhase === "received"
-                      ? "Email received — AI agent opening the message…"
-                      : "AI agent extracting dispute id, reason, amount, and order…"}
+                    AI agent reading the buyer claim notice…
                   </p>
                 )}
                 {capturedClaim ? (
                   <div className={s.agentCaptureCard}>
-                    <p className={s.agentCaptureBanner} role="status">Details captured from email</p>
+                    <p className={s.agentCaptureBanner} role="status">Details captured from claim</p>
                     <dl className={s.summaryList}>
                       <div><dt>Event</dt><dd>{capturedClaim.eventType}</dd></div>
-                      <div><dt>Dispute</dt><dd>{capturedClaim.disputeId}</dd></div>
+                      <div><dt>Claim</dt><dd>{capturedClaim.disputeId}</dd></div>
                       <div><dt>Reason</dt><dd>{capturedClaim.reason}</dd></div>
+                      {capturedClaim.supplierId && <div><dt>Seller</dt><dd>{capturedClaim.supplierId}</dd></div>}
                       {capturedClaim.amount && <div><dt>Amount</dt><dd>${capturedClaim.amount}</dd></div>}
                       {capturedClaim.orderId && <div><dt>Order</dt><dd>{capturedClaim.orderId}</dd></div>}
                     </dl>
                   </div>
                 ) : (
-                  <p className={s.tableNote}>Fields appear here after the agent reads the email.</p>
+                  <p className={s.tableNote}>Fields appear after the agent reads the claim.</p>
                 )}
               </div>
 
               <div className={`${s.disputeStep} ${stepRespondActive ? s.disputeStepActive : ""}`}>
                 <div className={s.disputeStepHead}>
                   <span className={s.stepNumber}>3</span>
-                  <strong>AI helps respond</strong>
+                  <strong>Draft (Buyer) → Accept (Seller)</strong>
                   <span className={s.pending}>
-                    {activeOpen?.agentDraft ? "Draft ready" : stepRespondActive ? "Needs draft" : "—"}
+                    {activeOpen?.acceptApprovedBy
+                      ? "Accepted"
+                      : activeOpen?.agentDraft
+                        ? (isSeller ? "Ready for Seller" : "Draft ready")
+                        : stepRespondActive ? "Needs draft" : "—"}
                   </span>
                 </div>
                 {activeOpen ? (
@@ -365,28 +405,36 @@ export function DisputePanel({
                     </p>
                     {activeOpen.agentDraft ? (
                       <div className={s.agentCaptureCard}>
-                        <p className={s.agentCaptureBanner}>Agent draft</p>
+                        <p className={s.agentCaptureBanner}>Buyer claim draft</p>
                         <p className={s.description} style={{ margin: 0 }}>{activeOpen.agentDraft}</p>
                       </div>
                     ) : (
-                      <p className={s.tableNote}>Ask the agent to draft a seller response, then Supervisor accepts.</p>
+                      <p className={s.tableNote}>Buyer: click Draft claim. Seller waits until a draft exists.</p>
                     )}
                     <div className={s.reviewActions}>
-                      <button type="button" className={s.secondary} disabled={busy} onClick={() => void draft(activeOpen.disputeId)}>
-                        Draft response <ArrowRight size={15} />
+                      <button
+                        type="button"
+                        className={s.secondary}
+                        disabled={busy || isSeller}
+                        onClick={() => void draft(activeOpen.disputeId)}
+                      >
+                        Draft claim (Buyer) <ArrowRight size={15} />
                       </button>
                       <button
                         type="button"
                         className={s.primary}
-                        disabled={busy || !isOwner || !activeOpen.agentDraft || Boolean(activeOpen.acceptApprovedBy)}
+                        disabled={busy || !isSeller || !activeOpen.agentDraft || Boolean(activeOpen.acceptApprovedBy)}
                         onClick={() => void accept(activeOpen.disputeId)}
                       >
-                        {isOwner ? "Approve accept_dispute_claim" : "Supervisor login required"}
+                        {isSeller ? "Approve accept_dispute_claim" : "Seller login required"}
                       </button>
                     </div>
+                    {!isSeller && activeOpen.agentDraft && (
+                      <p className={s.summaryNote}>Switch sidebar to <strong>Seller</strong> (seller / seller) to accept.</p>
+                    )}
                   </>
                 ) : (
-                  <p className={s.tableNote}>No open claim yet — finish steps 1–2 first.</p>
+                  <p className={s.tableNote}>No open claim yet — finish steps 1–2 as Buyer first.</p>
                 )}
               </div>
             </div>
@@ -417,8 +465,8 @@ export function DisputePanel({
             {openItems.length === 0 && inboundPhase === "idle" && !inboundEmail && (
               <div className={s.empty}>
                 <span className={s.emptyIcon}><ShieldCheck size={26} /></span>
-                <h3>No open disputes</h3>
-                <p>Capture an order or Replay buyer claim to start the Open flow.</p>
+                <h3>No open claims</h3>
+                <p>As Buyer: capture an order or Replay buyer claim. As Seller: wait for a drafted claim, then Accept.</p>
               </div>
             )}
           </div>
@@ -439,7 +487,7 @@ export function DisputePanel({
         {closedSectionOpen && (
           <div className={s.paymentNestBody}>
             {closedItems.length === 0 ? (
-              <p className={s.tableNote}>No resolved disputes yet — they land here after Supervisor accept.</p>
+              <p className={s.tableNote}>No resolved claims yet — they land here after Seller accept.</p>
             ) : (
               <ul className={s.draftList}>
                 {closedItems.map((item) => (

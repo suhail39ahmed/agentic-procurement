@@ -9,7 +9,7 @@ export function backendConfig() {
 
 export async function proxyToApi(
   path: string,
-  init: RequestInit & { timeoutMs?: number; demoRole?: "buyer" | "owner" | null } = {},
+  init: RequestInit & { timeoutMs?: number; demoRole?: "buyer" | "owner" | "seller" | null } = {},
 ) {
   const config = backendConfig();
   if (!config) {

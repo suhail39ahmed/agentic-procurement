@@ -1,11 +1,12 @@
 import { proxyToApi } from "@/lib/api-proxy";
-import { demoRoleFromRequest, requireOwnerDemoRole } from "@/lib/demo-role-gate";
+import { demoRoleFromRequest, requireSellerDemoRole } from "@/lib/demo-role-gate";
 
+/** Seller-only: accept_dispute_claim after buyer drafted a claim. */
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const blocked = requireOwnerDemoRole(request);
+  const blocked = requireSellerDemoRole(request);
   if (blocked) return blocked;
   const { id } = await context.params;
   const body = await request.text();

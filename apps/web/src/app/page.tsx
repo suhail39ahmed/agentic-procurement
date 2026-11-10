@@ -27,6 +27,7 @@ import {
   clearDemoSession,
   demoRoleHeaders,
   isOwnerRole,
+  isSellerRole,
   readDemoSession,
   writeDemoSession,
   type DemoRole,
@@ -992,8 +993,12 @@ export default function Dashboard() {
     queueMicrotask(() => {
       if (existing) {
         setDemoSession(existing);
-        setLoginUser(existing.role === "owner" ? "supervisor" : "buyer");
-        setLoginPass(existing.role === "owner" ? "supervisor" : "buyer");
+        setLoginUser(
+          existing.role === "owner" ? "supervisor" : existing.role === "seller" ? "seller" : "buyer",
+        );
+        setLoginPass(
+          existing.role === "owner" ? "supervisor" : existing.role === "seller" ? "seller" : "buyer",
+        );
       }
       setDemoAuthReady(true);
     });
@@ -1014,6 +1019,7 @@ export default function Dashboard() {
 
   const demoRole: DemoRole | null = demoSession?.role ?? null;
   const isOwner = isOwnerRole(demoRole);
+  const isSeller = isSellerRole(demoRole);
 
   function signInAs(role: DemoRole) {
     const account = DEMO_ACCOUNTS[role];
@@ -1036,6 +1042,7 @@ export default function Dashboard() {
     const supervisorUser = user === DEMO_ACCOUNTS.owner.username || user === "owner";
     const supervisorPass = pass === DEMO_ACCOUNTS.owner.password || pass === "owner";
     const ownerOk = supervisorUser && supervisorPass;
+    const sellerOk = user === DEMO_ACCOUNTS.seller.username && pass === DEMO_ACCOUNTS.seller.password;
     if (buyerOk) {
       signInAs("buyer");
       return;
@@ -1044,7 +1051,11 @@ export default function Dashboard() {
       signInAs("owner");
       return;
     }
-    setLoginError("Use buyer/buyer or supervisor/supervisor for this sandbox demo.");
+    if (sellerOk) {
+      signInAs("seller");
+      return;
+    }
+    setLoginError("Use buyer/buyer, supervisor/supervisor, or seller/seller.");
   }
 
   function signOutDemo() {
@@ -1802,7 +1813,7 @@ export default function Dashboard() {
       const capturedAmount = payload.amount ?? activeOrder.amount;
       const capturedSupplierId = activeOrder.supplierId;
       setActiveOrder(null);
-      setNotice("Delivery confirmed. Payment captured — watching for a buyer dispute webhook…");
+      setNotice("Delivery confirmed. Payment captured — opening your buyer claim vs the seller…");
       await loadNegotiations();
       if (capturedId) {
         setRecentCapturedOpen(true);
@@ -1819,6 +1830,7 @@ export default function Dashboard() {
         amount: capturedAmount,
         supplierId: capturedSupplierId,
         brief: capturedBrief,
+        captureId: payload.captureId,
       });
       requestAnimationFrame(() => {
         disputePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1844,7 +1856,7 @@ export default function Dashboard() {
               <div>
                 <h1>ProcureAI demo login</h1>
                 <p className={s.description}>
-                  Same workspace for both. Only difference: Supervisor approval (over $20) and capture.
+                  Three roles: Buyer buys &amp; raises claims · Supervisor approves over-$20 spend · Seller accepts disputes.
                 </p>
               </div>
             </div>
@@ -1869,6 +1881,16 @@ export default function Dashboard() {
                   Continue as Supervisor
                 </span>
               </button>
+              <button type="button" className={s.trackCard} onClick={() => signInAs("seller")}>
+                <span className={s.iconTile}><Package size={20} /></span>
+                <h3>Seller</h3>
+                <p>{DEMO_ACCOUNTS.seller.blurb}</p>
+                <span className={s.trackCta}>
+                  <span className={s.trackRadio} aria-hidden />
+                  <ArrowRight size={14} aria-hidden />
+                  Continue as Seller
+                </span>
+              </button>
             </div>
             <form className={s.loginForm} onSubmit={submitDemoLogin}>
               <p className={s.description}>Or sign in with demo credentials</p>
@@ -1886,7 +1908,7 @@ export default function Dashboard() {
               <div className={s.reviewActions}>
                 <button type="submit" className={s.primary}>Sign in</button>
               </div>
-              <p className={s.tableNote}>buyer / buyer · supervisor / supervisor</p>
+              <p className={s.tableNote}>buyer / buyer · supervisor / supervisor · seller / seller</p>
             </form>
           </section>
         </main>
@@ -1904,10 +1926,10 @@ export default function Dashboard() {
           <span>Procure<span className={s.brandAI}>AI</span><small>AGENTIC PROCUREMENT</small></span>
           </Link>
         <div className={s.workspace}>
-          <span className={s.avatar}>{isOwner ? "S" : "B"}</span>
+          <span className={s.avatar}>{isOwner ? "S" : isSeller ? "Se" : "B"}</span>
           <div>
             {demoSession.name}
-            <small>{isOwner ? "Supervisor session" : "Buyer session"}</small>
+            <small>{isOwner ? "Supervisor session" : isSeller ? "Seller session" : "Buyer session"}</small>
           </div>
           <ShieldCheck size={17} />
         </div>
@@ -1929,10 +1951,16 @@ export default function Dashboard() {
             <p>Payment authorization and capture remain separate, guarded actions.</p>
           </div>
           <div className={s.profile}>
-            <span className={s.avatar}>{isOwner ? "S" : "B"}</span>
+            <span className={s.avatar}>{isOwner ? "S" : isSeller ? "Se" : "B"}</span>
             <div>
-              {isOwner ? "Supervisor" : "Buyer"}
-              <small>{isOwner ? "Full path + over-$20 approve" : "Full path; Supervisor for over-$20 approve"}</small>
+              {isOwner ? "Supervisor" : isSeller ? "Seller" : "Buyer"}
+              <small>
+                {isOwner
+                  ? "Over-$20 spend approve"
+                  : isSeller
+                    ? "Dispute accept only"
+                    : "Buy + raise claims"}
+              </small>
             </div>
             <button type="button" className={s.textButton} title="Sign out of demo role" onClick={signOutDemo}>
               <LogOut size={15} />
@@ -1941,8 +1969,8 @@ export default function Dashboard() {
           <div className={s.roleSwitch}>
             <button
               type="button"
-              className={isOwner ? s.secondary : s.primary}
-              disabled={!isOwner}
+              className={!isOwner && !isSeller ? s.primary : s.secondary}
+              disabled={!isOwner && !isSeller}
               onClick={() => signInAs("buyer")}
             >
               Buyer
@@ -1954,6 +1982,14 @@ export default function Dashboard() {
               onClick={() => signInAs("owner")}
             >
               Supervisor
+            </button>
+            <button
+              type="button"
+              className={isSeller ? s.primary : s.secondary}
+              disabled={isSeller}
+              onClick={() => signInAs("seller")}
+            >
+              Seller
             </button>
           </div>
         </div>
@@ -2031,7 +2067,7 @@ export default function Dashboard() {
                       <li><em>Eligible = Yes</em> means within budget and needed-by days. Checkout uses the best eligible winner.</li>
                       <li>Order total ≤ <em>$20</em> → auto ALLOW. Above <em>$20</em> → Supervisor approve before PayPal.</li>
                       <li>Authorize holds funds; seller email (~4s) → agent captures tracking → SHIPPED; Buyer or Supervisor can capture. AI never captures alone.</li>
-                      <li>After capture, buyer dispute email (~4s) → draft → Supervisor accept_dispute_claim only.</li>
+                      <li>After capture, Buyer opens claim (~4s) → draft → switch to Seller → accept_dispute_claim.</li>
                     </ul>
 
                     <strong>What to click — marketplace</strong>
@@ -2039,7 +2075,7 @@ export default function Dashboard() {
                       <li><em>Overview</em> → Channel3 search → <em>Use market price → Review</em> → <em>Queue negotiation</em>. Or <em>Load demo request</em>.</li>
                       <li>Wait until <em>SUCCEEDED</em> → <em>Offers</em> on that row → <em>Checkout winning offer</em>.</li>
                       <li>PayPal approve → <em>HELD</em> → Inbox email → agent captures tracking → <em>SHIPPED</em> → <em>Confirm delivery &amp; capture</em>.</li>
-                      <li>Disputes inbox auto-receives buyer claim after capture (or <em>Replay buyer claim</em>) → Draft → Supervisor accept.</li>
+                      <li>Disputes: Buyer claim after capture → Draft → switch to <em>Seller</em> → Accept.</li>
                     </ol>
 
                     <strong>What to click — payables &amp; automation</strong>

@@ -89,8 +89,8 @@ Negative case:
 ## 5c. PayPal Agent Toolkit surfaces
 
 - [ ] Assistant can create/send a sandbox client invoice when asked (Toolkit tools in reply metadata)
-- [ ] After capture (or **Replay buyer claim**) → Dispute inbox shows CUSTOMER.DISPUTE.CREATED email → dispute appears
-- [ ] **Draft response** stores agent draft; **Approve accept_dispute_claim** requires Supervisor + draft + `{approved:true}`
+- [ ] After capture (or **Replay buyer claim**) → Buyer claim notice → AI extracts fields
+- [ ] As Buyer: **Draft claim**; as Seller (`seller`/`seller`): **Approve accept_dispute_claim** (Buyer cannot accept)
 - [ ] `pnpm --filter paypal mcp` starts MCP server (stdio) with sandbox token
 
 ## 5d. Partners + payables smoke

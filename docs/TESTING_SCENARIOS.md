@@ -8,10 +8,11 @@ If the first load is slow, wait about a minute and refresh once (hosted demo can
 
 | Role | Username / password | Can do |
 |---|---|---|
-| **Buyer** | `buyer` / `buyer` | RFQ, negotiate, checkout, PayPal, watch seller ship email → SHIPPED, **Confirm delivery & capture** |
-| **Supervisor** | `supervisor` / `supervisor` | **Supervisor approval** for spends **over $20**, dispute accept; can also run the full buy path |
+| **Buyer** | `buyer` / `buyer` | RFQ → PayPal → ship email → capture; **opens dispute claims** + drafts claim wording |
+| **Supervisor** | `supervisor` / `supervisor` | **Over-$20 spend approve** only (plus full buy path). Not for dispute accept |
+| **Seller** | `seller` / `seller` | **Dispute accept only** — `accept_dispute_claim` via PayPal Toolkit |
 
-Use the login screen (or sidebar Buyer/Supervisor switch). Over-$20 checkout stops until a **Supervisor** approves.
+Use the login screen (or sidebar Buyer / Supervisor / Seller switch).
 
 ---
 
@@ -99,17 +100,25 @@ You run a small business buying supplies.
 
 ---
 
-## Story D — “A dispute showed up”
+## Story D — “Buyer claims; Seller accepts”
 
-**Goal:** After capture, a buyer claim arrives in the Dispute inbox; Supervisor still gates accept.
+**Goal:** You are the **Buyer** raising a claim that goods aren’t as negotiated. Only **Seller** can accept.
 
-1. Finish Story B through **Confirm delivery & capture** (or use an already-captured order).  
-2. Payments scrolls to **Disputes** — Inbox waits ~4s → **Email received** → AI agent captures dispute id / reason / amount (card under the email).  
-3. Open the dispute → **Draft response** (assistant prepares wording).  
-4. Switch to **Supervisor** → **Approve accept_dispute_claim**.
+1. As **Buyer**, finish Story B through **Confirm delivery & capture** (or **Replay buyer claim** on Payments → Disputes).  
+2. **Open** section: ~4s → buyer claim notice → AI extracts claim id / reason / amount / seller.  
+3. Still as **Buyer** → **Draft claim (Buyer)**.  
+4. Sidebar → **Seller** (`seller` / `seller`) → **Approve accept_dispute_claim** (PayPal Toolkit).  
+5. Claim moves to **Closed**.
 
-**Alternate:** click **Replay buyer claim** if you need the inbound without capturing again.  
-**You should see:** No Simulate button; webhook-style inbox → draft → Supervisor accept only.
+**Who does what**
+
+| Step | Role | Toolkit |
+|---|---|---|
+| Open claim + draft | Buyer | AI draft (local); list/get available |
+| Accept claim | Seller only | `accept_dispute_claim` |
+| Over-$20 checkout | Supervisor | (not disputes) |
+
+**You should see:** Buyer cannot accept; Seller cannot draft. Clear switch between roles.
 
 ---
 

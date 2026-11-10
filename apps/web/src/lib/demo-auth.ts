@@ -1,4 +1,4 @@
-export type DemoRole = "buyer" | "owner";
+export type DemoRole = "buyer" | "owner" | "seller";
 
 export type DemoSession = {
   role: DemoRole;
@@ -14,16 +14,22 @@ export const DEMO_ACCOUNTS = {
     name: "Buyer · Purchasing",
     username: "buyer",
     password: "buyer",
-    blurb: "Full buy path: RFQ, negotiate, PayPal, ship email. Cannot do Supervisor approval (over $20) or capture.",
+    blurb: "Buy path: RFQ → PayPal → ship email → capture. Opens disputes when goods are wrong. Cannot approve spend or accept claims.",
   },
   owner: {
     role: "owner" as const,
     name: "Supervisor · Approvals",
     username: "supervisor",
     password: "supervisor",
-    blurb: "Same as Buyer, plus Supervisor approval (over $20), capture, and dispute accept.",
-    /** Legacy sandbox aliases still accepted at login. */
+    blurb: "Same buy path + over-$20 spend approve. Does not accept seller-side dispute claims.",
     aliases: ["owner"] as const,
+  },
+  seller: {
+    role: "seller" as const,
+    name: "Seller · Fulfillment",
+    username: "seller",
+    password: "seller",
+    blurb: "Supplier view for disputes only. Sees buyer claims and can Approve accept_dispute_claim via PayPal Toolkit.",
   },
 } as const;
 
@@ -33,7 +39,7 @@ export function readDemoSession(): DemoSession | null {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<DemoSession>;
-    if (parsed.role !== "buyer" && parsed.role !== "owner") return null;
+    if (parsed.role !== "buyer" && parsed.role !== "owner" && parsed.role !== "seller") return null;
     if (!parsed.name || !parsed.signedInAt) return null;
     return { role: parsed.role, name: parsed.name, signedInAt: parsed.signedInAt };
   } catch {
@@ -58,7 +64,11 @@ export function isOwnerRole(role: DemoRole | null | undefined): boolean {
   return role === "owner";
 }
 
-/** Supervisor is the demo role that can approve spends / capture / disputes. */
+export function isSellerRole(role: DemoRole | null | undefined): boolean {
+  return role === "seller";
+}
+
+/** Supervisor = over-$20 spend approve (not dispute accept). */
 export function isSupervisorRole(role: DemoRole | null | undefined): boolean {
   return isOwnerRole(role);
 }
