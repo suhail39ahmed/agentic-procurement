@@ -221,7 +221,24 @@ export function DisputePanel({
       setCapturedClaim(claim);
       await refresh();
       setInboundPhase("done");
-      setNotice(`Raised to PayPal: ${claim.disputeId}. Click Raise to PayPal so PayPal notifies the Seller.`);
+
+      // From capture "Raise dispute": file with PayPal so it lands in Disputes + Seller inbox
+      if (claim.disputeId && claim.disputeId !== "unknown") {
+        setNotice(`Case ${claim.disputeId} under Disputes — filing with PayPal…`);
+        const draftRes = await fetch(`/api/disputes/${encodeURIComponent(claim.disputeId)}/draft`, {
+          method: "POST",
+          headers: { ...(demoRole ? { "x-demo-role": demoRole } : {}) },
+        });
+        if (token !== inboundTokenRef.current) return;
+        if (draftRes.ok) {
+          await refresh();
+          setNotice(`Raised to PayPal: ${claim.disputeId} is under Disputes. PayPal will notify the Seller.`);
+        } else {
+          setNotice(`Case ${claim.disputeId} is under Disputes — click Raise to PayPal to notify the Seller.`);
+        }
+      } else {
+        setNotice("Dispute case opened under Disputes.");
+      }
     } catch {
       if (token === inboundTokenRef.current) {
         setInboundPhase("idle");

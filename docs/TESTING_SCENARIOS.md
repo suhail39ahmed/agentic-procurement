@@ -114,10 +114,10 @@ Buyer                  PayPal                 Seller
 ```
 
 ### Buyer window (`buyer` / `buyer`)
-1. Capture (or **Open & raise to PayPal**).
-2. Step 1: **Raised to PayPal** (case card + fields).
-3. Step 2: **Raise to PayPal (notify Seller)**.
-4. Step 3 waits → after Seller accept: **Refund received**.
+1. After **Confirm delivery & capture**, open **Recently captured**.
+2. Click **Raise dispute** (not auto — you choose).
+3. Case opens under the **Disputes** nest (Raised to PayPal → PayPal notifies Seller).
+4. After Seller accept: **Refund received** on Buyer.
 
 ### Seller window (`seller` / `seller`)
 5. Sidebar → **Seller** → **From PayPal** / **PayPal sent you**.

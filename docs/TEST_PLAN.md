@@ -89,9 +89,8 @@ Negative case:
 ## 5c. PayPal Agent Toolkit surfaces
 
 - [ ] Assistant can create/send a sandbox client invoice when asked (Toolkit tools in reply metadata)
-- [ ] Buyer: **Raise to PayPal** → case shows Raised to PayPal; PayPal notifies Seller
-- [ ] Seller: claim under **PayPal sent you** → **Accept claim (refund buyer)**
-- [ ] Buyer: **Refund received** after Seller accept
+- [ ] After capture: **Raise dispute** on Recently captured → case appears under **Disputes**
+- [ ] Buyer: Raised to PayPal; Seller: **PayPal sent you** → Accept → Buyer **Refund received**
 - [ ] `pnpm --filter paypal mcp` starts MCP server (stdio) with sandbox token
 
 ## 5d. Partners + payables smoke

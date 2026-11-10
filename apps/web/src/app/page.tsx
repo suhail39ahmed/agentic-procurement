@@ -446,6 +446,8 @@ export default function Dashboard() {
   const [shipDemoPhase, setShipDemoPhase] = useState<"idle" | "waiting" | "received" | "reading" | "applying" | "done">("idle");
   const shipDemoTokenRef = useRef(0);
   const [disputeInbound, setDisputeInbound] = useState<DisputeInboundSeed | null>(null);
+  const [disputesOpen, setDisputesOpen] = useState(true);
+  const [raiseDisputeBusy, setRaiseDisputeBusy] = useState(false);
   const disputePanelRef = useRef<HTMLDivElement | null>(null);
   const [headerTab, setHeaderTab] = useState<"preview" | "help">("preview");
   const processHelpOpen = headerTab === "help";
@@ -1813,7 +1815,11 @@ export default function Dashboard() {
       const capturedAmount = payload.amount ?? activeOrder.amount;
       const capturedSupplierId = activeOrder.supplierId;
       setActiveOrder(null);
-      setNotice("Delivery confirmed. Payment captured — opening a PayPal dispute case as Buyer…");
+      setNotice(
+        demoRole === "seller"
+          ? "Delivery confirmed. Payment captured."
+          : "Delivery confirmed. Payment captured — use Raise dispute under Recently captured if goods are wrong.",
+      );
       await loadNegotiations();
       if (capturedId) {
         setRecentCapturedOpen(true);
@@ -1824,21 +1830,77 @@ export default function Dashboard() {
           maxUnitPrice: Number.isFinite(capturedMax) && capturedMax > 0 ? capturedMax : 1,
         });
       }
-      setDisputeInbound({
-        token: Date.now(),
-        orderId: capturedOrderId,
-        amount: capturedAmount,
-        supplierId: capturedSupplierId,
-        brief: capturedBrief,
-        captureId: payload.captureId,
-      });
-      requestAnimationFrame(() => {
-        disputePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
+      // Keep capture ids on preview so Raise dispute can use them without re-fetch
+      setCapturedPreview((prev) => prev && capturedId && prev.id === capturedId
+        ? {
+          ...prev,
+          orderId: capturedOrderId,
+          amount: capturedAmount,
+          supplierId: capturedSupplierId,
+          captureId: payload.captureId,
+          status: "CAPTURED",
+        }
+        : prev);
     } catch {
       setNotice("Capture failed.");
     } finally {
       setOrderBusy(false);
+    }
+  }
+
+  async function raiseDisputeFromCaptured(row: { id: string; brief: string; payment: string; maxUnitPrice: number }) {
+    if (demoRole === "seller") {
+      setNotice("Only Buyer raises disputes to PayPal.");
+      return;
+    }
+    if (raiseDisputeBusy) return;
+    setRaiseDisputeBusy(true);
+    setView("Payments & orders");
+    setRecentCapturedOpen(true);
+    setDisputesOpen(true);
+    setNotice("Raising dispute to PayPal — opening Disputes…");
+    try {
+      let orderId = capturedPreview?.id === row.id ? capturedPreview.orderId : undefined;
+      let amount = capturedPreview?.id === row.id ? capturedPreview.amount : undefined;
+      let supplierId = capturedPreview?.id === row.id ? capturedPreview.supplierId : undefined;
+      let captureId = capturedPreview?.id === row.id ? capturedPreview.captureId : undefined;
+      let brief = capturedPreview?.id === row.id ? capturedPreview.brief : row.brief;
+
+      if (!orderId || !captureId) {
+        const detail = await loadNegotiationDetail(row.id);
+        const saved = detail ? checkoutFromResult(detail.result) : null;
+        brief = detail?.brief ?? row.brief;
+        if (saved?.orderId) {
+          const response = await fetch(`/api/orders/${encodeURIComponent(saved.orderId)}`, { cache: "no-store" });
+          const payload = await response.json().catch(() => ({})) as {
+            id?: string;
+            amount?: number | string;
+            supplierId?: string;
+            captureId?: string;
+          };
+          orderId = payload.id ?? saved.orderId;
+          amount = payload.amount != null ? String(payload.amount) : saved.amount;
+          supplierId = payload.supplierId ?? saved.supplierId;
+          captureId = payload.captureId;
+        }
+      }
+
+      setDisputeInbound({
+        token: Date.now(),
+        orderId,
+        amount: amount ?? money.format(row.maxUnitPrice),
+        supplierId,
+        brief,
+        captureId,
+      });
+      requestAnimationFrame(() => {
+        disputePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      setNotice("Dispute opening under Disputes — raised to PayPal…");
+    } catch {
+      setNotice("Could not start dispute from this capture.");
+    } finally {
+      setRaiseDisputeBusy(false);
     }
   }
 
@@ -2067,7 +2129,7 @@ export default function Dashboard() {
                       <li><em>Eligible = Yes</em> means within budget and needed-by days. Checkout uses the best eligible winner.</li>
                       <li>Order total ≤ <em>$20</em> → auto ALLOW. Above <em>$20</em> → Supervisor approve before PayPal.</li>
                       <li>Authorize holds funds; seller email (~4s) → agent captures tracking → SHIPPED; Buyer or Supervisor can capture. AI never captures alone.</li>
-                      <li>After capture, Buyer opens claim (~4s) → draft → switch to Seller → accept_dispute_claim.</li>
+                      <li>After capture → <em>Raise dispute</em> under Recently captured → case appears under Disputes.</li>
                     </ul>
 
                     <strong>What to click — marketplace</strong>
@@ -2075,7 +2137,7 @@ export default function Dashboard() {
                       <li><em>Overview</em> → Channel3 search → <em>Use market price → Review</em> → <em>Queue negotiation</em>. Or <em>Load demo request</em>.</li>
                       <li>Wait until <em>SUCCEEDED</em> → <em>Offers</em> on that row → <em>Checkout winning offer</em>.</li>
                       <li>PayPal approve → <em>HELD</em> → Inbox email → agent captures tracking → <em>SHIPPED</em> → <em>Confirm delivery &amp; capture</em>.</li>
-                      <li>Disputes: Buyer claim after capture → Draft → switch to <em>Seller</em> → Accept.</li>
+                      <li>After capture: <em>Raise dispute</em> → opens under <em>Disputes</em> → Seller accepts → Refund received.</li>
                     </ol>
 
                     <strong>What to click — payables &amp; automation</strong>
@@ -3020,15 +3082,27 @@ export default function Dashboard() {
                                     <strong>{row.brief.slice(0, 88)}{row.brief.length > 88 ? "…" : ""}</strong>
                                     <p>CAPTURED · max {money.format(row.maxUnitPrice)}</p>
                                   </div>
-                                  <button
-                                    type="button"
-                                    className={s.textButton}
-                                    aria-expanded={expanded}
-                                    onClick={() => void toggleCapturedPreview(row)}
-                                  >
-                                    {expanded ? "Collapse" : "View"}
-                                    {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                  </button>
+                                  <div className={s.reviewActions}>
+                                    {demoRole !== "seller" && (
+                                      <button
+                                        type="button"
+                                        className={s.primary}
+                                        disabled={raiseDisputeBusy}
+                                        onClick={() => void raiseDisputeFromCaptured(row)}
+                                      >
+                                        {raiseDisputeBusy ? "Raising…" : "Raise dispute"} <ArrowRight size={14} />
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className={s.textButton}
+                                      aria-expanded={expanded}
+                                      onClick={() => void toggleCapturedPreview(row)}
+                                    >
+                                      {expanded ? "Collapse" : "View"}
+                                      {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                    </button>
+                                  </div>
                                 </div>
                                 {expanded && (
                                   <div className={s.paymentInlineWindow}>
@@ -3049,21 +3123,38 @@ export default function Dashboard() {
                                       <p className={s.description}>Loading capture details…</p>
                                     )}
                                     {capturedPreview?.id === row.id && (
-                                      <dl className={s.summaryList}>
-                                        <div><dt>Brief</dt><dd>{capturedPreview.brief}</dd></div>
-                                        <div><dt>Status</dt><dd>{capturedPreview.status ?? "CAPTURED"}</dd></div>
-                                        {capturedPreview.orderId && <div><dt>Order</dt><dd>{capturedPreview.orderId}</dd></div>}
-                                        {capturedPreview.amount && <div><dt>Amount</dt><dd>${capturedPreview.amount} USD</dd></div>}
-                                        {capturedPreview.supplierId && <div><dt>Supplier</dt><dd>{capturedPreview.supplierId}</dd></div>}
-                                        {capturedPreview.authorizationId && <div><dt>Authorization</dt><dd>{capturedPreview.authorizationId}</dd></div>}
-                                        {capturedPreview.tracking && (
-                                          <div>
-                                            <dt>Tracking</dt>
-                                            <dd>{capturedPreview.tracking.carrier} {capturedPreview.tracking.number}</dd>
+                                      <>
+                                        <dl className={s.summaryList}>
+                                          <div><dt>Brief</dt><dd>{capturedPreview.brief}</dd></div>
+                                          <div><dt>Status</dt><dd>{capturedPreview.status ?? "CAPTURED"}</dd></div>
+                                          {capturedPreview.orderId && <div><dt>Order</dt><dd>{capturedPreview.orderId}</dd></div>}
+                                          {capturedPreview.amount && <div><dt>Amount</dt><dd>${capturedPreview.amount} USD</dd></div>}
+                                          {capturedPreview.supplierId && <div><dt>Supplier</dt><dd>{capturedPreview.supplierId}</dd></div>}
+                                          {capturedPreview.authorizationId && <div><dt>Authorization</dt><dd>{capturedPreview.authorizationId}</dd></div>}
+                                          {capturedPreview.tracking && (
+                                            <div>
+                                              <dt>Tracking</dt>
+                                              <dd>{capturedPreview.tracking.carrier} {capturedPreview.tracking.number}</dd>
+                                            </div>
+                                          )}
+                                          {capturedPreview.captureId && <div><dt>Capture</dt><dd>{capturedPreview.captureId}</dd></div>}
+                                        </dl>
+                                        {demoRole !== "seller" && (
+                                          <div className={s.reviewActions} style={{ marginTop: 12 }}>
+                                            <button
+                                              type="button"
+                                              className={s.primary}
+                                              disabled={raiseDisputeBusy}
+                                              onClick={() => void raiseDisputeFromCaptured(row)}
+                                            >
+                                              Raise dispute to PayPal <ArrowRight size={15} />
+                                            </button>
+                                            <p className={s.summaryNote} style={{ margin: 0 }}>
+                                              Opens under <strong>Disputes</strong> below — PayPal then notifies the Seller.
+                                            </p>
                                           </div>
                                         )}
-                                        {capturedPreview.captureId && <div><dt>Capture</dt><dd>{capturedPreview.captureId}</dd></div>}
-                                      </dl>
+                                      </>
                                     )}
                                   </div>
                                 )}
@@ -3072,7 +3163,7 @@ export default function Dashboard() {
                           })}
                         </ul>
                       ) : (
-                        <p className={s.tableNote}>No captured orders yet.</p>
+                        <p className={s.tableNote}>No captured orders yet. After capture, Raise dispute appears here.</p>
                       )}
                     </div>
                   )}
@@ -3080,13 +3171,27 @@ export default function Dashboard() {
               </div>
             )}
 
-            {view === "Payments & orders" && !activeOrder && !pendingOwnerApproval && paymentNeedsAttention.length === 0 && <div className={s.empty}>
+            {view === "Payments & orders" && !activeOrder && !pendingOwnerApproval && paymentNeedsAttention.length === 0 && paymentRecentCaptured.length === 0 && <div className={s.empty}>
               <span className={s.emptyIcon}><Package size={26} /></span><h3>No open payment work</h3>
               <p>Checkout a winning offer from Supplier offers, or open an APPROVED / HELD row under Needs attention.</p>
             </div>}
             {view === "Payments & orders" && (
-              <div ref={disputePanelRef}>
-                <DisputePanel setNotice={setNotice} demoRole={demoRole} inboundSeed={disputeInbound} />
+              <div ref={disputePanelRef} className={s.paymentNest} style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className={s.paymentNestToggle}
+                  aria-expanded={disputesOpen}
+                  onClick={() => setDisputesOpen((open) => !open)}
+                >
+                  {disputesOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  <span>Disputes</span>
+                  <em>{demoRole === "seller" ? "Seller" : "Buyer"}</em>
+                </button>
+                {disputesOpen && (
+                  <div className={s.paymentNestBody}>
+                    <DisputePanel setNotice={setNotice} demoRole={demoRole} inboundSeed={disputeInbound} />
+                  </div>
+                )}
               </div>
             )}
             <div className={s.paymentFoot}><ShieldCheck size={16} /><span>AI recommendations do not authorize or capture payments.</span></div>
