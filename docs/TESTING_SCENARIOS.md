@@ -100,25 +100,25 @@ You run a small business buying supplies.
 
 ---
 
-## Story D — “Buyer claims; Seller accepts”
+## Story D — “PayPal dispute → Seller refunds”
 
-**Goal:** You are the **Buyer** raising a claim that goods aren’t as negotiated. Only **Seller** can accept.
+**Goal:** Buyer opens a **PayPal dispute case** (not an email to the seller). AI drafts the dispute statement. Seller accepts = buyer wins / refund.
 
-1. As **Buyer**, finish Story B through **Confirm delivery & capture** (or **Replay buyer claim** on Payments → Disputes).  
-2. **Open** section: ~4s → buyer claim notice → AI extracts claim id / reason / amount / seller.  
-3. Still as **Buyer** → **Draft claim (Buyer)**.  
-4. Sidebar → **Seller** (`seller` / `seller`) → **Approve accept_dispute_claim** (PayPal Toolkit).  
-5. Claim moves to **Closed**.
+1. As **Buyer**, finish Story B through **Confirm delivery & capture** (or **Open PayPal dispute** on Payments → Disputes).  
+2. **Open**: ~4s → PayPal dispute case card → AI captures dispute id / reason / amount / seller.  
+3. Still **Buyer** → **Draft dispute statement** (evidence for the case — not a seller email).  
+4. Switch to **Seller** (`seller` / `seller`) → **Accept claim (refund buyer)** = Toolkit `accept_dispute_claim`.  
+5. Case moves to **Closed**.
 
 **Who does what**
 
-| Step | Role | Toolkit |
+| Step | Role | What it is |
 |---|---|---|
-| Open claim + draft | Buyer | AI draft (local); list/get available |
-| Accept claim | Seller only | `accept_dispute_claim` |
-| Over-$20 checkout | Supervisor | (not disputes) |
+| Open case + draft statement | Buyer | PayPal dispute + AI statement |
+| Accept claim | Seller only | Buyer wins → refund (not “pay extra”) |
+| Over-$20 checkout | Supervisor | Unrelated to disputes |
 
-**You should see:** Buyer cannot accept; Seller cannot draft. Clear switch between roles.
+**You should see:** No “email to seller.” Buyer cannot accept; Seller cannot draft.
 
 ---
 

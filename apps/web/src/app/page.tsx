@@ -1813,7 +1813,7 @@ export default function Dashboard() {
       const capturedAmount = payload.amount ?? activeOrder.amount;
       const capturedSupplierId = activeOrder.supplierId;
       setActiveOrder(null);
-      setNotice("Delivery confirmed. Payment captured — opening your buyer claim vs the seller…");
+      setNotice("Delivery confirmed. Payment captured — opening a PayPal dispute case as Buyer…");
       await loadNegotiations();
       if (capturedId) {
         setRecentCapturedOpen(true);

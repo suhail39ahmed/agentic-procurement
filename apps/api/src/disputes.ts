@@ -79,7 +79,7 @@ disputesRouter.get("/:id", async (req, res) => {
   }
 });
 
-function buildBuyerClaimNotice(opts: {
+function buildPaypalDisputeCase(opts: {
   claimId: string;
   reason: string;
   amount: string;
@@ -89,28 +89,30 @@ function buildBuyerClaimNotice(opts: {
   captureId?: string;
 }): string {
   const reasonLabel = opts.reason.replace(/_/g, " ").toLowerCase();
-  const orderLine = opts.orderId ? `Order: ${opts.orderId}` : "Order: (sandbox capture)";
   const itemLine = opts.brief?.trim()
-    ? `Item: ${opts.brief.trim().slice(0, 120)}`
-    : `Supplier: ${opts.supplierId}`;
-  const captureLine = opts.captureId ? `Capture: ${opts.captureId}` : "Capture: (pending lookup)";
-  return `Subject: Buyer claim — goods not as negotiated · ${opts.claimId}
-From: buyer@procureai.demo
-To: disputes@paypal.com; fulfillment@${opts.supplierId.toLowerCase().replace(/[^a-z0-9-]/g, "-")}.example.com
+    ? opts.brief.trim().slice(0, 120)
+    : `Supply from ${opts.supplierId}`;
+  return `PAYPAL DISPUTE CASE (sandbox demo)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Dispute ID:  ${opts.claimId}
+Status:      OPEN
+Reason:      ${opts.reason}
+             (${reasonLabel})
+Amount:      $${opts.amount} USD
+Order:       ${opts.orderId ?? "(sandbox capture)"}
+Capture:     ${opts.captureId ?? "(n/a)"}
+Seller:      ${opts.supplierId}
+Item:        ${itemLine}
 
-We are the buying company on this capture. The shipment from ${opts.supplierId} does not match what was negotiated.
+Opened by:   BUYER (procurement company)
+Channel:     PayPal Customer Disputes
+Outcome if Seller accepts:
+  Dispute closes in BUYER's favor → refund of captured funds
+  (not an extra payment)
 
-${orderLine}
-${itemLine}
-${captureLine}
-Amount: $${opts.amount} USD
-Reason: ${opts.reason} (${reasonLabel})
-Claim ID: ${opts.claimId}
-
-Buyer statement:
-"Product quality / description does not match the winning offer. Please open a claim so we can recover funds."
-
-Next in ProcureAI: Buyer AI drafts the claim → switch to Seller → Approve accept_dispute_claim (PayPal Toolkit).
+Next steps in ProcureAI:
+  1) Buyer — AI drafts the dispute statement (evidence for this case)
+  2) Seller — Approve accept_dispute_claim (PayPal Agent Toolkit)
 `;
 }
 
@@ -162,7 +164,7 @@ disputesRouter.post("/simulate", async (req, res) => {
       disputesCounted: (existing?.disputesCounted ?? 0) + 1,
     });
 
-    const emailText = buildBuyerClaimNotice({
+    const emailText = buildPaypalDisputeCase({
       claimId,
       reason,
       amount,
@@ -173,7 +175,7 @@ disputesRouter.post("/simulate", async (req, res) => {
     });
 
     return res.status(201).json({
-      eventType: "BUYER_CLAIM_OPENED",
+      eventType: "BUYER_DISPUTE_OPENED",
       disputeId: claimId,
       status: "OPEN",
       reason,
@@ -182,7 +184,7 @@ disputesRouter.post("/simulate", async (req, res) => {
       captureId: captureId ?? null,
       supplierId,
       emailText,
-      note: "Buyer opened a claim against the supplier. Draft as Buyer, then switch to Seller to accept via PayPal Toolkit.",
+      note: "Buyer opened a PayPal dispute case vs the seller. Draft the statement as Buyer, then Seller accepts (refund path).",
     });
   } catch (err) {
     console.error("[disputes] simulate failed", err);
@@ -212,16 +214,17 @@ disputesRouter.post("/:id/draft", async (req, res) => {
       {
         role: "system",
         content:
-          "You draft a concise buyer claim for a procurement company that paid a supplier via PayPal. "
-          + "We believe goods are not as negotiated. Address PayPal and the supplier. "
-          + "Be factual and firm. Ask for remedy / refund. Do not invent tracking numbers. "
+          "You write a short PayPal dispute statement for a BUYER (procurement company). "
+          + "Goods from the supplier were not as negotiated after capture. "
+          + "This text is evidence attached to the PayPal dispute case — not an email to the seller. "
+          + "Be factual and firm. Request refund / remedy. Do not invent tracking numbers. "
           + "Return plain text only (no markdown).",
       },
       {
         role: "user",
         content: JSON.stringify({
           claim: local,
-          instruction: "Draft the claim wording the Seller will review before accept_dispute_claim.",
+          instruction: "Draft the dispute statement for this PayPal case. Seller will later accept_dispute_claim.",
         }),
       },
     ], { timeoutMs: 45_000 });
