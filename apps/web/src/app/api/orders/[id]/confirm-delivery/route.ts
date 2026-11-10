@@ -1,7 +1,7 @@
 import { proxyToApi } from "@/lib/api-proxy";
 import { demoRoleFromRequest } from "@/lib/demo-role-gate";
 
-/** Buyer or Supervisor may confirm delivery & capture. Supervisor-only gates stay on spend approve + dispute accept. */
+/** Buyer or Supervisor may confirm delivery & capture. Dispute accept is Seller-only. */
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },

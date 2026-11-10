@@ -2773,7 +2773,7 @@ export default function Dashboard() {
                   <div>
                     <h3>Payment queues</h3>
                     <p className={s.description}>
-                      Pay / Open hold / Confirm expand under that row. Buyer and Supervisor share the path; only over-$20 spend approve (and dispute accept) need Supervisor.
+                      Pay / Open hold / Confirm under that row. Over-$20 spend needs Supervisor; dispute accept needs Seller.
                     </p>
                   </div>
                   <button type="button" className={s.secondary} onClick={() => void loadNegotiations()}>Refresh</button>
