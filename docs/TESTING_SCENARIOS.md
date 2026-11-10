@@ -102,23 +102,23 @@ You run a small business buying supplies.
 
 ## Story D — “PayPal dispute → Seller refunds”
 
-**Goal:** Buyer opens a **PayPal dispute case** (not an email to the seller). AI drafts the dispute statement. Seller accepts = buyer wins / refund.
+**Goal:** Two different windows. Buyer opens + drafts. Seller only accepts (refund).
 
-1. As **Buyer**, finish Story B through **Confirm delivery & capture** (or **Open PayPal dispute** on Payments → Disputes).  
-2. **Open**: ~4s → PayPal dispute case card → AI captures dispute id / reason / amount / seller.  
-3. Still **Buyer** → **Draft dispute statement** (evidence for the case — not a seller email).  
-4. Switch to **Seller** (`seller` / `seller`) → **Accept claim (refund buyer)** = Toolkit `accept_dispute_claim`.  
-5. Case moves to **Closed**.
+### Buyer window (`buyer` / `buyer`)
+1. Finish capture (or click **Open PayPal dispute**).  
+2. See **Buyer window · My PayPal disputes**: case opens → AI fields → **Draft dispute statement**.  
+3. Banner says switch to Seller. **No Accept button** on Buyer.
 
-**Who does what**
+### Seller window (`seller` / `seller`)
+4. Sidebar → **Seller**. UI changes to **Seller window · Incoming disputes**.  
+5. Only cases with a Buyer statement appear under **Needs your accept**.  
+6. **Accept claim (refund buyer)** → Closed.
 
-| Step | Role | What it is |
-|---|---|---|
-| Open case + draft statement | Buyer | PayPal dispute + AI statement |
-| Accept claim | Seller only | Buyer wins → refund (not “pay extra”) |
-| Over-$20 checkout | Supervisor | Unrelated to disputes |
-
-**You should see:** No “email to seller.” Buyer cannot accept; Seller cannot draft.
+| Window | Can open case? | Can draft? | Can accept? |
+|---|---|---|---|
+| Buyer | Yes | Yes | No |
+| Seller | No | No | Yes (refund) |
+| Supervisor | (buy path) | — | No |
 
 ---
 

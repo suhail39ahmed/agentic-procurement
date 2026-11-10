@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, ChevronDown, ChevronRight, ShieldCheck } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, Package, ShieldCheck, UserRound } from "lucide-react";
 import s from "./dashboard.module.css";
 import type { DemoRole } from "@/lib/demo-auth";
 
@@ -22,7 +22,6 @@ export type DisputeInboundSeed = {
   supplierId?: string;
   brief?: string;
   captureId?: string;
-  /** Bump to re-trigger auto inbound after capture. */
   token: number;
 };
 
@@ -50,15 +49,16 @@ export function DisputePanel({
   inboundSeed?: DisputeInboundSeed | null;
 }) {
   const isSeller = demoRole === "seller";
-  const isBuyerSide = demoRole === "buyer" || demoRole === "owner" || demoRole === null;
+  const isBuyerSide = !isSeller;
   const [items, setItems] = useState<LocalDispute[]>([]);
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [inboundPhase, setInboundPhase] = useState<"idle" | "waiting" | "received" | "reading" | "done">("idle");
-  const [inboundEmail, setInboundEmail] = useState("");
+  const [caseText, setCaseText] = useState("");
   const [capturedClaim, setCapturedClaim] = useState<CapturedClaim | null>(null);
-  const [openSectionOpen, setOpenSectionOpen] = useState(true);
-  const [closedSectionOpen, setClosedSectionOpen] = useState(false);
+  const [buyerOpen, setBuyerOpen] = useState(true);
+  const [sellerInboxOpen, setSellerInboxOpen] = useState(true);
+  const [closedOpen, setClosedOpen] = useState(false);
   const inboundTokenRef = useRef(0);
   const lastSeedTokenRef = useRef(0);
 
@@ -69,6 +69,14 @@ export function DisputePanel({
   const closedItems = useMemo(
     () => items.filter((item) => isClosedStatus(item.status)),
     [items],
+  );
+  const awaitingSeller = useMemo(
+    () => openItems.filter((item) => Boolean(item.agentDraft) && !item.acceptApprovedBy),
+    [openItems],
+  );
+  const needsDraft = useMemo(
+    () => openItems.filter((item) => !item.agentDraft),
+    [openItems],
   );
 
   const activeOpen = useMemo(() => {
@@ -108,25 +116,22 @@ export function DisputePanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function openBuyerClaim(seed?: {
+  async function openPaypalDispute(seed?: {
     orderId?: string;
     amount?: string;
     supplierId?: string;
     brief?: string;
     captureId?: string;
   }) {
-    if (isSeller) {
-      setNotice("Seller does not open disputes — switch to Buyer to open a PayPal case, then return as Seller to accept.");
-      return;
-    }
+    if (isSeller) return;
     const token = ++inboundTokenRef.current;
     setBusy(true);
-    setOpenSectionOpen(true);
-    setClosedSectionOpen(false);
+    setBuyerOpen(true);
+    setClosedOpen(false);
     setInboundPhase("waiting");
-    setInboundEmail("");
+    setCaseText("");
     setCapturedClaim(null);
-    setNotice("Opening PayPal dispute case as Buyer (~4s)…");
+    setNotice("Buyer: opening PayPal dispute case (~4s)…");
     try {
       await new Promise((resolve) => setTimeout(resolve, 3800));
       if (token !== inboundTokenRef.current) return;
@@ -155,21 +160,19 @@ export function DisputePanel({
       };
       if (!response.ok) {
         setInboundPhase("idle");
-        setNotice(payload.error ?? "PayPal dispute case did not open.");
+        setNotice(payload.error ?? "PayPal dispute did not open.");
         return;
       }
       if (token !== inboundTokenRef.current) return;
 
-      setInboundEmail(payload.emailText ?? "");
+      setCaseText(payload.emailText ?? "");
       setInboundPhase("received");
       setSelected(payload.disputeId ?? null);
-      setNotice("PayPal dispute case opened — AI agent is reading case details…");
+      setNotice("PayPal case opened — AI reading case fields…");
 
       await new Promise((resolve) => setTimeout(resolve, 1400));
       if (token !== inboundTokenRef.current) return;
-
       setInboundPhase("reading");
-      setNotice("AI agent capturing dispute id, reason, amount, and seller…");
 
       const claim: CapturedClaim = {
         disputeId: payload.disputeId ?? "unknown",
@@ -185,13 +188,11 @@ export function DisputePanel({
       setCapturedClaim(claim);
       await refresh();
       setInboundPhase("done");
-      setNotice(
-        `PayPal dispute ${claim.disputeId} open. Draft the dispute statement as Buyer, then Seller accepts (refund).`,
-      );
+      setNotice(`Buyer window: dispute ${claim.disputeId} open — draft your statement, then switch to Seller.`);
     } catch {
       if (token === inboundTokenRef.current) {
         setInboundPhase("idle");
-        setNotice("Open dispute failed — try Open PayPal dispute again.");
+        setNotice("Open dispute failed.");
       }
     } finally {
       if (token === inboundTokenRef.current) setBusy(false);
@@ -199,9 +200,10 @@ export function DisputePanel({
   }
 
   useEffect(() => {
+    if (isSeller) return;
     if (!inboundSeed?.token || inboundSeed.token === lastSeedTokenRef.current) return;
     lastSeedTokenRef.current = inboundSeed.token;
-    void openBuyerClaim({
+    void openPaypalDispute({
       orderId: inboundSeed.orderId,
       amount: inboundSeed.amount,
       supplierId: inboundSeed.supplierId,
@@ -209,29 +211,23 @@ export function DisputePanel({
       captureId: inboundSeed.captureId,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inboundSeed?.token]);
+  }, [inboundSeed?.token, isSeller]);
 
   async function draft(id: string) {
-    if (isSeller) {
-      setNotice("Switch to Buyer to draft the dispute statement. Seller only accepts (refund).");
-      return;
-    }
+    if (isSeller) return;
     setBusy(true);
     setSelected(id);
-    setOpenSectionOpen(true);
     try {
       const response = await fetch(`/api/disputes/${encodeURIComponent(id)}/draft`, {
         method: "POST",
-        headers: {
-          ...(demoRole ? { "x-demo-role": demoRole } : {}),
-        },
+        headers: { ...(demoRole ? { "x-demo-role": demoRole } : {}) },
       });
       const payload = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) {
         setNotice(payload.error ?? "Draft failed.");
         return;
       }
-      setNotice("Dispute statement drafted for PayPal. Switch to Seller → Accept claim (refund buyer).");
+      setNotice("Buyer statement ready. Switch sidebar to Seller to accept (refund).");
       await refresh();
     } finally {
       setBusy(false);
@@ -239,10 +235,7 @@ export function DisputePanel({
   }
 
   async function accept(id: string) {
-    if (!isSeller) {
-      setNotice("Only Seller can accept. Sign in as seller / seller → Accept claim (closes in buyer's favor / refund).");
-      return;
-    }
+    if (!isSeller) return;
     setBusy(true);
     try {
       const response = await fetch(`/api/disputes/${encodeURIComponent(id)}/accept`, {
@@ -251,7 +244,7 @@ export function DisputePanel({
           "content-type": "application/json",
           ...(demoRole ? { "x-demo-role": demoRole } : {}),
         },
-        body: JSON.stringify({ approved: true, note: "Seller approved accept_dispute_claim from dashboard" }),
+        body: JSON.stringify({ approved: true, note: "Seller accepted dispute — refund buyer" }),
       });
       const payload = await response.json().catch(() => ({})) as {
         error?: string;
@@ -264,51 +257,137 @@ export function DisputePanel({
       }
       setNotice(
         payload.toolkitNote
-        ?? "Seller accepted — dispute closes in buyer's favor (refund path) via accept_dispute_claim.",
+        ?? "Seller accepted — buyer wins, refund path (PayPal accept_dispute_claim).",
       );
       if (payload.toolkitError) {
-        setNotice(`Seller accepted in app (refund path). Toolkit note: ${payload.toolkitError}`);
+        setNotice(`Seller accepted in app. Toolkit: ${payload.toolkitError}`);
       }
-      setClosedSectionOpen(true);
+      setClosedOpen(true);
       await refresh();
     } finally {
       setBusy(false);
     }
   }
 
-  const stepEmailDone = inboundPhase === "received" || inboundPhase === "reading" || inboundPhase === "done" || Boolean(inboundEmail);
-  const stepExtractDone = inboundPhase === "done" || Boolean(capturedClaim);
-  const stepRespondActive = stepExtractDone || Boolean(activeOpen);
+  const caseVisible = inboundPhase === "received" || inboundPhase === "reading" || inboundPhase === "done" || Boolean(caseText);
 
+  /* ─── SELLER WINDOW ─── */
+  if (isSeller) {
+    return (
+      <div className={s.reviewPanel} style={{ marginTop: 18 }}>
+        <div className={s.sectionHeader}>
+          <div>
+            <h3 className={s.disputeRoleTitle}>
+              <Package size={18} aria-hidden /> Seller window · Incoming disputes
+            </h3>
+            <p className={s.description}>
+              You only see buyer-opened PayPal cases. Review their statement, then <strong>Accept claim (refund buyer)</strong>.
+              You cannot open or draft disputes.
+            </p>
+          </div>
+          <button type="button" className={s.secondary} disabled={busy} onClick={() => void refresh()}>Refresh</button>
+        </div>
+
+        <div className={s.paymentNest} style={{ marginBottom: 12 }}>
+          <button
+            type="button"
+            className={s.paymentNestToggle}
+            aria-expanded={sellerInboxOpen}
+            onClick={() => setSellerInboxOpen((v) => !v)}
+          >
+            {sellerInboxOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            <span>Needs your accept</span>
+            <em>{awaitingSeller.length}</em>
+          </button>
+          {sellerInboxOpen && (
+            <div className={s.paymentNestBody}>
+              {awaitingSeller.length === 0 ? (
+                <div className={s.empty}>
+                  <span className={s.emptyIcon}><Package size={26} /></span>
+                  <h3>No drafted claims waiting</h3>
+                  <p>Ask the Buyer to open a PayPal dispute and draft a statement, then Refresh.</p>
+                </div>
+              ) : (
+                <ul className={s.draftList}>
+                  {awaitingSeller.map((item) => (
+                    <li key={item.disputeId} className={s.paymentQueueSelected}>
+                      <div className={s.iconTile}><Package size={19} /></div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <strong>{item.disputeId}</strong>
+                        <p>
+                          {item.reason}
+                          {item.amount ? ` · $${item.amount}` : ""}
+                          {item.orderId ? ` · order ${item.orderId}` : ""}
+                        </p>
+                        <div className={s.agentCaptureCard}>
+                          <p className={s.agentCaptureBanner}>Buyer’s dispute statement</p>
+                          <p className={s.description} style={{ margin: 0 }}>{item.agentDraft}</p>
+                        </div>
+                        <div className={s.reviewActions} style={{ marginTop: 10 }}>
+                          <button
+                            type="button"
+                            className={s.primary}
+                            disabled={busy}
+                            onClick={() => void accept(item.disputeId)}
+                          >
+                            Accept claim (refund buyer) <ArrowRight size={15} />
+                          </button>
+                        </div>
+                        <p className={s.summaryNote}>Accept = buyer wins. Money goes back — not “pay extra.”</p>
+                      </div>
+                      <span className={s.draftBadge}>OPEN</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {needsDraft.length > 0 && (
+                <p className={s.tableNote}>
+                  {needsDraft.length} case(s) still waiting for Buyer to draft a statement — they won’t appear here until drafted.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <ClosedNest
+          open={closedOpen}
+          setOpen={setClosedOpen}
+          items={closedItems}
+          emptyHint="Resolved after you accept — buyer refund path."
+        />
+      </div>
+    );
+  }
+
+  /* ─── BUYER WINDOW ─── */
   return (
     <div className={s.reviewPanel} style={{ marginTop: 18 }}>
       <div className={s.sectionHeader}>
         <div>
-          <h3>Disputes · PayPal case</h3>
+          <h3 className={s.disputeRoleTitle}>
+            <UserRound size={18} aria-hidden /> Buyer window · My PayPal disputes
+          </h3>
           <p className={s.description}>
-            Not an email to the seller. <strong>Buyer</strong> opens a PayPal dispute → AI drafts the statement →
-            <strong> Seller</strong> accepts (buyer wins / refund). Supervisor is only for over-$20 spend.
-            {isSeller ? " You are Seller — accept below to refund." : " You are Buyer — open + draft, then switch to Seller."}
+            You open the PayPal case and draft the statement. Then switch to <strong>Seller</strong> — they accept (refund).
+            You cannot accept claims here.
           </p>
         </div>
         <div className={s.reviewActions}>
           <button type="button" className={s.secondary} disabled={busy} onClick={() => void refresh()}>Refresh</button>
-          {isBuyerSide && (
-            <button
-              type="button"
-              className={s.secondary}
-              disabled={busy}
-              onClick={() => void openBuyerClaim({
-                orderId: inboundSeed?.orderId,
-                amount: inboundSeed?.amount,
-                supplierId: inboundSeed?.supplierId,
-                brief: inboundSeed?.brief,
-                captureId: inboundSeed?.captureId,
-              })}
-            >
-              {busy && inboundPhase === "waiting" ? "Opening…" : "Open PayPal dispute"}
-            </button>
-          )}
+          <button
+            type="button"
+            className={s.primary}
+            disabled={busy}
+            onClick={() => void openPaypalDispute({
+              orderId: inboundSeed?.orderId,
+              amount: inboundSeed?.amount,
+              supplierId: inboundSeed?.supplierId,
+              brief: inboundSeed?.brief,
+              captureId: inboundSeed?.captureId,
+            })}
+          >
+            {busy && inboundPhase === "waiting" ? "Opening…" : "Open PayPal dispute"}
+          </button>
         </div>
       </div>
 
@@ -316,85 +395,71 @@ export function DisputePanel({
         <button
           type="button"
           className={s.paymentNestToggle}
-          aria-expanded={openSectionOpen}
-          onClick={() => setOpenSectionOpen((open) => !open)}
+          aria-expanded={buyerOpen}
+          onClick={() => setBuyerOpen((v) => !v)}
         >
-          {openSectionOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          <span>Open</span>
+          {buyerOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          <span>My open cases</span>
           <em>{openItems.length}</em>
         </button>
-        {openSectionOpen && (
+        {buyerOpen && (
           <div className={s.paymentNestBody}>
-            <p className={s.description}>
-              1) Buyer opens PayPal dispute case → 2) AI reads case fields → 3) Buyer drafts statement → 4) Seller accepts = refund.
-            </p>
-
             <div className={s.disputeFlowWindow}>
               <div className={s.disputeStep}>
                 <div className={s.disputeStepHead}>
                   <span className={s.stepNumber}>1</span>
-                  <strong>PayPal dispute case (Buyer)</strong>
+                  <strong>Open PayPal case</strong>
                   <span className={s.pending}>
                     {inboundPhase === "waiting" && "Opening…"}
                     {(inboundPhase === "received" || inboundPhase === "reading") && "Case ready"}
-                    {(inboundPhase === "done" || (inboundPhase === "idle" && inboundEmail)) && "Opened"}
-                    {inboundPhase === "idle" && !inboundEmail && "—"}
+                    {(inboundPhase === "done" || (inboundPhase === "idle" && caseText)) && "Opened"}
+                    {inboundPhase === "idle" && !caseText && "—"}
                   </span>
                 </div>
                 {inboundPhase === "waiting" && (
-                  <p className={s.description}>Filing dispute with PayPal — goods not as negotiated (~4s)…</p>
+                  <p className={s.description}>Filing with PayPal — goods not as negotiated (~4s)…</p>
                 )}
-                {stepEmailDone && inboundEmail ? (
-                  <pre className={s.shipInboxBody} aria-live="polite">{inboundEmail}</pre>
+                {caseVisible && caseText ? (
+                  <pre className={s.shipInboxBody} aria-live="polite">{caseText}</pre>
                 ) : inboundPhase !== "waiting" ? (
-                  <p className={s.tableNote}>
-                    Capture as Buyer, or click <strong>Open PayPal dispute</strong>. This is a dispute case — not a seller email.
-                  </p>
+                  <p className={s.tableNote}>After capture, or click <strong>Open PayPal dispute</strong>.</p>
                 ) : null}
               </div>
 
-              <div className={`${s.disputeStep} ${stepExtractDone ? s.disputeStepActive : ""}`}>
+              <div className={`${s.disputeStep} ${capturedClaim ? s.disputeStepActive : ""}`}>
                 <div className={s.disputeStepHead}>
                   <span className={s.stepNumber}>2</span>
-                  <strong>AI reads case fields</strong>
+                  <strong>AI reads case</strong>
                   <span className={s.pending}>
                     {inboundPhase === "reading" && "Reading…"}
-                    {stepExtractDone && "Captured"}
-                    {!stepExtractDone && inboundPhase !== "reading" && "—"}
+                    {capturedClaim ? "Captured" : "—"}
                   </span>
                 </div>
                 {(inboundPhase === "received" || inboundPhase === "reading") && !capturedClaim && (
-                  <p className={s.agentCaptureBanner} role="status">
-                    AI agent reading the PayPal dispute case…
-                  </p>
+                  <p className={s.agentCaptureBanner} role="status">AI reading PayPal case fields…</p>
                 )}
                 {capturedClaim ? (
                   <div className={s.agentCaptureCard}>
-                    <p className={s.agentCaptureBanner} role="status">Case fields captured</p>
+                    <p className={s.agentCaptureBanner}>Case fields</p>
                     <dl className={s.summaryList}>
-                      <div><dt>Event</dt><dd>{capturedClaim.eventType}</dd></div>
                       <div><dt>Dispute</dt><dd>{capturedClaim.disputeId}</dd></div>
                       <div><dt>Reason</dt><dd>{capturedClaim.reason}</dd></div>
-                      {capturedClaim.supplierId && <div><dt>Seller</dt><dd>{capturedClaim.supplierId}</dd></div>}
+                      {capturedClaim.supplierId && <div><dt>Against seller</dt><dd>{capturedClaim.supplierId}</dd></div>}
                       {capturedClaim.amount && <div><dt>Amount</dt><dd>${capturedClaim.amount}</dd></div>}
                       {capturedClaim.orderId && <div><dt>Order</dt><dd>{capturedClaim.orderId}</dd></div>}
                     </dl>
                   </div>
                 ) : (
-                  <p className={s.tableNote}>Fields appear after the agent reads the case.</p>
+                  <p className={s.tableNote}>Fields appear after the case opens.</p>
                 )}
               </div>
 
-              <div className={`${s.disputeStep} ${stepRespondActive ? s.disputeStepActive : ""}`}>
+              <div className={`${s.disputeStep} ${activeOpen ? s.disputeStepActive : ""}`}>
                 <div className={s.disputeStepHead}>
                   <span className={s.stepNumber}>3</span>
-                  <strong>Statement (Buyer) → Accept = refund (Seller)</strong>
+                  <strong>Draft statement (Buyer only)</strong>
                   <span className={s.pending}>
-                    {activeOpen?.acceptApprovedBy
-                      ? "Refund path"
-                      : activeOpen?.agentDraft
-                        ? (isSeller ? "Ready for Seller" : "Statement ready")
-                        : stepRespondActive ? "Needs statement" : "—"}
+                    {activeOpen?.agentDraft ? "Sent to Seller inbox" : activeOpen ? "Needs draft" : "—"}
                   </span>
                 </div>
                 {activeOpen ? (
@@ -402,118 +467,135 @@ export function DisputePanel({
                     <p className={s.description}>
                       {activeOpen.disputeId} · {activeOpen.status}
                       {activeOpen.amount ? ` · $${activeOpen.amount}` : ""}
-                      {activeOpen.orderId ? ` · order ${activeOpen.orderId}` : ""}
                     </p>
                     {activeOpen.agentDraft ? (
                       <div className={s.agentCaptureCard}>
-                        <p className={s.agentCaptureBanner}>Dispute statement for PayPal (not an email)</p>
+                        <p className={s.agentCaptureBanner}>Your dispute statement (Seller will review this)</p>
                         <p className={s.description} style={{ margin: 0 }}>{activeOpen.agentDraft}</p>
                       </div>
                     ) : (
-                      <p className={s.tableNote}>Buyer: draft the statement attached to this PayPal case. Seller waits.</p>
+                      <p className={s.tableNote}>AI writes the PayPal dispute statement — not an email to the seller.</p>
                     )}
                     <div className={s.reviewActions}>
                       <button
                         type="button"
-                        className={s.secondary}
-                        disabled={busy || isSeller}
+                        className={s.primary}
+                        disabled={busy || Boolean(activeOpen.agentDraft)}
                         onClick={() => void draft(activeOpen.disputeId)}
                       >
-                        Draft dispute statement <ArrowRight size={15} />
-                      </button>
-                      <button
-                        type="button"
-                        className={s.primary}
-                        disabled={busy || !isSeller || !activeOpen.agentDraft || Boolean(activeOpen.acceptApprovedBy)}
-                        onClick={() => void accept(activeOpen.disputeId)}
-                      >
-                        {isSeller ? "Accept claim (refund buyer)" : "Seller login required"}
+                        {activeOpen.agentDraft ? "Statement ready" : "Draft dispute statement"} <ArrowRight size={15} />
                       </button>
                     </div>
-                    {!isSeller && activeOpen.agentDraft && (
+                    {activeOpen.agentDraft && (
                       <p className={s.summaryNote}>
-                        Switch to <strong>Seller</strong> (seller / seller). Accept = buyer wins, refund — not “pay extra.”
+                        Next: sidebar → <strong>Seller</strong> (`seller` / `seller`) → Accept claim (refund).
                       </p>
                     )}
                   </>
                 ) : (
-                  <p className={s.tableNote}>No open PayPal dispute yet — finish steps 1–2 as Buyer first.</p>
+                  <p className={s.tableNote}>Open a case in step 1 first.</p>
                 )}
               </div>
             </div>
 
             {openItems.length > 1 && (
               <div className={s.disputeOtherOpen}>
-                <p className={s.description}>Other open claims</p>
+                <p className={s.description}>Your other open cases</p>
                 <ul className={s.draftList}>
                   {openItems
                     .filter((item) => item.disputeId !== activeOpen?.disputeId)
                     .map((item) => (
                       <li key={item.disputeId}>
-                        <div className={s.iconTile}><ShieldCheck size={19} /></div>
+                        <div className={s.iconTile}><UserRound size={19} /></div>
                         <div>
                           <strong>{item.disputeId}</strong>
-                          <p>{item.reason}{item.amount ? ` · $${item.amount}` : ""}</p>
-                          <button type="button" className={s.textButton} onClick={() => { setSelected(item.disputeId); setOpenSectionOpen(true); }}>
-                            Work this claim <ArrowRight size={14} />
+                          <p>{item.agentDraft ? "Waiting for Seller" : "Needs your draft"} · {item.reason}</p>
+                          <button type="button" className={s.textButton} onClick={() => setSelected(item.disputeId)}>
+                            Select <ArrowRight size={14} />
                           </button>
                         </div>
-                        <span className={s.draftBadge}>{item.status}</span>
+                        <span className={s.draftBadge}>{item.agentDraft ? "DRAFTED" : "OPEN"}</span>
                       </li>
                     ))}
                 </ul>
               </div>
             )}
 
-            {openItems.length === 0 && inboundPhase === "idle" && !inboundEmail && (
+            {openItems.length === 0 && inboundPhase === "idle" && !caseText && (
               <div className={s.empty}>
-                <span className={s.emptyIcon}><ShieldCheck size={26} /></span>
-                <h3>No open claims</h3>
-                <p>As Buyer: capture or Open PayPal dispute. As Seller: wait for a drafted statement, then Accept (refund).</p>
+                <span className={s.emptyIcon}><UserRound size={26} /></span>
+                <h3>No open disputes</h3>
+                <p>Capture an order, or click Open PayPal dispute.</p>
               </div>
             )}
           </div>
         )}
       </div>
 
-      <div className={s.paymentNest}>
-        <button
-          type="button"
-          className={s.paymentNestToggle}
-          aria-expanded={closedSectionOpen}
-          onClick={() => setClosedSectionOpen((open) => !open)}
-        >
-          {closedSectionOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          <span>Closed</span>
-          <em>{closedItems.length}</em>
-        </button>
-        {closedSectionOpen && (
-          <div className={s.paymentNestBody}>
-            {closedItems.length === 0 ? (
-              <p className={s.tableNote}>No resolved claims yet — they land here after Seller accept.</p>
-            ) : (
-              <ul className={s.draftList}>
-                {closedItems.map((item) => (
-                  <li key={item.disputeId}>
-                    <div className={s.iconTile}><ShieldCheck size={19} /></div>
-                    <details className={s.draftDetail}>
-                      <summary>{item.disputeId} · {item.status}</summary>
-                      <p>
-                        {item.reason}
-                        {item.amount ? ` · $${item.amount}` : ""}
-                        {item.orderId ? ` · order ${item.orderId}` : ""}
-                      </p>
-                      {item.agentDraft && <p><strong>Draft:</strong> {item.agentDraft}</p>}
-                      {item.acceptApprovedBy && <p>Accepted by {item.acceptApprovedBy}</p>}
-                    </details>
-                    <span className={s.draftBadge}>{item.status}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-      </div>
+      <ClosedNest
+        open={closedOpen}
+        setOpen={setClosedOpen}
+        items={closedItems}
+        emptyHint="Appear here after Seller accepts (refund)."
+      />
+
+      {isBuyerSide && (
+        <p className={s.tableNote} style={{ marginTop: 10 }}>
+          Supervisor role does not accept disputes — only Seller does.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ClosedNest({
+  open,
+  setOpen,
+  items,
+  emptyHint,
+}: {
+  open: boolean;
+  setOpen: (fn: (v: boolean) => boolean) => void;
+  items: LocalDispute[];
+  emptyHint: string;
+}) {
+  return (
+    <div className={s.paymentNest}>
+      <button
+        type="button"
+        className={s.paymentNestToggle}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        <span>Closed</span>
+        <em>{items.length}</em>
+      </button>
+      {open && (
+        <div className={s.paymentNestBody}>
+          {items.length === 0 ? (
+            <p className={s.tableNote}>{emptyHint}</p>
+          ) : (
+            <ul className={s.draftList}>
+              {items.map((item) => (
+                <li key={item.disputeId}>
+                  <div className={s.iconTile}><ShieldCheck size={19} /></div>
+                  <details className={s.draftDetail}>
+                    <summary>{item.disputeId} · {item.status}</summary>
+                    <p>
+                      {item.reason}
+                      {item.amount ? ` · $${item.amount}` : ""}
+                    </p>
+                    {item.agentDraft && <p><strong>Statement:</strong> {item.agentDraft}</p>}
+                    {item.acceptApprovedBy && <p>Accepted by {item.acceptApprovedBy}</p>}
+                  </details>
+                  <span className={s.draftBadge}>{item.status}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }

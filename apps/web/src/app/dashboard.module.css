@@ -209,6 +209,7 @@
   .disputeStepHead { display: flex; align-items: center; gap: 8px; }
   .disputeStepHead strong { flex: 1; font-size: 13px; color: #16375f; }
   .disputeOtherOpen { margin-top: 4px; }
+  .disputeRoleTitle { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
   .paymentInlineWindow { margin-top: 12px; border: 1px solid #cfe0f5; border-radius: 12px; background: #fff; padding: 14px; box-shadow: 0 8px 24px rgba(22, 55, 95, 0.06); }
   .paymentInlineWindowHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
   .paymentInlineWindowHead strong { font-size: 13px; color: #16375f; }
