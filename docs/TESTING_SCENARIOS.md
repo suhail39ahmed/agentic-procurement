@@ -141,20 +141,24 @@ Buyer / Supervisor desk          PayPal            Seller desk (separate app chr
 
 ## Then — “Pay the supplier invoice” (Payables)
 
-**Goal:** AP track — three intake paths, one extract → match → payout.
+**Goal:** AP track — three intake paths, one extract → match → payout → Seller sees money.
 
-1. Open **Payables**.  
-2. Pick an intake channel:
-   - **Storage vault** → Agent read & extract a demo PDF  
-   - **From email** → Simulate supplier invoice email (~3s) → auto extract  
-   - **Upload PDF** → Choose a file (or paste text)  
-3. Set PO and receipt to the **same** invoice amount → **Match**.  
-4. When MATCHED → **Payout**.  
-5. Optional: **Client invoice** via Toolkit.  
+1. Open **Payables** as Buyer.  
+2. Intake: **Storage vault** / **From email** / **Upload PDF** → extract.  
+3. Invoice lands in **Needs match** → set PO/receipt same amount → **Match** → moves to **Ready to pay**.  
+4. **Payout** → invoice moves to **Paid** queue.  
+5. Switch **Seller desk → Payouts & invoices** → **Payouts completed** shows that batch.
 
-**Render note:** PDF bytes are not kept on disk (ephemeral FS). Demo vault + extract results live in the API/Postgres. Real Azure Blob/S3 can replace the vault later.
+### Create & send (Buyer → client, not Seller)
+6. On Payables bottom card **Client invoice (Toolkit)** → **Create & send**.  
+7. Works even if PayPal Toolkit is flaky (demo invoice id returned).  
+8. This is **AR to your client** — it does **not** appear on the Seller desk.
 
-**You should see:** Extracted vendor/amount → **MATCHED** → payout available when matched.
+### Seller invoice (what you *do* see on Seller)
+- Seller desk → **Payouts & invoices** → **Send invoice** → appears under **Invoices you sent** → ~3s **Buyer AP received**.  
+- After Buyer Match/Payout → Seller **Payouts completed**.
+
+**Render note:** PDF vault + extract/payout rows live in Postgres (no ephemeral disk).
 
 ---
 
