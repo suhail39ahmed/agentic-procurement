@@ -517,16 +517,6 @@ export function PayablesPanel({
               />
             </div>
             <div className={s.reviewActions}>
-              <button
-                type="button"
-                className={s.secondary}
-                onClick={() => {
-                  const origin = typeof window !== "undefined" ? window.location.origin : "";
-                  setPageUrl(`${origin}/demo/amazon-invoice`);
-                }}
-              >
-                Use demo Amazon invoice
-              </button>
               <button type="button" className={s.primary} disabled={busy} onClick={() => void ingestFromWebpage()}>
                 {busy ? "Fetching…" : "Fetch & extract"} <Globe size={14} />
               </button>

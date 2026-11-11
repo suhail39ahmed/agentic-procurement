@@ -3,7 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   ArrowRight, ArrowUpRight, Bot, Check, ChevronDown, ChevronRight,
-  CircleHelp, CreditCard, FileText, Layers3, LayoutDashboard, LogOut,
+  CircleHelp, CreditCard, FileText, Layers3, LayoutDashboard, LogOut, X,
   Maximize2, Menu, Minimize2, Package, PackageSearch, Plus,
   RefreshCw, Search, Send, ShieldCheck, Sparkles, UserRound, Wallet, X,
 } from "lucide-react";
@@ -480,8 +480,7 @@ export default function Dashboard() {
       reloadCaptureWindows();
     }, 0);
   }
-  const [headerTab, setHeaderTab] = useState<"preview" | "help">("preview");
-  const processHelpOpen = headerTab === "help";
+  const [processHelpOpen, setProcessHelpOpen] = useState(false);
   const [channel3Busy, setChannel3Busy] = useState(false);
   const [channel3Query, setChannel3Query] = useState("office sticky notes pack");
   const [channel3Products, setChannel3Products] = useState<Array<{
@@ -1283,26 +1282,6 @@ export default function Dashboard() {
     setFieldErrors({});
     setNotice("");
     requestAnimationFrame(() => briefRef.current?.focus());
-  }
-
-  function loadDemoRequest() {
-    const demo = examples[0];
-    const validated = validateFields(demo);
-    setView("Overview");
-    setMobileOpen(false);
-    setFields(demo);
-    setFieldErrors({});
-    if (!validated.draft) {
-      setComposerMode("compose");
-      setPendingDraft(null);
-      setNotice("Demo request needs edits before review.");
-      requestAnimationFrame(() => briefRef.current?.focus());
-      return;
-    }
-    setPendingDraft(validated.draft);
-    setComposerMode("review");
-    setNotice("Demo request ready — click Queue negotiation to start buyer/seller agents.");
-    requestAnimationFrame(() => reviewHeadingRef.current?.focus());
   }
 
   /** Search Channel3 catalog and show product + price rows to pick from. */
@@ -2251,32 +2230,36 @@ export default function Dashboard() {
             </div>
             <div className={s.headingActions}>
               <div className={s.processHelp}>
-                <div className={s.previewTabGroup} role="radiogroup" aria-label="Header view">
-                  <label className={`${s.previewPill} ${headerTab === "preview" ? s.previewPillActive : ""}`}>
-                    <input
-                      type="radio"
-                      name="header-tab"
-                      value="preview"
-                      checked={headerTab === "preview"}
-                      onChange={() => setHeaderTab("preview")}
-                    />
-                    UI preview
-                  </label>
-                  <label className={`${s.previewPill} ${headerTab === "help" ? s.previewPillActive : ""}`}>
-                    <input
-                      type="radio"
-                      name="header-tab"
-                      value="help"
-                      checked={headerTab === "help"}
-                      onChange={() => setHeaderTab("help")}
-                    />
-                    <CircleHelp size={12} aria-hidden />
-                    Help
-                  </label>
-                </div>
+                <button
+                  type="button"
+                  className={`${s.previewPill} ${processHelpOpen ? s.previewPillActive : ""}`}
+                  aria-expanded={processHelpOpen}
+                  aria-controls="procureai-help-panel"
+                  title={processHelpOpen ? "Close help" : "Open help"}
+                  onClick={() => setProcessHelpOpen((open) => !open)}
+                >
+                  <CircleHelp size={12} aria-hidden />
+                  Help
+                </button>
                 {processHelpOpen && (
-                  <div className={s.processHelpPanel} role="region" aria-label="How to use ProcureAI">
-                    <strong>What this product is</strong>
+                  <div
+                    id="procureai-help-panel"
+                    className={s.processHelpPanel}
+                    role="dialog"
+                    aria-label="How to use ProcureAI"
+                  >
+                    <div className={s.processHelpHead}>
+                      <strong>What this product is</strong>
+                      <button
+                        type="button"
+                        className={s.processHelpClose}
+                        aria-label="Close help"
+                        title="Close help"
+                        onClick={() => setProcessHelpOpen(false)}
+                      >
+                        <X size={16} aria-hidden />
+                      </button>
+                    </div>
                     <p>
                       Dual-track sandbox demo. <em>Marketplace</em> = buyer AI negotiates with seller AIs, then PayPal
                       authorize→capture. <em>Payables</em> = extract supplier invoices, three-way match, payout.
@@ -2295,7 +2278,7 @@ export default function Dashboard() {
 
                     <strong>What to click — marketplace</strong>
                     <ol>
-                      <li><em>Overview</em> → Channel3 search → <em>Use market price → Review</em> → <em>Queue negotiation</em>. Or <em>Load demo request</em>.</li>
+                      <li><em>Overview</em> → Channel3 search → <em>Use market price → Review</em> → <em>Queue negotiation</em>.</li>
                       <li>Wait until <em>SUCCEEDED</em> → <em>Offers</em> on that row → <em>Checkout winning offer</em>.</li>
                       <li>PayPal approve → <em>HELD</em> → Inbox email → agent captures tracking → <em>SHIPPED</em> → <em>Confirm delivery &amp; capture</em>.</li>
                       <li>Buy → pay → ship → capture → Satisfied / Leave open / Raise with PayPal → Seller desk → refund payment.</li>
@@ -2303,8 +2286,8 @@ export default function Dashboard() {
 
                     <strong>What to click — payables &amp; automation</strong>
                     <ol>
-                      <li><em>Payables</em> → Upload / Email / Web page (Amazon demo) → Match → Payout.</li>
-                      <li><em>Payables</em> → Web page → demo Amazon invoice → Fetch &amp; extract (KERNEL).</li>
+                      <li><em>Payables</em> → Upload / Email / Web page (Amazon demo URL) → Match → Payout.</li>
+                      <li><em>Payables</em> → Web page → <em>Fetch &amp; extract</em> (KERNEL).</li>
                       <li><em>Automation</em> → multi-currency FX compare · replenishment · Slack · forecast.</li>
                     </ol>
 
@@ -2315,14 +2298,6 @@ export default function Dashboard() {
                 )}
               </div>
               <div className={s.reviewActions}>
-                <button
-                  type="button"
-                  className={s.secondary}
-                  title="Fill the composer with a sample procurement brief"
-                  onClick={loadDemoRequest}
-                >
-                  Load demo request
-                </button>
                 <button
                   className={s.primary}
                   title="Start a new sourcing brief on the Overview composer"
