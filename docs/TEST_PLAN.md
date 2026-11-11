@@ -78,13 +78,16 @@ Negative case:
 
 ---
 
-## 5b. Payables agent (UI)
+## 5b. Payables agent (UI) — Buyer / Supervisor
 
 - [ ] **Payables** intake: Storage vault / Email / Upload PDF → extract
 - [ ] Match with PO/receipt ≈ invoice → MATCHED
 - [ ] Payout to sandbox seller email
-- [ ] Create & send client invoice `$1.50`
 - [ ] Marketplace Disputes: Raise with PayPal → Seller accept → refund payment
+
+## 5b′. Seller money desk
+
+- [ ] Seller → **Payouts & invoices** → **Create & send** (PayPal invoice → Buyer AP; not on Buyer Payables)
 
 ## 5c. PayPal Agent Toolkit surfaces
 
