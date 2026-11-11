@@ -1,3 +1,5 @@
+import { AMAZON_INVOICE_DEMO_TEXT, isAmazonInvoiceDemoUrl } from "./amazon-invoice-demo";
+
 /** KERNEL browser fetch for invoice pages — env-gated (`KERNEL_API_KEY`). */
 export function kernelConfigured(): boolean {
   return Boolean(process.env.KERNEL_API_KEY?.trim());
@@ -6,11 +8,12 @@ export function kernelConfigured(): boolean {
 /**
  * Prefer KERNEL hosted browser when configured.
  * Falls back to a careful server-side fetch of public HTML text for demos.
+ * Built-in Amazon demo invoice short-circuits so extract always gets a clean text layer.
  */
 export async function fetchInvoicePageText(url: string): Promise<{
   configured: boolean;
   text: string;
-  source: "kernel" | "direct-fetch" | "none";
+  source: "kernel" | "direct-fetch" | "demo" | "none";
   note: string;
 }> {
   let parsed: URL;
@@ -21,6 +24,15 @@ export async function fetchInvoicePageText(url: string): Promise<{
   }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new Error("Only http(s) URLs are allowed");
+  }
+
+  if (isAmazonInvoiceDemoUrl(parsed.toString())) {
+    return {
+      configured: kernelConfigured(),
+      text: AMAZON_INVOICE_DEMO_TEXT,
+      source: "demo",
+      note: "Amazon Business demo invoice loaded (INV-AMZ-5520 · $55.00).",
+    };
   }
 
   const key = process.env.KERNEL_API_KEY?.trim();
@@ -63,7 +75,7 @@ export async function fetchInvoicePageText(url: string): Promise<{
   return {
     configured: Boolean(key),
     text,
-    source: key ? "direct-fetch" : "direct-fetch",
+    source: "direct-fetch",
     note: key
       ? "KERNEL key present but browser create failed — used direct HTML fetch."
       : "KERNEL_API_KEY not set — used direct HTML fetch for public pages.",

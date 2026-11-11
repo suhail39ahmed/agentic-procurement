@@ -105,7 +105,7 @@ export function StretchPanel({
         body: JSON.stringify({
           base: fxBase,
           maxUnitPrice: fxBase === "USD" ? 200 : fxBase === "SGD" ? 270 : 17000,
-          neededByDays: 21,
+          neededByDays: 30,
           quotes: [
             { supplier: "Anchor SG", unitPrice: 268, currency: "SGD", leadTimeDays: 12 },
             { supplier: "BundleWorks US", unitPrice: 185, currency: "USD", leadTimeDays: 18 },
@@ -116,7 +116,8 @@ export function StretchPanel({
       const payload = await response.json().catch(() => ({})) as {
         quotes?: FxQuote[];
         winner?: FxQuote | null;
-        comparison?: Array<{ rank: number; supplier: string; original: string; normalised: string }>;
+        comparison?: Array<{ rank: number; supplier: string; original: string; normalised: string; usd?: string }>;
+        fx?: { rates?: Record<string, number>; note?: string };
         error?: string;
       };
       if (!response.ok) {
@@ -125,10 +126,13 @@ export function StretchPanel({
       }
       setFxQuotes(Array.isArray(payload.quotes) ? payload.quotes : []);
       setFxWinner(payload.winner ?? null);
+      const rates = payload.fx?.rates
+        ? `Rates→USD: SGD ${payload.fx.rates.SGD ?? "?"} · INR ${payload.fx.rates.INR ?? "?"}`
+        : "";
       const lines = (payload.comparison ?? [])
-        .map((c) => `#${c.rank} ${c.supplier}: ${c.original} → ${c.normalised}`)
+        .map((c) => `#${c.rank} ${c.supplier}: ${c.original} → ${c.normalised}${c.usd ? ` (${c.usd})` : ""}`)
         .join(" · ");
-      setNotice(`FX into ${fxBase}. Winner: ${payload.winner?.supplier ?? "n/a"}. ${lines}`);
+      setNotice(`FX into ${fxBase}. Winner: ${payload.winner?.supplier ?? "n/a"}. ${rates}. ${lines}`);
     } finally {
       setBusy(false);
     }
@@ -146,7 +150,7 @@ export function StretchPanel({
           thresholdQty: Number(threshold),
           reorderQty: Number(reorder),
           onHand: Number(onHand),
-          maxUnitPrice: 2,
+          maxUnitPrice: 45,
           currency: "USD",
           neededByDays: 21,
           priority: "balanced",
@@ -157,7 +161,12 @@ export function StretchPanel({
         setNotice(payload.error ?? "Could not save replenishment rule.");
         return;
       }
-      setNotice(payload.note ?? "Replenishment rule saved.");
+      setNotice(
+        (payload.note ?? "Replenishment rule saved.")
+        + (Number(onHand) <= Number(threshold)
+          ? " On-hand ≤ threshold — click Evaluate & queue next."
+          : ""),
+      );
       await refreshAll();
     } finally {
       setBusy(false);
@@ -279,7 +288,10 @@ export function StretchPanel({
             <span className={s.iconTile}><Wallet size={20} /></span>
             <div>
               <h2>Multi-currency quotes</h2>
-              <p className={s.description}>Compare USD / SGD / INR after FX normalisation into one base.</p>
+              <p className={s.description}>
+                Demo FX table converts SGD/INR → USD → your base, then ranks by normalised unit price.
+                Not live market rates — sandbox rates for fair quote compare.
+              </p>
             </div>
           </div>
           <button
@@ -312,11 +324,12 @@ export function StretchPanel({
               <li key={`${q.supplier}-${q.currency}`}>
                 <div className={s.iconTile}><Wallet size={18} /></div>
                 <div className={s.draftDetail}>
-                  <strong>{q.supplier}</strong>
+                  <strong>{q.supplier}{fxWinner?.supplier === q.supplier ? " · winner" : ""}</strong>
                   <p>
-                    {q.currency} {q.unitPrice.toFixed(2)} → {fxBase} {q.unitPriceBase.toFixed(2)}
-                    {" · "}{q.leadTimeDays}d
-                    {fxWinner?.supplier === q.supplier ? " · winner" : ""}
+                    {q.currency} {q.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    {" → USD "}{q.unitPriceUsd.toFixed(2)}
+                    {" → "}{fxBase}{" "}{q.unitPriceBase.toFixed(2)}
+                    {" · "}{q.leadTimeDays}d lead
                   </p>
                 </div>
               </li>
@@ -331,7 +344,9 @@ export function StretchPanel({
             <span className={s.iconTile}><Package size={20} /></span>
             <div>
               <h2>Recurring replenishment</h2>
-              <p className={s.description}>Low-stock rules auto-queue a sourcing negotiation.</p>
+              <p className={s.description}>
+                Save a rule with on-hand ≤ threshold, then Evaluate &amp; queue to auto-start a live negotiation.
+              </p>
             </div>
           </div>
           <button

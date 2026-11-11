@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowRight, Check, ChevronDown, ChevronRight, Cloud, FileText, Mail,
+  ArrowRight, Check, ChevronDown, ChevronRight, FileText, Globe, Mail,
   RefreshCw, ShieldCheck, Upload, Wallet,
 } from "lucide-react";
 import s from "./dashboard.module.css";
@@ -28,15 +28,9 @@ type SupplierInvoice = {
   source?: string;
 };
 
-type StorageDoc = {
-  id: string;
-  filename: string;
-  vendor: string;
-  amountLabel: string;
-  summary: string;
-};
+type IngestChannel = "upload" | "email" | "webpage";
 
-type IngestChannel = "upload" | "email" | "storage";
+const DEFAULT_AMAZON_INVOICE_URL = "https://agentic-procurement-web.onrender.com/demo/amazon-invoice";
 
 type InvoiceResult = {
   error?: string;
@@ -56,14 +50,15 @@ export function PayablesPanel({
   seedText?: string | null;
 }) {
   const [busy, setBusy] = useState(false);
-  const [channel, setChannel] = useState<IngestChannel>("storage");
+  const [channel, setChannel] = useState<IngestChannel>("webpage");
   const [items, setItems] = useState<SupplierInvoice[]>([]);
-  const [storageDocs, setStorageDocs] = useState<StorageDoc[]>([]);
-  const [selectedStorage, setSelectedStorage] = useState("");
   const [emailPhase, setEmailPhase] = useState<"idle" | "waiting" | "received" | "extracting" | "done">("idle");
   const [emailText, setEmailText] = useState("");
   const [uploadName, setUploadName] = useState("");
   const [uploadPreview, setUploadPreview] = useState("");
+  const [pageUrl, setPageUrl] = useState(DEFAULT_AMAZON_INVOICE_URL);
+  const [pagePreview, setPagePreview] = useState("");
+  const [kernelNote, setKernelNote] = useState<string | null>(null);
   const [needsMatchOpen, setNeedsMatchOpen] = useState(true);
   const [readyPayOpen, setReadyPayOpen] = useState(true);
   const [paidOpen, setPaidOpen] = useState(false);
@@ -109,21 +104,6 @@ export function PayablesPanel({
     setItems(Array.isArray(payload.items) ? payload.items : []);
   }
 
-  async function loadStorage() {
-    const response = await fetch("/api/invoices/storage", { cache: "no-store" });
-    const payload = await response.json().catch(() => ({})) as {
-      items?: StorageDoc[];
-      error?: string;
-    };
-    if (!response.ok) {
-      setNotice(payload.error ?? "Could not list storage vault.");
-      return;
-    }
-    const docs = Array.isArray(payload.items) ? payload.items : [];
-    setStorageDocs(docs);
-    if (!selectedStorage && docs[0]) setSelectedStorage(docs[0].id);
-  }
-
   function applyExtractSuccess(payload: InvoiceResult) {
     const inv = payload.invoice;
     setNotice(
@@ -136,30 +116,7 @@ export function PayablesPanel({
     }
   }
 
-  async function ingestFromStorage(sampleId: string) {
-    setBusy(true);
-    setNotice("Agent reading vault PDF…");
-    try {
-      const response = await fetch("/api/invoices/ingest/storage", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sampleId }),
-      });
-      const payload = await response.json().catch(() => ({})) as InvoiceResult;
-      if (!response.ok) {
-        setNotice([payload.error, payload.hint].filter(Boolean).join(" — ") || `Storage read failed (${response.status}).`);
-        return;
-      }
-      applyExtractSuccess(payload);
-      await refresh();
-    } catch (err) {
-      setNotice(`Storage read failed: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function ingestFromEmail(opts?: { sampleId?: string; fromSeller?: SellerApEmailEvent }) {
+  async function ingestFromEmail(opts?: { fromSeller?: SellerApEmailEvent }) {
     const token = ++emailTokenRef.current;
     const fromSeller = opts?.fromSeller;
     setBusy(true);
@@ -193,7 +150,10 @@ export function PayablesPanel({
             to: fromSeller.to,
             vendor: fromSeller.vendor,
           }
-        : { sampleId: opts?.sampleId || selectedStorage || storageDocs[0]?.id };
+        : {
+            // Fallback sample path when Simulate is used without Seller live send
+            sampleId: "inv-bundlebits",
+          };
       const response = await fetch("/api/invoices/ingest/email", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -222,6 +182,70 @@ export function PayablesPanel({
     }
   }
 
+  async function ingestFromWebpage() {
+    const raw = pageUrl.trim();
+    if (!raw) {
+      setNotice("Paste a public invoice page URL first.");
+      return;
+    }
+    let url = raw;
+    try {
+      // Allow relative paths like /demo/amazon-invoice
+      url = new URL(raw, window.location.origin).toString();
+    } catch {
+      setNotice("Invalid URL.");
+      return;
+    }
+
+    setBusy(true);
+    setPagePreview("");
+    setKernelNote(null);
+    setNotice("KERNEL / web fetch — reading invoice page…");
+    try {
+      const fetchRes = await fetch("/api/sponsors/kernel/fetch-invoice", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const fetchPayload = await fetchRes.json().catch(() => ({})) as {
+        error?: string;
+        note?: string;
+        text?: string;
+        source?: string;
+      };
+      if (!fetchRes.ok || !fetchPayload.text) {
+        setNotice(fetchPayload.error ?? "Page fetch failed.");
+        return;
+      }
+      setPagePreview(fetchPayload.text.slice(0, 1200));
+      setKernelNote(fetchPayload.note ?? `Fetched via ${fetchPayload.source ?? "web"}`);
+      setNotice("Page text ready — extracting invoice fields…");
+
+      const response = await fetch("/api/invoices/ingest/upload", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          filename: "amazon-invoice-page.txt",
+          text: fetchPayload.text,
+        }),
+      });
+      const payload = await response.json().catch(() => ({})) as InvoiceResult;
+      if (!response.ok) {
+        setNotice([payload.error, payload.hint].filter(Boolean).join(" — ") || "Extract after page fetch failed.");
+        return;
+      }
+      applyExtractSuccess(payload);
+      await refresh();
+      setNotice(
+        `Web page extracted · $${payload.invoice?.amount.toFixed(2) ?? "—"} — Match → Payout.`,
+      );
+    } catch (err) {
+      setNotice(`Web page intake failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function playSellerApEmail(event: SellerApEmailEvent) {
     if (sellerEmailHandledRef.current === event.invoiceId) return;
     sellerEmailHandledRef.current = event.invoiceId;
@@ -231,7 +255,9 @@ export function PayablesPanel({
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void refresh().catch(() => undefined);
-      void loadStorage().catch(() => undefined);
+      if (typeof window !== "undefined") {
+        setPageUrl(`${window.location.origin}/demo/amazon-invoice`);
+      }
       const pending = readPendingSellerApEmail();
       if (pending) playSellerApEmail(pending);
     }, 0);
@@ -354,7 +380,7 @@ export function PayablesPanel({
             <div>
               <h2>Invoice intake</h2>
               <p className={s.description}>
-                Three ways in: <strong>Upload PDF</strong>, <strong>supplier email</strong>, or <strong>storage vault</strong>.
+                Three ways in: <strong>Upload PDF</strong>, <strong>supplier email</strong>, or <strong>web page (KERNEL)</strong>.
                 Same extract → match → payout. Render keeps results in Postgres (no ephemeral disk).
               </p>
             </div>
@@ -381,10 +407,10 @@ export function PayablesPanel({
           </button>
           <button
             type="button"
-            className={channel === "storage" ? s.primary : s.secondary}
-            onClick={() => setChannel("storage")}
+            className={channel === "webpage" ? s.primary : s.secondary}
+            onClick={() => setChannel("webpage")}
           >
-            <Cloud size={14} /> Storage vault
+            <Globe size={14} /> Web page
           </button>
         </div>
 
@@ -426,7 +452,7 @@ export function PayablesPanel({
               value={pasteText}
               onChange={(e) => setPasteText(e.target.value)}
               rows={5}
-              placeholder="Optional paste / Automation → KERNEL seed…"
+              placeholder="Optional paste invoice text…"
             />
             {pasteText.trim() && (
               <div className={s.reviewActions}>
@@ -457,27 +483,11 @@ export function PayablesPanel({
                 : "Open Seller → Create & send in another window, or use vault simulate below. Then Match → Payout → Seller Payouts completed."}
             </p>
             {!sellerEmailBanner && (
-              <>
-                <div className={s.field} style={{ marginTop: 8 }}>
-                  <label htmlFor="email-sample">Preferred attachment (from vault)</label>
-                  <select
-                    id="email-sample"
-                    value={selectedStorage}
-                    onChange={(e) => setSelectedStorage(e.target.value)}
-                  >
-                    {storageDocs.map((doc) => (
-                      <option key={doc.id} value={doc.id}>
-                        {doc.filename} · {doc.vendor} · {doc.amountLabel}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className={s.reviewActions}>
-                  <button type="button" className={s.primary} disabled={busy} onClick={() => void ingestFromEmail()}>
-                    {emailPhase === "waiting" ? "Waiting for email…" : emailPhase === "extracting" ? "Extracting…" : "Simulate invoice email"} <Mail size={14} />
-                  </button>
-                </div>
-              </>
+              <div className={s.reviewActions}>
+                <button type="button" className={s.primary} disabled={busy} onClick={() => void ingestFromEmail()}>
+                  {emailPhase === "waiting" ? "Waiting for email…" : emailPhase === "extracting" ? "Extracting…" : "Simulate invoice email"} <Mail size={14} />
+                </button>
+              </div>
             )}
             {sellerEmailBanner && (emailPhase === "waiting" || emailPhase === "extracting") && (
               <p className={s.pending} style={{ marginTop: 10 }}>
@@ -490,39 +500,40 @@ export function PayablesPanel({
           </div>
         )}
 
-        {channel === "storage" && (
+        {channel === "webpage" && (
           <div className={s.agentCaptureCard}>
-            <p className={s.agentCaptureBanner}>3 · Storage vault</p>
+            <p className={s.agentCaptureBanner}>3 · Web page (KERNEL)</p>
             <p className={s.description}>
-              Demo vault of supplier PDFs (text layers in the API). On Render this stands in for Azure Blob / S3 — extract results persist in Postgres.
+              Fetch a public invoice page (demo Amazon Business invoice below), then extract → match → payout.
+              Uses KERNEL when the API key is set; otherwise direct HTML fetch / built-in demo text.
             </p>
-            <ul className={s.draftList} style={{ marginTop: 10 }}>
-              {storageDocs.map((doc) => (
-                <li key={doc.id} className={selectedStorage === doc.id ? s.paymentQueueSelected : undefined}>
-                  <div className={s.iconTile}><Cloud size={18} /></div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <strong>{doc.filename}</strong>
-                    <p>{doc.vendor} · {doc.summary} · {doc.amountLabel}</p>
-                    <div className={s.reviewActions} style={{ marginTop: 8 }}>
-                      <button
-                        type="button"
-                        className={s.primary}
-                        disabled={busy}
-                        onClick={() => {
-                          setSelectedStorage(doc.id);
-                          void ingestFromStorage(doc.id);
-                        }}
-                      >
-                        {busy && selectedStorage === doc.id ? "Reading…" : "Agent read & extract"} <ArrowRight size={14} />
-                      </button>
-                    </div>
-                  </div>
-                  <span className={s.draftBadge}>PDF</span>
-                </li>
-              ))}
-            </ul>
-            {storageDocs.length === 0 && (
-              <p className={s.tableNote}>Loading vault…</p>
+            <div className={s.field} style={{ marginTop: 8 }}>
+              <label htmlFor="page-url">Invoice page URL</label>
+              <input
+                id="page-url"
+                value={pageUrl}
+                onChange={(e) => setPageUrl(e.target.value)}
+                placeholder={DEFAULT_AMAZON_INVOICE_URL}
+              />
+            </div>
+            <div className={s.reviewActions}>
+              <button
+                type="button"
+                className={s.secondary}
+                onClick={() => {
+                  const origin = typeof window !== "undefined" ? window.location.origin : "";
+                  setPageUrl(`${origin}/demo/amazon-invoice`);
+                }}
+              >
+                Use demo Amazon invoice
+              </button>
+              <button type="button" className={s.primary} disabled={busy} onClick={() => void ingestFromWebpage()}>
+                {busy ? "Fetching…" : "Fetch & extract"} <Globe size={14} />
+              </button>
+            </div>
+            {kernelNote && <p className={s.tableNote} style={{ marginTop: 8 }}>{kernelNote}</p>}
+            {pagePreview && (
+              <pre className={s.shipInboxBody} style={{ marginTop: 10 }} aria-live="polite">{pagePreview}</pre>
             )}
           </div>
         )}
@@ -560,7 +571,7 @@ export function PayablesPanel({
           <div className={s.empty}>
             <span className={s.emptyIcon}><FileText size={24} /></span>
             <h3>No extracted invoices</h3>
-            <p>Use Upload, Email, or Storage vault on the left, then match and pay.</p>
+            <p>Use Upload, Email, or Web page on the left, then match and pay.</p>
           </div>
         ) : (
           <>

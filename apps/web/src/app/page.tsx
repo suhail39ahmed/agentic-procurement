@@ -32,7 +32,6 @@ import {
   upsertCaptureWindow,
   type CaptureDisputeRecord,
 } from "../lib/capture-dispute-window";
-import { SponsorsPanel } from "./SponsorsPanel";
 import { OverviewSchedulePanel } from "./OverviewSchedulePanel";
 import { PayPalApproveButtons, paypalOrderIdFromApproveUrl } from "./PayPalApproveButtons";
 import {
@@ -493,7 +492,7 @@ export default function Dashboard() {
     productId?: string;
   }>>([]);
   const [channel3Selected, setChannel3Selected] = useState("");
-  const [payablesSeed, setPayablesSeed] = useState<string | null>(null);
+  const [payablesSeed] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -2304,8 +2303,9 @@ export default function Dashboard() {
 
                     <strong>What to click — payables &amp; automation</strong>
                     <ol>
-                      <li><em>Payables</em> → Upload / Email / Storage vault → Match → Payout.</li>
-                      <li><em>Automation</em> → KERNEL URL → Fetch page text. Stretch tools optional.</li>
+                      <li><em>Payables</em> → Upload / Email / Web page (Amazon demo) → Match → Payout.</li>
+                      <li><em>Payables</em> → Web page → demo Amazon invoice → Fetch &amp; extract (KERNEL).</li>
+                      <li><em>Automation</em> → multi-currency FX compare · replenishment · Slack · forecast.</li>
                     </ol>
 
                     <p className={s.processHelpFoot}>
@@ -2366,7 +2366,7 @@ export default function Dashboard() {
             <div className={s.previewNotice}>
               <ShieldCheck size={17} />
               <p>
-                Payables track — ingest via Upload PDF, supplier email, or storage vault → match → payout.
+                Payables track — ingest via Upload PDF, supplier email, or web page (KERNEL) → match → payout.
               </p>
             </div>
           )}
@@ -2402,11 +2402,11 @@ export default function Dashboard() {
               >
                 <span className={s.iconTile}><Wallet size={20} /></span>
                 <h3>2 · Payables agent</h3>
-                <p>Upload PDF, email, or storage vault → extract → match → payout.</p>
+                <p>Upload PDF, email, or web page → extract → match → payout.</p>
                 <ul className={s.trackSteps}>
-                  <li><ArrowRight size={12} aria-hidden /> Intake via Upload / Email / Storage</li>
+                  <li><ArrowRight size={12} aria-hidden /> Intake via Upload / Email / Web page</li>
                   <li><ArrowRight size={12} aria-hidden /> Match PO + receipt → payout</li>
-                  <li><ArrowRight size={12} aria-hidden /> Optional client invoice via Toolkit</li>
+                  <li><ArrowRight size={12} aria-hidden /> Seller Create &amp; send → Payouts completed</li>
                 </ul>
                 <span className={s.trackCta}>
                   <span className={s.trackRadio} aria-hidden />
@@ -2912,17 +2912,7 @@ export default function Dashboard() {
           </section>}
 
           {view === "Automation" && (
-            <>
-              <StretchPanel setNotice={setNotice} />
-              <SponsorsPanel
-                setNotice={setNotice}
-                onKernelInvoiceText={(text) => {
-                  setPayablesSeed(text);
-                  setView("Payables");
-                  setNotice("KERNEL page text loaded in Payables — use Upload → Extract pasted text.");
-                }}
-              />
-            </>
+            <StretchPanel setNotice={setNotice} />
           )}
 
           {view === "Payables" && (

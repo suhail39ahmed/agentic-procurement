@@ -144,7 +144,7 @@ Buyer / Supervisor desk          PayPal            Seller desk (separate app chr
 **Goal:** AP track — three intake paths, one extract → match → payout → Seller sees money.
 
 1. Open **Payables** as Buyer.  
-2. Intake: **Storage vault** / **From email** / **Upload PDF** → extract.  
+2. Intake: **Web page** (demo Amazon invoice) / **From email** / **Upload PDF** → extract.  
 3. Invoice lands in **Needs match** → set PO/receipt same amount → **Match** → moves to **Ready to pay**.  
 4. **Payout** → invoice moves to **Paid** queue.  
 5. Switch **Seller desk → Payouts & invoices** → **Payouts completed** shows that batch.
