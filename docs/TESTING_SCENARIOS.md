@@ -127,7 +127,7 @@ Buyer / Supervisor desk          PayPal            Seller desk (separate app chr
 3. After Seller accept → **PayPal refund payments**.
 
 ### Seller desk
-5. Separate product (no buy nav) → **Accept claim (refund buyer)** only.
+5. Separate product with tabs: **RFQ inbox** · **Seller agents** · **Fulfillment** (preview) · **Disputes** (live Accept).
 
 | Product | Dispute Yes/No | Buy path | Accept → PayPal refund |
 |---|---|---|---|
