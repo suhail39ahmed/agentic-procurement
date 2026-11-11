@@ -2,7 +2,7 @@
 
 **ProcureAI** — AI agents that negotiate, buy and pay on PayPal: agentic procurement and payables for small businesses.
 
-**Hosted demo:** https://agentic-procurement-web.onrender.com · **Devpost pack:** [`docs/DEVPOST_SUBMISSION.md`](docs/DEVPOST_SUBMISSION.md)
+**Hosted demo:** https://agentic-procurement-web.onrender.com · **Demo video:** https://youtu.be/dTtNFE9A6aM
 
 **Two tracks in one product:** (1) **Agent-to-agent marketplace** — buyer AI negotiates with seller AIs, scores offers, then PayPal authorize→capture. (2) **AI procurement & payables** — extract supplier invoices, three-way match, payouts, client invoicing, disputes.
 
@@ -103,7 +103,7 @@ Legend: **solid** = primary money / negotiation path · **dotted** = enrichment 
   - `packages/ai`: chat client with tool-calling (`chatWithTools`) against Azure AI; buyer/judge strong, seller/extractor fast.
   - `apps/api`: Express API with PayPal webhooks, Agent Toolkit–backed assistant/disputes/invoices, authorize→capture checkout.
 - **PayPal Agent Toolkit:** `@paypal/agent-toolkit` (OpenAI adapter in the buying assistant; MCP stdio server for Cursor/Claude). Disputes list/get + owner-gated `accept_dispute_claim`; invoice create/send; order get; shipment/transactions tools.
-- **Demos + eval:** runnable scripts in `packages/agents/src/demos/`; headless eval via `pnpm --filter agents eval` writes `docs/EVAL_REPORT.md` (savings + judge scores + mermaid charts).
+- **Demos + eval:** runnable scripts in `packages/agents/src/demos/`; headless eval via `pnpm --filter agents eval` writes `docs/EVAL_REPORT.md`, git-ignored (savings + judge scores + mermaid charts).
 
 **Ops notes**
 
@@ -111,7 +111,7 @@ Legend: **solid** = primary money / negotiation path · **dotted** = enrichment 
 - CI: `.github/workflows/ci.yml` (typecheck/lint/build + secret scan).
 - API refuses to start unless `PAYPAL_ENV=sandbox` and `MANDATE_SECRET` is set.
 - Dashboard: negotiation SSE feed, AG Grid, Payments inbox (nested Needs attention / Recently captured), Payables, Automation (stretch + KERNEL), Overview Bryntum live payment Gantt.
-- Demo path: `docs/TESTING_SCENARIOS.md` · full checklist: `docs/TEST_PLAN.md` · Devpost: `docs/DEVPOST_SUBMISSION.md`.
+- Demo video (3 min): https://youtu.be/dTtNFE9A6aM
 - Hackathon / sponsor tools used:
   - **PayPal** sandbox REST + Checkout AUTHORIZE, webhooks, Agent Toolkit/MCP
   - **AG Grid** Community (live grids)
