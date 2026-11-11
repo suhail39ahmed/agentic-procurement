@@ -149,14 +149,12 @@ Buyer / Supervisor desk          PayPal            Seller desk (separate app chr
 4. **Payout** → invoice moves to **Paid** queue.  
 5. Switch **Seller desk → Payouts & invoices** → **Payouts completed** shows that batch.
 
-### Create & send (Buyer → client, not Seller)
-6. On Payables bottom card **Client invoice (Toolkit)** → **Create & send**.  
-7. Works even if PayPal Toolkit is flaky (demo invoice id returned).  
-8. This is **AR to your client** — it does **not** appear on the Seller desk.
+### Create & send (Seller → Buyer AP)
+6. **Seller desk → Payouts & invoices → Create & send** (PayPal invoice to Buyer AP).  
+7. Appears under **Invoices you sent** → ~3s **Buyer AP received**.  
+8. Buyer Payables extracts / matches / pays → Seller **Payouts completed**.  
 
-### Seller invoice (what you *do* see on Seller)
-- Seller desk → **Payouts & invoices** → **Send invoice** → appears under **Invoices you sent** → ~3s **Buyer AP received**.  
-- After Buyer Match/Payout → Seller **Payouts completed**.
+Create & send is **not** on Buyer Payables (that desk only intakes → match → payout).
 
 **Render note:** PDF vault + extract/payout rows live in Postgres (no ephemeral disk).
 

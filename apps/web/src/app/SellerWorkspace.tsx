@@ -556,9 +556,10 @@ export function SellerWorkspace({
               </div>
 
               <div className={s.agentCaptureCard} style={{ marginTop: 14 }}>
-                <p className={s.agentCaptureBanner}>Send invoice to Buyer AP</p>
+                <p className={s.agentCaptureBanner}>Create &amp; send (PayPal invoice)</p>
                 <p className={s.description} style={{ margin: 0 }}>
-                  Creates a PayPal sandbox invoice and emails the buyer payables address. ~3s later we mark Buyer AP received (email extract).
+                  Seller action: create a PayPal invoice and send it to Buyer AP. Buyer then extracts it on Payables → Match → Payout.
+                  ~3s later this desk marks <strong>Buyer AP received</strong>.
                 </p>
                 <div className={s.fieldGrid} style={{ marginTop: 10 }}>
                   <div className={s.field}>
@@ -576,7 +577,7 @@ export function SellerWorkspace({
                 </div>
                 <div className={s.reviewActions}>
                   <button type="button" className={s.primary} disabled={busy} onClick={() => void sendSupplierInvoice()}>
-                    {busy ? "Sending…" : "Send invoice"} <Send size={14} />
+                    {busy ? "Sending…" : "Create & send"} <Send size={14} />
                   </button>
                 </div>
               </div>

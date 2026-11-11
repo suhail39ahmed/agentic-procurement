@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight, Check, ChevronDown, ChevronRight, Cloud, FileText, Mail,
-  RefreshCw, Send, ShieldCheck, Upload, Wallet,
+  RefreshCw, ShieldCheck, Upload, Wallet,
 } from "lucide-react";
 import s from "./dashboard.module.css";
 
@@ -80,8 +80,6 @@ export function PayablesPanel({
   const [poAmount, setPoAmount] = useState("45.00");
   const [receiptAmount, setReceiptAmount] = useState("45.00");
   const [receiver, setReceiver] = useState("seller-a@business.example.com");
-  const [clientEmail, setClientEmail] = useState("client-agentic@personal.example.com");
-  const [clientAmount, setClientAmount] = useState("45.00");
 
   // Optional KERNEL seed still supported as paste fallback in upload channel
   const [pasteText, setPasteText] = useState(() =>
@@ -293,37 +291,6 @@ export function PayablesPanel({
       await refresh();
     } catch (err) {
       setNotice(`Payout failed: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function createClientInvoice() {
-    setBusy(true);
-    setNotice("Creating client invoice…");
-    try {
-      const response = await fetch("/api/invoices/paypal", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          email: clientEmail,
-          amount: clientAmount,
-          note: "ProcureAI sandbox client invoice",
-          send: true,
-        }),
-      });
-      const payload = await response.json().catch(() => ({})) as {
-        error?: string;
-        invoiceId?: string;
-        note?: string;
-      };
-      if (!response.ok) {
-        setNotice(payload.error ?? `Client invoice failed (${response.status}).`);
-        return;
-      }
-      setNotice(`Client invoice ${payload.invoiceId ?? "created"} · ${payload.note ?? ""}`);
-    } catch (err) {
-      setNotice(`Client invoice failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setBusy(false);
     }
@@ -677,32 +644,9 @@ export function PayablesPanel({
         )}
       </section>
 
-      <section className={`${s.card} ${s.stretchCard}`}>
-        <div className={s.sectionHeader}>
-          <div className={s.inlineTitle}>
-            <span className={s.iconTile}><Send size={20} /></span>
-            <div>
-              <h2>Client invoice (Toolkit)</h2>
-              <p className={s.description}>create_invoice + send_invoice via PayPal Agent Toolkit.</p>
-            </div>
-          </div>
-        </div>
-        <div className={s.fieldGrid}>
-          <div className={s.field}>
-            <label htmlFor="client-email">Client email</label>
-            <input id="client-email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} />
-          </div>
-          <div className={s.field}>
-            <label htmlFor="client-amt">Amount (USD)</label>
-            <input id="client-amt" value={clientAmount} onChange={(e) => setClientAmount(e.target.value)} />
-          </div>
-        </div>
-        <div className={s.reviewActions}>
-          <button type="button" className={s.primary} disabled={busy} onClick={() => void createClientInvoice()}>
-            Create &amp; send <ArrowRight size={15} />
-          </button>
-        </div>
-      </section>
+      <p className={s.tableNote} style={{ gridColumn: "1 / -1" }}>
+        <strong>Create &amp; send</strong> lives on the <strong>Seller desk → Payouts &amp; invoices</strong> (supplier bills you). Buyer Payables only extracts → match → payout.
+      </p>
     </div>
   );
 }
