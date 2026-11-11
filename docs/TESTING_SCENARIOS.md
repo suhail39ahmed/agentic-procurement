@@ -127,7 +127,9 @@ Buyer / Supervisor desk          PayPal            Seller desk (separate app chr
 3. After Seller accept → **PayPal refund payments**.
 
 ### Seller desk
-5. Separate product with tabs: **RFQ inbox** · **Seller agents** · **Fulfillment** (preview) · **Disputes** (live Accept).
+5. Separate product with tabs: **RFQ inbox** · **Seller agents** · **Fulfillment** (preview) · **Payouts & invoices** (live send invoice + payouts + email received) · **Disputes** (live Accept).
+
+**Seller money path:** Send invoice → ~3s Buyer AP received → after Buyer Match/Payout, **Payouts completed** fills in.
 
 | Product | Dispute Yes/No | Buy path | Accept → PayPal refund |
 |---|---|---|---|

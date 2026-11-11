@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight, Bot, ChevronDown, ChevronRight, FileText, LogOut,
-  Package, ShieldCheck, Layers3, Truck,
+  Mail, Package, Send, ShieldCheck, Layers3, Truck, Wallet,
 } from "lucide-react";
 import Link from "next/link";
 import s from "./dashboard.module.css";
 import type { DemoSession } from "@/lib/demo-auth";
 
-type SellerTab = "rfqs" | "agents" | "fulfillment" | "disputes";
+type SellerTab = "rfqs" | "agents" | "fulfillment" | "money" | "disputes";
 
 type LocalDispute = {
   disputeId: string;
@@ -19,6 +19,37 @@ type LocalDispute = {
   orderId?: string | null;
   agentDraft?: string;
   acceptApprovedBy?: string;
+};
+
+type PayoutRow = {
+  id: string;
+  paypalBatchId?: string;
+  status: string;
+  amount: number;
+  currency: string;
+  invoiceId?: string;
+  receiver: string;
+  note?: string;
+  createdAt?: string;
+};
+
+type ExtractedInvoice = {
+  id: string;
+  vendorName?: string;
+  invoiceNumber?: string;
+  amount: number;
+  currency: string;
+  status: string;
+  source?: string;
+};
+
+type SentInvoice = {
+  id: string;
+  to: string;
+  amount: string;
+  note: string;
+  at: string;
+  buyerReceived: boolean;
 };
 
 const SELLER_RFQS = [
@@ -119,6 +150,12 @@ const TAB_META: Record<SellerTab, { eyebrow: string; title: string; accent: stri
     accent: "You fulfill.",
     line: "Track what you owe to ship after authorization. Buyer capture and Satisfied stay on their desk.",
   },
+  money: {
+    eyebrow: "SELLER · MONEY",
+    title: "Invoices out. Payouts in.",
+    accent: "Your cash desk.",
+    line: "Send invoices to Buyer AP, see when email is received/extracted, and watch PayPal payouts land after match.",
+  },
   disputes: {
     eyebrow: "SELLER · PAYPAL",
     title: "Claims from PayPal.",
@@ -129,7 +166,7 @@ const TAB_META: Record<SellerTab, { eyebrow: string; title: string; accent: stri
 
 /**
  * Seller product surface — separate from Buyer/Supervisor marketplace.
- * RFQ / Agents / Fulfillment are seller-desk previews; Disputes is live.
+ * Money + Disputes are live; RFQ / Agents / Fulfillment are seller-desk previews.
  */
 export function SellerWorkspace({
   session,
@@ -146,11 +183,19 @@ export function SellerWorkspace({
   onSwitchToSupervisor: () => void;
   onSignOut: () => void;
 }) {
-  const [tab, setTab] = useState<SellerTab>("disputes");
+  const [tab, setTab] = useState<SellerTab>("money");
   const [items, setItems] = useState<LocalDispute[]>([]);
+  const [payouts, setPayouts] = useState<PayoutRow[]>([]);
+  const [buyerInbox, setBuyerInbox] = useState<ExtractedInvoice[]>([]);
+  const [sentInvoices, setSentInvoices] = useState<SentInvoice[]>([]);
   const [busy, setBusy] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(true);
   const [closedOpen, setClosedOpen] = useState(false);
+  const [payoutsOpen, setPayoutsOpen] = useState(true);
+  const [receivedOpen, setReceivedOpen] = useState(true);
+  const [invoiceTo, setInvoiceTo] = useState("payables@procureai.demo");
+  const [invoiceAmount, setInvoiceAmount] = useState("45.00");
+  const [invoiceNote, setInvoiceNote] = useState("Supplier invoice — BundleBits Supply Co");
 
   const inbox = useMemo(
     () => items.filter((item) => !isClosed(item.status) && Boolean(item.agentDraft) && !item.acceptApprovedBy),
@@ -160,10 +205,14 @@ export function SellerWorkspace({
     () => items.filter((item) => isClosed(item.status)),
     [items],
   );
+  const emailReceived = useMemo(
+    () => buyerInbox.filter((inv) => String(inv.source ?? "").startsWith("email:")),
+    [buyerInbox],
+  );
 
   const meta = TAB_META[tab];
 
-  async function refresh() {
+  async function refreshDisputes() {
     const response = await fetch("/api/disputes", { cache: "no-store" });
     const payload = await response.json().catch(() => ({})) as {
       local?: LocalDispute[];
@@ -176,12 +225,44 @@ export function SellerWorkspace({
     setItems(Array.isArray(payload.local) ? payload.local : []);
   }
 
+  async function refreshMoney() {
+    const [payoutRes, invRes] = await Promise.all([
+      fetch("/api/invoices/payouts", { cache: "no-store" }),
+      fetch("/api/invoices/extracted", { cache: "no-store" }),
+    ]);
+    const payoutPayload = await payoutRes.json().catch(() => ({})) as {
+      items?: PayoutRow[];
+      error?: string;
+    };
+    const invPayload = await invRes.json().catch(() => ({})) as {
+      items?: ExtractedInvoice[];
+      error?: string;
+    };
+    if (payoutRes.ok) {
+      setPayouts(Array.isArray(payoutPayload.items) ? payoutPayload.items : []);
+    }
+    if (invRes.ok) {
+      setBuyerInbox(Array.isArray(invPayload.items) ? invPayload.items : []);
+      // Mark local sent invoices as received when Buyer AP extracted an email invoice
+      setSentInvoices((prev) => prev.map((row) => {
+        if (row.buyerReceived) return row;
+        const hit = (invPayload.items ?? []).some((inv) =>
+          String(inv.source ?? "").startsWith("email:")
+          && Math.abs(Number(inv.amount) - Number(row.amount)) < 0.02,
+        );
+        return hit ? { ...row, buyerReceived: true } : row;
+      }));
+    }
+  }
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void refresh();
+      void refreshDisputes();
+      void refreshMoney();
     }, 0);
     const poll = window.setInterval(() => {
-      void refresh();
+      void refreshDisputes();
+      void refreshMoney();
     }, 5000);
     return () => {
       window.clearTimeout(timer);
@@ -215,7 +296,70 @@ export function SellerWorkspace({
         setNotice(`Accepted locally. Toolkit: ${payload.toolkitError}`);
       }
       setClosedOpen(true);
-      await refresh();
+      await refreshDisputes();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendSupplierInvoice() {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/invoices/paypal", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-demo-role": "seller",
+        },
+        body: JSON.stringify({
+          email: invoiceTo,
+          amount: invoiceAmount,
+          note: invoiceNote,
+          givenName: "Buyer",
+          surname: "Payables",
+          send: true,
+        }),
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        error?: string;
+        invoiceId?: string;
+        note?: string;
+      };
+      if (!response.ok) {
+        setNotice(payload.error ?? "Send invoice failed.");
+        return;
+      }
+      const sent: SentInvoice = {
+        id: payload.invoiceId ?? `sent-${Date.now()}`,
+        to: invoiceTo,
+        amount: invoiceAmount,
+        note: invoiceNote,
+        at: new Date().toISOString(),
+        buyerReceived: false,
+      };
+      setSentInvoices((prev) => [sent, ...prev]);
+      setNotice(
+        `Invoice sent to ${invoiceTo} (${payload.invoiceId ?? "sandbox"}). `
+        + "Switch Buyer → Payables → From email to simulate AP receiving the PDF, or wait for extract.",
+      );
+
+      // Demo: also push the same invoice through email ingest so Seller sees “Buyer AP received”
+      window.setTimeout(() => {
+        void (async () => {
+          const emailRes = await fetch("/api/invoices/ingest/email", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ sampleId: "inv-bundlebits" }),
+          });
+          if (emailRes.ok) {
+            setSentInvoices((prev) => prev.map((row) =>
+              row.id === sent.id ? { ...row, buyerReceived: true } : row,
+            ));
+            setNotice("Buyer AP received your invoice email — extracted on Payables.");
+            await refreshMoney();
+          }
+        })();
+      }, 3200);
     } finally {
       setBusy(false);
     }
@@ -248,6 +392,12 @@ export function SellerWorkspace({
           <button type="button" aria-current={tab === "fulfillment" ? "page" : undefined} onClick={() => setTab("fulfillment")}>
             <Truck size={19} /><span>Fulfillment</span>
           </button>
+          <button type="button" aria-current={tab === "money" ? "page" : undefined} onClick={() => setTab("money")}>
+            <Wallet size={19} /><span>Payouts &amp; invoices</span>
+            {(payouts.length > 0 || emailReceived.length > 0) && (
+              <span className={s.navCount}>{payouts.length + emailReceived.length}</span>
+            )}
+          </button>
           <button type="button" aria-current={tab === "disputes" ? "page" : undefined} onClick={() => setTab("disputes")}>
             <Package size={19} /><span>Disputes</span>
             {inbox.length > 0 && <span className={s.navCount}>{inbox.length}</span>}
@@ -255,9 +405,9 @@ export function SellerWorkspace({
         </nav>
         <div className={s.sidebarBottom}>
           <div className={`${s.safety} ${s.sellerSafety}`}>
-            <Package size={23} />
-            <strong>Win RFQs.<br />Ship. Handle claims.</strong>
-            <p>Seller desk mirrors how a supplier works — inbound RFQs, agents, fulfillment, then PayPal disputes.</p>
+            <Wallet size={23} />
+            <strong>Quote. Ship.<br />Invoice. Get paid.</strong>
+            <p>Seller desk: RFQs → fulfill → send invoice → see payouts → handle PayPal claims.</p>
           </div>
           <div className={s.profile}>
             <span className={s.avatar}>Se</span>
@@ -286,6 +436,7 @@ export function SellerWorkspace({
               {tab === "rfqs" && "RFQ inbox"}
               {tab === "agents" && "Seller agents"}
               {tab === "fulfillment" && "Fulfillment"}
+              {tab === "money" && "Payouts & invoices"}
               {tab === "disputes" && "Disputes"}
             </strong>
           </div>
@@ -310,7 +461,7 @@ export function SellerWorkspace({
                 <span className={`${s.paymentIcon} ${s.sellerIcon}`}><FileText size={22} /></span>
                 <div>
                   <h2>Inbound RFQs</h2>
-                  <p className={s.description}>Buyers publish requests; you decide which to quote. Preview rows — wiring optional.</p>
+                  <p className={s.description}>Buyers publish requests; you decide which to quote. Preview rows.</p>
                 </div>
                 <span className={s.pending}>Preview</span>
               </div>
@@ -323,18 +474,10 @@ export function SellerWorkspace({
                       <p>{rfq.brief}</p>
                       <p className={s.tableNote}>{rfq.budget} · {rfq.due}</p>
                       <div className={s.reviewActions} style={{ marginTop: 8 }}>
-                        <button
-                          type="button"
-                          className={s.primary}
-                          onClick={() => setNotice(`Preview: quote agent would draft a response for ${rfq.id}.`)}
-                        >
+                        <button type="button" className={s.primary} onClick={() => setNotice(`Preview: quote agent would draft a response for ${rfq.id}.`)}>
                           Draft quote <ArrowRight size={14} />
                         </button>
-                        <button
-                          type="button"
-                          className={s.secondary}
-                          onClick={() => setNotice(`Preview: ${rfq.id} declined for this demo.`)}
-                        >
+                        <button type="button" className={s.secondary} onClick={() => setNotice(`Preview: ${rfq.id} declined for this demo.`)}>
                           Pass
                         </button>
                       </div>
@@ -343,10 +486,6 @@ export function SellerWorkspace({
                   </li>
                 ))}
               </ul>
-              <div className={s.paymentFoot}>
-                <ShieldCheck size={16} />
-                <span>Seller RFQ inbox · preview · not Buyer Requests</span>
-              </div>
             </section>
           )}
 
@@ -356,7 +495,7 @@ export function SellerWorkspace({
                 <span className={`${s.paymentIcon} ${s.sellerIcon}`}><Bot size={22} /></span>
                 <div>
                   <h2>Seller agent team</h2>
-                  <p className={s.description}>Same idea as buyer agents — but quoting, countering, and ship notify on your side.</p>
+                  <p className={s.description}>Quote, counter, and ship-notify agents on your side.</p>
                 </div>
                 <span className={s.pending}>Preview</span>
               </div>
@@ -368,24 +507,11 @@ export function SellerWorkspace({
                       <strong>{agent.name}</strong>
                       <p>{agent.role}</p>
                       <p className={s.tableNote}>{agent.state}</p>
-                      <div className={s.reviewActions} style={{ marginTop: 8 }}>
-                        <button
-                          type="button"
-                          className={s.secondary}
-                          onClick={() => setNotice(`Preview: ${agent.name} run queued (demo only).`)}
-                        >
-                          Run once <ArrowRight size={14} />
-                        </button>
-                      </div>
                     </div>
                     <span className={s.draftBadge}>SELLER</span>
                   </li>
                 ))}
               </ul>
-              <div className={s.paymentFoot}>
-                <ShieldCheck size={16} />
-                <span>Seller agents · preview · ship notify still fires live after HELD on the buy path</span>
-              </div>
             </section>
           )}
 
@@ -395,7 +521,7 @@ export function SellerWorkspace({
                 <span className={`${s.paymentIcon} ${s.sellerIcon}`}><Truck size={22} /></span>
                 <div>
                   <h2>Fulfillment board</h2>
-                  <p className={s.description}>What you must ship after PayPal authorize. Capture and Satisfied stay on the Buyer desk.</p>
+                  <p className={s.description}>Ship after PayPal hold. Then invoice from Payouts &amp; invoices.</p>
                 </div>
                 <span className={s.pending}>Preview</span>
               </div>
@@ -406,34 +532,171 @@ export function SellerWorkspace({
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <strong>{order.id} · {order.item}</strong>
                       <p>{order.detail}</p>
-                      <div className={s.reviewActions} style={{ marginTop: 8 }}>
-                        {order.stage === "HELD" && (
-                          <button
-                            type="button"
-                            className={s.primary}
-                            onClick={() => setNotice("Preview: seller ship email would send tracking (live demo still runs from Buyer Payments).")}
-                          >
-                            Mark shipped <ArrowRight size={14} />
-                          </button>
-                        )}
-                        {order.stage !== "HELD" && (
-                          <button
-                            type="button"
-                            className={s.secondary}
-                            onClick={() => setNotice(`Preview: ${order.id} is ${order.stage}.`)}
-                          >
-                            View timeline
-                          </button>
-                        )}
-                      </div>
                     </div>
                     <span className={s.draftBadge}>{order.stage}</span>
                   </li>
                 ))}
               </ul>
+            </section>
+          )}
+
+          {tab === "money" && (
+            <section className={`${s.card} ${s.sellerCard}`}>
+              <div className={s.inlineTitle}>
+                <span className={`${s.paymentIcon} ${s.sellerIcon}`}><Wallet size={22} /></span>
+                <div>
+                  <h2>Payouts &amp; invoices</h2>
+                  <p className={s.description}>
+                    Live seller cash desk: send invoice to Buyer AP, see email received, watch payouts complete.
+                  </p>
+                </div>
+                <button type="button" className={s.secondary} disabled={busy} onClick={() => void refreshMoney()}>
+                  Refresh
+                </button>
+              </div>
+
+              <div className={s.agentCaptureCard} style={{ marginTop: 14 }}>
+                <p className={s.agentCaptureBanner}>Send invoice to Buyer AP</p>
+                <p className={s.description} style={{ margin: 0 }}>
+                  Creates a PayPal sandbox invoice and emails the buyer payables address. ~3s later we mark Buyer AP received (email extract).
+                </p>
+                <div className={s.fieldGrid} style={{ marginTop: 10 }}>
+                  <div className={s.field}>
+                    <label htmlFor="seller-inv-to">Buyer AP email</label>
+                    <input id="seller-inv-to" value={invoiceTo} onChange={(e) => setInvoiceTo(e.target.value)} />
+                  </div>
+                  <div className={s.field}>
+                    <label htmlFor="seller-inv-amt">Amount (USD)</label>
+                    <input id="seller-inv-amt" value={invoiceAmount} onChange={(e) => setInvoiceAmount(e.target.value)} />
+                  </div>
+                  <div className={s.field}>
+                    <label htmlFor="seller-inv-note">Note</label>
+                    <input id="seller-inv-note" value={invoiceNote} onChange={(e) => setInvoiceNote(e.target.value)} />
+                  </div>
+                </div>
+                <div className={s.reviewActions}>
+                  <button type="button" className={s.primary} disabled={busy} onClick={() => void sendSupplierInvoice()}>
+                    {busy ? "Sending…" : "Send invoice"} <Send size={14} />
+                  </button>
+                </div>
+              </div>
+
+              {sentInvoices.length > 0 && (
+                <div className={s.paymentNest} style={{ marginTop: 12 }}>
+                  <div className={s.paymentNestToggle} style={{ cursor: "default" }}>
+                    <Mail size={16} />
+                    <span>Invoices you sent</span>
+                    <em>{sentInvoices.length}</em>
+                  </div>
+                  <div className={s.paymentNestBody}>
+                    <ul className={s.draftList}>
+                      {sentInvoices.map((row) => (
+                        <li key={row.id}>
+                          <div className={s.iconTile}><Send size={18} /></div>
+                          <div>
+                            <strong>{row.id}</strong>
+                            <p>
+                              To {row.to} · ${row.amount} · {row.note}
+                            </p>
+                            <p className={s.tableNote}>
+                              {row.buyerReceived
+                                ? "Buyer AP received email · extracted on Payables"
+                                : "Sent — waiting for Buyer AP to receive / extract…"}
+                            </p>
+                          </div>
+                          <span className={s.draftBadge}>{row.buyerReceived ? "RECEIVED" : "SENT"}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              <div className={s.paymentNest} style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className={s.paymentNestToggle}
+                  aria-expanded={receivedOpen}
+                  onClick={() => setReceivedOpen((v) => !v)}
+                >
+                  {receivedOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  <span>Buyer AP · email received</span>
+                  <em>{emailReceived.length}</em>
+                </button>
+                {receivedOpen && (
+                  <div className={s.paymentNestBody}>
+                    {emailReceived.length === 0 ? (
+                      <p className={s.tableNote}>
+                        When Buyer Payables runs <strong>From email</strong> (or you Send invoice here), extracted email invoices appear.
+                      </p>
+                    ) : (
+                      <ul className={s.draftList}>
+                        {emailReceived.map((inv) => (
+                          <li key={inv.id} className={s.paymentQueueSelected}>
+                            <div className={s.iconTile}><Mail size={18} /></div>
+                            <div>
+                              <strong>{inv.invoiceNumber ?? inv.id.slice(0, 8)}</strong>
+                              <p>
+                                {inv.vendorName ?? "Vendor"} · {inv.currency} {inv.amount.toFixed(2)} · {inv.status}
+                              </p>
+                              <p className={s.tableNote}>via {inv.source}</p>
+                            </div>
+                            <span className={s.draftBadge}>EMAIL IN</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className={s.paymentNest} style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className={s.paymentNestToggle}
+                  aria-expanded={payoutsOpen}
+                  onClick={() => setPayoutsOpen((v) => !v)}
+                >
+                  {payoutsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  <span>Payouts completed</span>
+                  <em>{payouts.length}</em>
+                </button>
+                {payoutsOpen && (
+                  <div className={s.paymentNestBody}>
+                    {payouts.length === 0 ? (
+                      <div className={s.empty}>
+                        <span className={s.emptyIcon}><Wallet size={26} /></span>
+                        <h3>No payouts yet</h3>
+                        <p>When Buyer Payables runs Match → Payout, completed batches show here.</p>
+                      </div>
+                    ) : (
+                      <ul className={s.draftList}>
+                        {payouts.map((row) => (
+                          <li key={row.id} className={s.paymentQueueSelected}>
+                            <div className={s.iconTile}><Wallet size={18} /></div>
+                            <div>
+                              <strong>
+                                {row.currency} {Number(row.amount).toFixed(2)} · {row.status}
+                              </strong>
+                              <p>
+                                To {row.receiver}
+                                {row.paypalBatchId ? ` · ${row.paypalBatchId}` : ""}
+                                {row.invoiceId ? ` · invoice ${row.invoiceId.slice(0, 8)}` : ""}
+                              </p>
+                              {row.note && <p className={s.tableNote}>{row.note}</p>}
+                            </div>
+                            <span className={s.draftBadge}>PAID</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className={s.paymentFoot}>
                 <ShieldCheck size={16} />
-                <span>Seller fulfillment · preview · disputes tab is the live PayPal path</span>
+                <span>Live payouts + send invoice · Buyer Payables is the AP twin of this tab</span>
               </div>
             </section>
           )}
@@ -445,11 +708,10 @@ export function SellerWorkspace({
                 <div>
                   <h2>PayPal → Seller inbox</h2>
                   <p className={s.description}>
-                    Live: review the claim, then <strong>Accept (refund buyer)</strong>.
-                    Buyer then sees a PayPal refund payment.
+                    Live: <strong>Accept (refund buyer)</strong>. Buyer then sees a PayPal refund payment.
                   </p>
                 </div>
-                <button type="button" className={s.secondary} disabled={busy} onClick={() => void refresh()}>
+                <button type="button" className={s.secondary} disabled={busy} onClick={() => void refreshDisputes()}>
                   Refresh
                 </button>
               </div>
@@ -483,7 +745,6 @@ export function SellerWorkspace({
                               <p>
                                 From PayPal · {item.reason}
                                 {item.amount ? ` · $${item.amount}` : ""}
-                                {item.orderId ? ` · order ${item.orderId}` : ""}
                               </p>
                               <div className={s.agentCaptureCard}>
                                 <p className={s.agentCaptureBanner}>Buyer claim</p>
@@ -523,7 +784,7 @@ export function SellerWorkspace({
                 {closedOpen && (
                   <div className={s.paymentNestBody}>
                     {closed.length === 0 ? (
-                      <p className={s.tableNote}>Accepted claims appear here. Buyer then sees Refund received.</p>
+                      <p className={s.tableNote}>Accepted claims appear here.</p>
                     ) : (
                       <ul className={s.draftList}>
                         {closed.map((item) => (
@@ -534,7 +795,6 @@ export function SellerWorkspace({
                               <p>
                                 {item.status}
                                 {item.amount ? ` · $${item.amount}` : ""}
-                                {item.acceptApprovedBy ? ` · ${item.acceptApprovedBy}` : ""}
                               </p>
                             </div>
                             <span className={s.draftBadge}>{item.status}</span>
@@ -544,11 +804,6 @@ export function SellerWorkspace({
                     )}
                   </div>
                 )}
-              </div>
-
-              <div className={s.paymentFoot}>
-                <ShieldCheck size={16} />
-                <span>Live disputes · RFQ / Agents / Fulfillment tabs are seller-product preview</span>
               </div>
             </section>
           )}
