@@ -124,6 +124,7 @@ export function PayablesPanel({
 
   async function ingestFromStorage(sampleId: string) {
     setBusy(true);
+    setNotice("Agent reading vault PDF…");
     try {
       const response = await fetch("/api/invoices/ingest/storage", {
         method: "POST",
@@ -132,11 +133,13 @@ export function PayablesPanel({
       });
       const payload = await response.json().catch(() => ({})) as InvoiceResult;
       if (!response.ok) {
-        setNotice([payload.error, payload.hint].filter(Boolean).join(" — ") || "Storage read failed.");
+        setNotice([payload.error, payload.hint].filter(Boolean).join(" — ") || `Storage read failed (${response.status}).`);
         return;
       }
       applyExtractSuccess(payload);
       await refresh();
+    } catch (err) {
+      setNotice(`Storage read failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setBusy(false);
     }
@@ -249,6 +252,7 @@ export function PayablesPanel({
 
   async function payout(id: string) {
     setBusy(true);
+    setNotice("Submitting payout…");
     try {
       const response = await fetch(`/api/invoices/${encodeURIComponent(id)}/payout`, {
         method: "POST",
@@ -259,13 +263,16 @@ export function PayablesPanel({
         error?: string;
         batchId?: string;
         note?: string;
+        status?: string;
       };
       if (!response.ok) {
-        setNotice(payload.error ?? "Payout failed.");
+        setNotice(payload.error ?? `Payout failed (${response.status}).`);
         return;
       }
-      setNotice(`Payout submitted · ${payload.batchId} · ${payload.note ?? ""}`);
+      setNotice(`Payout ${payload.status ?? "submitted"} · ${payload.batchId} · ${payload.note ?? ""}`);
       await refresh();
+    } catch (err) {
+      setNotice(`Payout failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setBusy(false);
     }
@@ -273,6 +280,7 @@ export function PayablesPanel({
 
   async function createClientInvoice() {
     setBusy(true);
+    setNotice("Creating client invoice…");
     try {
       const response = await fetch("/api/invoices/paypal", {
         method: "POST",
@@ -290,10 +298,12 @@ export function PayablesPanel({
         note?: string;
       };
       if (!response.ok) {
-        setNotice(payload.error ?? "Client invoice failed.");
+        setNotice(payload.error ?? `Client invoice failed (${response.status}).`);
         return;
       }
       setNotice(`Client invoice ${payload.invoiceId ?? "created"} · ${payload.note ?? ""}`);
+    } catch (err) {
+      setNotice(`Client invoice failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setBusy(false);
     }
@@ -490,6 +500,9 @@ export function PayablesPanel({
             <input id="pay-recv" value={receiver} onChange={(e) => setReceiver(e.target.value)} />
           </div>
         </div>
+        <p className={s.tableNote}>
+          Flow: extract → set PO/receipt amounts → <strong>Match</strong> → <strong>Payout</strong> (Payout stays off until MATCHED).
+        </p>
         {items.length === 0 ? (
           <div className={s.empty}>
             <span className={s.emptyIcon}><FileText size={24} /></span>
@@ -498,35 +511,54 @@ export function PayablesPanel({
           </div>
         ) : (
           <ul className={s.draftList}>
-            {items.map((inv) => (
-              <li key={inv.id}>
-                <div className={s.iconTile}><Wallet size={18} /></div>
-                <div className={s.draftDetail}>
-                  <strong>
-                    {inv.vendorName ?? "Vendor"} · {inv.currency} {inv.amount.toFixed(2)}
-                  </strong>
-                  <p>
-                    {inv.invoiceNumber ?? inv.id.slice(0, 8)} · {inv.matchStatus} · {inv.status}
-                    {inv.source ? ` · via ${inv.source}` : ""}
-                    {inv.lowConfidence ? " · low confidence" : ""}
-                    {inv.matchNotes ? ` · ${inv.matchNotes}` : ""}
-                  </p>
-                  <div className={s.reviewActions}>
-                    <button type="button" className={s.secondary} disabled={busy} onClick={() => void match(inv.id)}>
-                      Match
-                    </button>
-                    <button
-                      type="button"
-                      className={s.primary}
-                      disabled={busy || inv.matchStatus !== "MATCHED"}
-                      onClick={() => void payout(inv.id)}
-                    >
-                      Payout <ArrowRight size={15} />
-                    </button>
+            {items.map((inv) => {
+              const canPay = inv.matchStatus === "MATCHED" && inv.status !== "PAYOUT_SUBMITTED";
+              const paid = inv.status === "PAYOUT_SUBMITTED";
+              return (
+                <li key={inv.id}>
+                  <div className={s.iconTile}><Wallet size={18} /></div>
+                  <div className={s.draftDetail}>
+                    <strong>
+                      {inv.vendorName ?? "Vendor"} · {inv.currency} {inv.amount.toFixed(2)}
+                    </strong>
+                    <p>
+                      {inv.invoiceNumber ?? inv.id.slice(0, 8)} · {inv.matchStatus} · {inv.status}
+                      {inv.source ? ` · via ${inv.source}` : ""}
+                      {inv.lowConfidence ? " · low confidence" : ""}
+                      {inv.matchNotes ? ` · ${inv.matchNotes}` : ""}
+                    </p>
+                    <div className={s.reviewActions}>
+                      <button
+                        type="button"
+                        className={s.secondary}
+                        disabled={busy || paid}
+                        onClick={() => void match(inv.id)}
+                      >
+                        {inv.matchStatus === "MATCHED" ? "Re-match" : "Match"}
+                      </button>
+                      <button
+                        type="button"
+                        className={s.primary}
+                        disabled={busy || !canPay}
+                        title={
+                          paid
+                            ? "Already paid"
+                            : inv.matchStatus !== "MATCHED"
+                              ? "Click Match first"
+                              : "Submit payout"
+                        }
+                        onClick={() => void payout(inv.id)}
+                      >
+                        {paid ? "Paid" : "Payout"} <ArrowRight size={15} />
+                      </button>
+                    </div>
+                    {inv.matchStatus !== "MATCHED" && !paid && (
+                      <p className={s.summaryNote}>Payout disabled until Match succeeds.</p>
+                    )}
                   </div>
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
