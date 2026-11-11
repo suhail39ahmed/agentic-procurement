@@ -17,6 +17,7 @@ import { parseToolJson, runPayPalTool } from "./paypal-toolkit";
 import { assertDemoAmount } from "./demo-cap";
 import {
   INVOICE_STORAGE_SAMPLES,
+  buildLiveSellerInvoiceEmail,
   buildSupplierInvoiceEmail,
   getInvoiceSample,
 } from "./invoice-samples";
@@ -276,25 +277,56 @@ invoicesRouter.post("/ingest/email", async (req, res) => {
   if (!ownerId) return res.sendStatus(404);
   if (!process.env.DATABASE_URL) return res.status(503).json({ error: "Database unavailable" });
 
-  const sampleId = typeof req.body?.sampleId === "string" && req.body.sampleId.trim()
-    ? req.body.sampleId.trim()
-    : INVOICE_STORAGE_SAMPLES[0]?.id;
-  const doc = sampleId ? getInvoiceSample(sampleId) : undefined;
-  if (!doc) return res.status(404).json({ error: "No invoice sample for email demo" });
+  const liveInvoiceId = typeof req.body?.invoiceId === "string" ? req.body.invoiceId.trim() : "";
+  const liveAmountRaw = req.body?.amount;
+  const liveAmount = typeof liveAmountRaw === "number"
+    ? liveAmountRaw
+    : Number(typeof liveAmountRaw === "string" ? liveAmountRaw.trim() : NaN);
+  const liveNote = typeof req.body?.note === "string" ? req.body.note.trim() : "";
+  const liveTo = typeof req.body?.to === "string" ? req.body.to.trim() : "payables@procureai.demo";
+  const liveVendor = typeof req.body?.vendor === "string" ? req.body.vendor.trim() : "";
 
-  const emailText = buildSupplierInvoiceEmail(doc);
+  let emailText: string;
+  let filename: string;
+  let sourceLabel: string;
+
+  if (liveInvoiceId && Number.isFinite(liveAmount) && liveAmount > 0) {
+    const capped = assertDemoAmount(liveAmount, "seller invoice amount");
+    if (!capped.ok) return res.status(400).json({ error: capped.error });
+    emailText = buildLiveSellerInvoiceEmail({
+      invoiceId: liveInvoiceId,
+      amount: liveAmount,
+      note: liveNote || "Supplier invoice",
+      to: liveTo,
+      vendor: liveVendor || undefined,
+    });
+    filename = `${liveInvoiceId}.pdf`;
+    sourceLabel = `email:seller:${liveInvoiceId}`;
+  } else {
+    const sampleId = typeof req.body?.sampleId === "string" && req.body.sampleId.trim()
+      ? req.body.sampleId.trim()
+      : INVOICE_STORAGE_SAMPLES[0]?.id;
+    const doc = sampleId ? getInvoiceSample(sampleId) : undefined;
+    if (!doc) return res.status(404).json({ error: "No invoice sample for email demo" });
+    emailText = buildSupplierInvoiceEmail(doc);
+    filename = doc.filename;
+    sourceLabel = `email:${doc.filename}`;
+  }
+
   try {
     const result = await extractAndSaveInvoice({
       ownerId,
       text: emailText,
-      source: `email:${doc.filename}`,
+      source: sourceLabel,
     });
     return res.status(201).json({
       ...result,
       channel: "email",
-      filename: doc.filename,
+      filename,
       emailText,
-      note: `Supplier email received with ${doc.filename} — agent extracted invoice fields.`,
+      note: liveInvoiceId
+        ? `Seller Create & send ${liveInvoiceId} · $${Number(liveAmount).toFixed(2)} — agent extracted invoice fields.`
+        : `Supplier email received with ${filename} — agent extracted invoice fields.`,
     });
   } catch (err) {
     const status = typeof (err as { status?: number })?.status === "number"

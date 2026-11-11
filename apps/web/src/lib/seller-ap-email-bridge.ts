@@ -5,7 +5,7 @@ export type SellerApEmailEvent = {
   to: string;
   amount: string;
   note: string;
-  sampleId: string;
+  vendor?: string;
   at: string;
 };
 

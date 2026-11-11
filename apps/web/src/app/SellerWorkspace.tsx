@@ -345,7 +345,7 @@ export function SellerWorkspace({
         to: invoiceTo,
         amount: invoiceAmount,
         note: invoiceNote,
-        sampleId: "inv-bundlebits",
+        vendor: "BundleBits Supply Co",
         at: sent.at,
       });
       setNotice(

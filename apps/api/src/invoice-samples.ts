@@ -108,3 +108,55 @@ Note: ${doc.summary}
 ${doc.text}
 `;
 }
+
+/** Live Seller Create & send → Buyer email body (amount/id/note from Seller desk). */
+export function buildLiveSellerInvoiceEmail(opts: {
+  invoiceId: string;
+  amount: number;
+  note: string;
+  to: string;
+  vendor?: string;
+}): string {
+  const vendor = (opts.vendor?.trim() || "BundleBits Supply Co");
+  const amountLabel = opts.amount.toFixed(2);
+  const due = new Date();
+  due.setUTCDate(due.getUTCDate() + 14);
+  const dueDate = due.toISOString().slice(0, 10);
+  const filename = `${opts.invoiceId}.pdf`;
+  const text = `TAX INVOICE
+Document: ${filename}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Vendor:     ${vendor}
+Bill to:    ProcureAI Sandbox
+Invoice #:  ${opts.invoiceId}
+Due date:   ${dueDate}
+PO ref:     PO-AP-${amountLabel.replace(".", "")}
+
+Line items:
+  ${opts.note || "Supplier invoice"} × 1 @ ${amountLabel} USD
+
+Subtotal:   ${amountLabel} USD
+Tax:         0.00 USD
+Total due:  ${amountLabel} USD
+
+Remit to: seller-a@business.example.com
+`;
+
+  return `From: ap@${vendor.toLowerCase().replace(/[^a-z0-9]+/g, "")}.example.com
+To: ${opts.to || "payables@procureai.demo"}
+Subject: Invoice ${opts.invoiceId} attached — $${amountLabel}
+Date: ${new Date().toUTCString()}
+
+Hello Payables,
+
+Please find attached our tax invoice from Seller Create & send.
+
+Attachment: ${filename}
+Vendor: ${vendor}
+Amount: $${amountLabel}
+Note: ${opts.note || "Supplier invoice"}
+
+——— PDF text layer (agent extract) ———
+${text}
+`;
+}

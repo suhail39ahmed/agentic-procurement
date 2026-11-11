@@ -161,16 +161,16 @@ export function PayablesPanel({
 
   async function ingestFromEmail(opts?: { sampleId?: string; fromSeller?: SellerApEmailEvent }) {
     const token = ++emailTokenRef.current;
-    const sampleId = opts?.sampleId || selectedStorage || storageDocs[0]?.id;
+    const fromSeller = opts?.fromSeller;
     setBusy(true);
     setChannel("email");
     setEmailPhase("waiting");
     setEmailText("");
-    if (opts?.fromSeller) {
+    if (fromSeller) {
       setSellerEmailBanner(
-        `Seller sent invoice ${opts.fromSeller.invoiceId} · $${opts.fromSeller.amount} → ${opts.fromSeller.to}`,
+        `Seller sent invoice ${fromSeller.invoiceId} · $${fromSeller.amount} → ${fromSeller.to}`,
       );
-      setNotice("Seller Create & send — waiting for supplier invoice email (~3s)…");
+      setNotice(`Seller Create & send $${fromSeller.amount} — waiting for email (~3s)…`);
     } else {
       setSellerEmailBanner(null);
       setNotice("Waiting for supplier invoice email (~3s)…");
@@ -180,11 +180,24 @@ export function PayablesPanel({
       if (token !== emailTokenRef.current) return;
 
       setEmailPhase("extracting");
-      setNotice("Email received — agent extracting PDF attachment…");
+      setNotice(
+        fromSeller
+          ? `Email received — extracting Seller invoice ${fromSeller.invoiceId} ($${fromSeller.amount})…`
+          : "Email received — agent extracting PDF attachment…",
+      );
+      const body = fromSeller
+        ? {
+            invoiceId: fromSeller.invoiceId,
+            amount: fromSeller.amount,
+            note: fromSeller.note,
+            to: fromSeller.to,
+            vendor: fromSeller.vendor,
+          }
+        : { sampleId: opts?.sampleId || selectedStorage || storageDocs[0]?.id };
       const response = await fetch("/api/invoices/ingest/email", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sampleId }),
+        body: JSON.stringify(body),
       });
       const payload = await response.json().catch(() => ({})) as InvoiceResult;
       if (token !== emailTokenRef.current) return;
@@ -198,10 +211,10 @@ export function PayablesPanel({
       applyExtractSuccess(payload);
       await refresh();
       setEmailPhase("done");
-      if (opts?.fromSeller) {
+      if (fromSeller) {
         clearPendingSellerApEmail();
         setNotice(
-          `Seller email extracted · $${payload.invoice?.amount.toFixed(2) ?? "—"} — Match → Payout, then Seller sees Payouts completed.`,
+          `Seller email extracted · $${payload.invoice?.amount.toFixed(2) ?? fromSeller.amount} — Match → Payout, then Seller sees Payouts completed.`,
         );
       }
     } finally {
@@ -212,8 +225,7 @@ export function PayablesPanel({
   function playSellerApEmail(event: SellerApEmailEvent) {
     if (sellerEmailHandledRef.current === event.invoiceId) return;
     sellerEmailHandledRef.current = event.invoiceId;
-    if (event.sampleId) setSelectedStorage(event.sampleId);
-    void ingestFromEmail({ sampleId: event.sampleId, fromSeller: event });
+    void ingestFromEmail({ fromSeller: event });
   }
 
   useEffect(() => {
@@ -440,28 +452,38 @@ export function PayablesPanel({
               </p>
             )}
             <p className={s.description}>
-              Seller <strong>Create &amp; send</strong> lands here as email (two-window demo), or simulate below.
-              Agent extracts the PDF → Needs match → Payout → Seller <strong>Payouts completed</strong>.
+              {sellerEmailBanner
+                ? "Live Seller Create & send — email body and extract use the amount/id you sent (not the vault sample)."
+                : "Open Seller → Create & send in another window, or use vault simulate below. Then Match → Payout → Seller Payouts completed."}
             </p>
-            <div className={s.field} style={{ marginTop: 8 }}>
-              <label htmlFor="email-sample">Preferred attachment (from vault)</label>
-              <select
-                id="email-sample"
-                value={selectedStorage}
-                onChange={(e) => setSelectedStorage(e.target.value)}
-              >
-                {storageDocs.map((doc) => (
-                  <option key={doc.id} value={doc.id}>
-                    {doc.filename} · {doc.vendor} · {doc.amountLabel}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className={s.reviewActions}>
-              <button type="button" className={s.primary} disabled={busy} onClick={() => void ingestFromEmail()}>
-                {emailPhase === "waiting" ? "Waiting for email…" : emailPhase === "extracting" ? "Extracting…" : "Simulate invoice email"} <Mail size={14} />
-              </button>
-            </div>
+            {!sellerEmailBanner && (
+              <>
+                <div className={s.field} style={{ marginTop: 8 }}>
+                  <label htmlFor="email-sample">Preferred attachment (from vault)</label>
+                  <select
+                    id="email-sample"
+                    value={selectedStorage}
+                    onChange={(e) => setSelectedStorage(e.target.value)}
+                  >
+                    {storageDocs.map((doc) => (
+                      <option key={doc.id} value={doc.id}>
+                        {doc.filename} · {doc.vendor} · {doc.amountLabel}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className={s.reviewActions}>
+                  <button type="button" className={s.primary} disabled={busy} onClick={() => void ingestFromEmail()}>
+                    {emailPhase === "waiting" ? "Waiting for email…" : emailPhase === "extracting" ? "Extracting…" : "Simulate invoice email"} <Mail size={14} />
+                  </button>
+                </div>
+              </>
+            )}
+            {sellerEmailBanner && (emailPhase === "waiting" || emailPhase === "extracting") && (
+              <p className={s.pending} style={{ marginTop: 10 }}>
+                {emailPhase === "waiting" ? "Waiting for Seller email…" : "Extracting live invoice…"}
+              </p>
+            )}
             {(emailPhase === "received" || emailPhase === "done" || emailText) && emailText && (
               <pre className={s.shipInboxBody} style={{ marginTop: 10 }} aria-live="polite">{emailText}</pre>
             )}
