@@ -129,7 +129,7 @@ Buyer / Supervisor desk          PayPal            Seller desk (separate app chr
 ### Seller desk
 5. Separate product with tabs: **RFQ inbox** · **Seller agents** · **Fulfillment** (preview) · **Payouts & invoices** (live send invoice + payouts + email received) · **Disputes** (live Accept).
 
-**Seller money path:** Send invoice → ~3s Buyer AP received → after Buyer Match/Payout, **Payouts completed** fills in.
+**Seller money path (two windows):** Seller **Create & send** → Buyer Payables **From email** shows the invoice (~3s) → Match → Payout → Seller **Payouts completed**.
 
 | Product | Dispute Yes/No | Buy path | Accept → PayPal refund |
 |---|---|---|---|
@@ -150,9 +150,10 @@ Buyer / Supervisor desk          PayPal            Seller desk (separate app chr
 5. Switch **Seller desk → Payouts & invoices** → **Payouts completed** shows that batch.
 
 ### Create & send (Seller → Buyer AP)
-6. **Seller desk → Payouts & invoices → Create & send** (PayPal invoice to Buyer AP).  
-7. Appears under **Invoices you sent** → ~3s **Buyer AP received**.  
-8. Buyer Payables extracts / matches / pays → Seller **Payouts completed**.  
+6. Window A: **Seller → Payouts & invoices → Create & send**.  
+7. Window B (Buyer on **Payables**): **From email** auto-shows the supplier email (~3s) and extracts.  
+8. Buyer **Match** → **Payout** (invoice → **Paid**).  
+9. Seller **Refresh** → **Buyer AP · email received** + **Payouts completed**.  
 
 Create & send is **not** on Buyer Payables (that desk only intakes → match → payout).
 

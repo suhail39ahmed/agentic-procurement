@@ -8,6 +8,7 @@ import {
 import Link from "next/link";
 import s from "./dashboard.module.css";
 import type { DemoSession } from "@/lib/demo-auth";
+import { publishSellerApEmail } from "@/lib/seller-ap-email-bridge";
 
 type SellerTab = "rfqs" | "agents" | "fulfillment" | "money" | "disputes";
 
@@ -338,28 +339,19 @@ export function SellerWorkspace({
         buyerReceived: false,
       };
       setSentInvoices((prev) => [sent, ...prev]);
+      // Cross-tab: Buyer Payables From email picks this up and shows the supplier email.
+      publishSellerApEmail({
+        invoiceId: sent.id,
+        to: invoiceTo,
+        amount: invoiceAmount,
+        note: invoiceNote,
+        sampleId: "inv-bundlebits",
+        at: sent.at,
+      });
       setNotice(
-        `Invoice sent to ${invoiceTo} (${payload.invoiceId ?? "sandbox"}). `
-        + "Switch Buyer → Payables → From email to simulate AP receiving the PDF, or wait for extract.",
+        `Invoice sent to ${invoiceTo} (${sent.id}). `
+        + "Buyer window → Payables → From email will show it (~3s). After Match → Payout, refresh Payouts completed here.",
       );
-
-      // Demo: also push the same invoice through email ingest so Seller sees “Buyer AP received”
-      window.setTimeout(() => {
-        void (async () => {
-          const emailRes = await fetch("/api/invoices/ingest/email", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ sampleId: "inv-bundlebits" }),
-          });
-          if (emailRes.ok) {
-            setSentInvoices((prev) => prev.map((row) =>
-              row.id === sent.id ? { ...row, buyerReceived: true } : row,
-            ));
-            setNotice("Buyer AP received your invoice email — extracted on Payables.");
-            await refreshMoney();
-          }
-        })();
-      }, 3200);
     } finally {
       setBusy(false);
     }
@@ -558,8 +550,8 @@ export function SellerWorkspace({
               <div className={s.agentCaptureCard} style={{ marginTop: 14 }}>
                 <p className={s.agentCaptureBanner}>Create &amp; send (PayPal invoice)</p>
                 <p className={s.description} style={{ margin: 0 }}>
-                  Seller action: create a PayPal invoice and send it to Buyer AP. Buyer then extracts it on Payables → Match → Payout.
-                  ~3s later this desk marks <strong>Buyer AP received</strong>.
+                  Seller action: create a PayPal invoice and send it as email to Buyer AP.
+                  Buyer window shows it under <strong>From email</strong> → Match → Payout → <strong>Payouts completed</strong> here.
                 </p>
                 <div className={s.fieldGrid} style={{ marginTop: 10 }}>
                   <div className={s.field}>
@@ -628,7 +620,7 @@ export function SellerWorkspace({
                   <div className={s.paymentNestBody}>
                     {emailReceived.length === 0 ? (
                       <p className={s.tableNote}>
-                        When Buyer Payables runs <strong>From email</strong> (or you Send invoice here), extracted email invoices appear.
+                        After Buyer extracts your Create &amp; send email on Payables, rows appear here.
                       </p>
                     ) : (
                       <ul className={s.draftList}>

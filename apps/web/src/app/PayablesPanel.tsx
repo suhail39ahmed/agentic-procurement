@@ -6,6 +6,12 @@ import {
   RefreshCw, ShieldCheck, Upload, Wallet,
 } from "lucide-react";
 import s from "./dashboard.module.css";
+import {
+  clearPendingSellerApEmail,
+  readPendingSellerApEmail,
+  subscribeSellerApEmail,
+  type SellerApEmailEvent,
+} from "@/lib/seller-ap-email-bridge";
 
 type SupplierInvoice = {
   id: string;
@@ -63,6 +69,8 @@ export function PayablesPanel({
   const [paidOpen, setPaidOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const emailTokenRef = useRef(0);
+  const sellerEmailHandledRef = useRef<string | null>(null);
+  const [sellerEmailBanner, setSellerEmailBanner] = useState<string | null>(null);
 
   const paidItems = useMemo(
     () => items.filter((inv) => inv.status === "PAYOUT_SUBMITTED"),
@@ -116,15 +124,6 @@ export function PayablesPanel({
     if (!selectedStorage && docs[0]) setSelectedStorage(docs[0].id);
   }
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void refresh().catch(() => undefined);
-      void loadStorage().catch(() => undefined);
-    }, 0);
-    return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   function applyExtractSuccess(payload: InvoiceResult) {
     const inv = payload.invoice;
     setNotice(
@@ -160,12 +159,22 @@ export function PayablesPanel({
     }
   }
 
-  async function ingestFromEmail() {
+  async function ingestFromEmail(opts?: { sampleId?: string; fromSeller?: SellerApEmailEvent }) {
     const token = ++emailTokenRef.current;
+    const sampleId = opts?.sampleId || selectedStorage || storageDocs[0]?.id;
     setBusy(true);
+    setChannel("email");
     setEmailPhase("waiting");
     setEmailText("");
-    setNotice("Waiting for supplier invoice email (~3s)…");
+    if (opts?.fromSeller) {
+      setSellerEmailBanner(
+        `Seller sent invoice ${opts.fromSeller.invoiceId} · $${opts.fromSeller.amount} → ${opts.fromSeller.to}`,
+      );
+      setNotice("Seller Create & send — waiting for supplier invoice email (~3s)…");
+    } else {
+      setSellerEmailBanner(null);
+      setNotice("Waiting for supplier invoice email (~3s)…");
+    }
     try {
       await new Promise((resolve) => setTimeout(resolve, 2800));
       if (token !== emailTokenRef.current) return;
@@ -175,7 +184,7 @@ export function PayablesPanel({
       const response = await fetch("/api/invoices/ingest/email", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sampleId: selectedStorage || storageDocs[0]?.id }),
+        body: JSON.stringify({ sampleId }),
       });
       const payload = await response.json().catch(() => ({})) as InvoiceResult;
       if (token !== emailTokenRef.current) return;
@@ -189,10 +198,38 @@ export function PayablesPanel({
       applyExtractSuccess(payload);
       await refresh();
       setEmailPhase("done");
+      if (opts?.fromSeller) {
+        clearPendingSellerApEmail();
+        setNotice(
+          `Seller email extracted · $${payload.invoice?.amount.toFixed(2) ?? "—"} — Match → Payout, then Seller sees Payouts completed.`,
+        );
+      }
     } finally {
       if (token === emailTokenRef.current) setBusy(false);
     }
   }
+
+  function playSellerApEmail(event: SellerApEmailEvent) {
+    if (sellerEmailHandledRef.current === event.invoiceId) return;
+    sellerEmailHandledRef.current = event.invoiceId;
+    if (event.sampleId) setSelectedStorage(event.sampleId);
+    void ingestFromEmail({ sampleId: event.sampleId, fromSeller: event });
+  }
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void refresh().catch(() => undefined);
+      void loadStorage().catch(() => undefined);
+      const pending = readPendingSellerApEmail();
+      if (pending) playSellerApEmail(pending);
+    }, 0);
+    const unsub = subscribeSellerApEmail((event) => playSellerApEmail(event));
+    return () => {
+      window.clearTimeout(timer);
+      unsub();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function ingestUpload(opts: { filename: string; text?: string }) {
     setBusy(true);
@@ -397,8 +434,14 @@ export function PayablesPanel({
         {channel === "email" && (
           <div className={s.agentCaptureCard}>
             <p className={s.agentCaptureBanner}>2 · Supplier email → PDF</p>
+            {sellerEmailBanner && (
+              <p className={s.agentCaptureBanner} style={{ marginTop: 8 }}>
+                Live from Seller desk · {sellerEmailBanner}
+              </p>
+            )}
             <p className={s.description}>
-              Like the ship-email path: invoice arrives by email with a PDF attached; the agent extracts fields automatically.
+              Seller <strong>Create &amp; send</strong> lands here as email (two-window demo), or simulate below.
+              Agent extracts the PDF → Needs match → Payout → Seller <strong>Payouts completed</strong>.
             </p>
             <div className={s.field} style={{ marginTop: 8 }}>
               <label htmlFor="email-sample">Preferred attachment (from vault)</label>
