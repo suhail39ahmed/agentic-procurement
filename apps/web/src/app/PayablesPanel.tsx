@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowRight, Cloud, FileText, Mail, RefreshCw, Send, ShieldCheck, Upload, Wallet,
+  ArrowRight, Check, ChevronDown, ChevronRight, Cloud, FileText, Mail,
+  RefreshCw, Send, ShieldCheck, Upload, Wallet,
 } from "lucide-react";
 import s from "./dashboard.module.css";
 
@@ -57,8 +58,24 @@ export function PayablesPanel({
   const [emailText, setEmailText] = useState("");
   const [uploadName, setUploadName] = useState("");
   const [uploadPreview, setUploadPreview] = useState("");
+  const [needsMatchOpen, setNeedsMatchOpen] = useState(true);
+  const [readyPayOpen, setReadyPayOpen] = useState(true);
+  const [paidOpen, setPaidOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const emailTokenRef = useRef(0);
+
+  const paidItems = useMemo(
+    () => items.filter((inv) => inv.status === "PAYOUT_SUBMITTED"),
+    [items],
+  );
+  const readyItems = useMemo(
+    () => items.filter((inv) => inv.matchStatus === "MATCHED" && inv.status !== "PAYOUT_SUBMITTED"),
+    [items],
+  );
+  const needsMatchItems = useMemo(
+    () => items.filter((inv) => inv.matchStatus !== "MATCHED" && inv.status !== "PAYOUT_SUBMITTED"),
+    [items],
+  );
 
   const [poAmount, setPoAmount] = useState("45.00");
   const [receiptAmount, setReceiptAmount] = useState("45.00");
@@ -241,9 +258,10 @@ export function PayablesPanel({
       }
       setNotice(
         payload.queuedForPayment
-          ? `MATCHED (Δ ${payload.deltaPct?.toFixed(2)}%) — ready for payout.`
+          ? `MATCHED (Δ ${payload.deltaPct?.toFixed(2)}%) — moved to Ready to pay.`
           : `MISMATCH (Δ ${payload.deltaPct?.toFixed(2)}%) — ${payload.invoice?.matchNotes ?? ""}`,
       );
+      if (payload.queuedForPayment) setReadyPayOpen(true);
       await refresh();
     } finally {
       setBusy(false);
@@ -269,7 +287,9 @@ export function PayablesPanel({
         setNotice(payload.error ?? `Payout failed (${response.status}).`);
         return;
       }
-      setNotice(`Payout ${payload.status ?? "submitted"} · ${payload.batchId} · ${payload.note ?? ""}`);
+      setNotice(`Payout ${payload.status ?? "submitted"} · ${payload.batchId} · moved to Paid queue.`);
+      setPaidOpen(true);
+      setReadyPayOpen(true);
       await refresh();
     } catch (err) {
       setNotice(`Payout failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -501,8 +521,9 @@ export function PayablesPanel({
           </div>
         </div>
         <p className={s.tableNote}>
-          Flow: extract → set PO/receipt amounts → <strong>Match</strong> → <strong>Payout</strong> (Payout stays off until MATCHED).
+          Queues: <strong>Needs match</strong> → <strong>Ready to pay</strong> → <strong>Paid</strong> (paid leaves the active queues).
         </p>
+
         {items.length === 0 ? (
           <div className={s.empty}>
             <span className={s.emptyIcon}><FileText size={24} /></span>
@@ -510,56 +531,149 @@ export function PayablesPanel({
             <p>Use Upload, Email, or Storage vault on the left, then match and pay.</p>
           </div>
         ) : (
-          <ul className={s.draftList}>
-            {items.map((inv) => {
-              const canPay = inv.matchStatus === "MATCHED" && inv.status !== "PAYOUT_SUBMITTED";
-              const paid = inv.status === "PAYOUT_SUBMITTED";
-              return (
-                <li key={inv.id}>
-                  <div className={s.iconTile}><Wallet size={18} /></div>
-                  <div className={s.draftDetail}>
-                    <strong>
-                      {inv.vendorName ?? "Vendor"} · {inv.currency} {inv.amount.toFixed(2)}
-                    </strong>
-                    <p>
-                      {inv.invoiceNumber ?? inv.id.slice(0, 8)} · {inv.matchStatus} · {inv.status}
-                      {inv.source ? ` · via ${inv.source}` : ""}
-                      {inv.lowConfidence ? " · low confidence" : ""}
-                      {inv.matchNotes ? ` · ${inv.matchNotes}` : ""}
-                    </p>
-                    <div className={s.reviewActions}>
-                      <button
-                        type="button"
-                        className={s.secondary}
-                        disabled={busy || paid}
-                        onClick={() => void match(inv.id)}
-                      >
-                        {inv.matchStatus === "MATCHED" ? "Re-match" : "Match"}
-                      </button>
-                      <button
-                        type="button"
-                        className={s.primary}
-                        disabled={busy || !canPay}
-                        title={
-                          paid
-                            ? "Already paid"
-                            : inv.matchStatus !== "MATCHED"
-                              ? "Click Match first"
-                              : "Submit payout"
-                        }
-                        onClick={() => void payout(inv.id)}
-                      >
-                        {paid ? "Paid" : "Payout"} <ArrowRight size={15} />
-                      </button>
-                    </div>
-                    {inv.matchStatus !== "MATCHED" && !paid && (
-                      <p className={s.summaryNote}>Payout disabled until Match succeeds.</p>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          <>
+            <div className={s.paymentNest} style={{ marginBottom: 10 }}>
+              <button
+                type="button"
+                className={s.paymentNestToggle}
+                aria-expanded={needsMatchOpen}
+                onClick={() => setNeedsMatchOpen((v) => !v)}
+              >
+                {needsMatchOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                <span>Needs match</span>
+                <em>{needsMatchItems.length}</em>
+              </button>
+              {needsMatchOpen && (
+                <div className={s.paymentNestBody}>
+                  {needsMatchItems.length === 0 ? (
+                    <p className={s.tableNote}>Nothing waiting — extract an invoice or all are matched/paid.</p>
+                  ) : (
+                    <ul className={s.draftList}>
+                      {needsMatchItems.map((inv) => (
+                        <li key={inv.id}>
+                          <div className={s.iconTile}><FileText size={18} /></div>
+                          <div className={s.draftDetail}>
+                            <strong>
+                              {inv.vendorName ?? "Vendor"} · {inv.currency} {inv.amount.toFixed(2)}
+                            </strong>
+                            <p>
+                              {inv.invoiceNumber ?? inv.id.slice(0, 8)} · {inv.matchStatus} · {inv.status}
+                              {inv.source ? ` · via ${inv.source}` : ""}
+                            </p>
+                            <div className={s.reviewActions}>
+                              <button
+                                type="button"
+                                className={s.primary}
+                                disabled={busy}
+                                onClick={() => void match(inv.id)}
+                              >
+                                Match <ArrowRight size={15} />
+                              </button>
+                            </div>
+                            <p className={s.summaryNote}>Set PO/receipt above, then Match to move into Ready to pay.</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className={s.paymentNest} style={{ marginBottom: 10 }}>
+              <button
+                type="button"
+                className={s.paymentNestToggle}
+                aria-expanded={readyPayOpen}
+                onClick={() => setReadyPayOpen((v) => !v)}
+              >
+                {readyPayOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                <span>Ready to pay</span>
+                <em>{readyItems.length}</em>
+              </button>
+              {readyPayOpen && (
+                <div className={s.paymentNestBody}>
+                  {readyItems.length === 0 ? (
+                    <p className={s.tableNote}>No MATCHED invoices waiting for payout.</p>
+                  ) : (
+                    <ul className={s.draftList}>
+                      {readyItems.map((inv) => (
+                        <li key={inv.id} className={s.paymentQueueSelected}>
+                          <div className={s.iconTile}><Wallet size={18} /></div>
+                          <div className={s.draftDetail}>
+                            <strong>
+                              {inv.vendorName ?? "Vendor"} · {inv.currency} {inv.amount.toFixed(2)}
+                            </strong>
+                            <p>
+                              {inv.invoiceNumber ?? inv.id.slice(0, 8)} · MATCHED · {inv.status}
+                              {inv.matchNotes ? ` · ${inv.matchNotes}` : ""}
+                            </p>
+                            <div className={s.reviewActions}>
+                              <button
+                                type="button"
+                                className={s.secondary}
+                                disabled={busy}
+                                onClick={() => void match(inv.id)}
+                              >
+                                Re-match
+                              </button>
+                              <button
+                                type="button"
+                                className={s.primary}
+                                disabled={busy}
+                                onClick={() => void payout(inv.id)}
+                              >
+                                Payout <ArrowRight size={15} />
+                              </button>
+                            </div>
+                          </div>
+                          <span className={s.draftBadge}>MATCHED</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className={s.paymentNest}>
+              <button
+                type="button"
+                className={s.paymentNestToggle}
+                aria-expanded={paidOpen}
+                onClick={() => setPaidOpen((v) => !v)}
+              >
+                {paidOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                <span>Paid</span>
+                <em>{paidItems.length}</em>
+              </button>
+              {paidOpen && (
+                <div className={s.paymentNestBody}>
+                  {paidItems.length === 0 ? (
+                    <p className={s.tableNote}>Completed payouts land here — also visible on Seller → Payouts completed.</p>
+                  ) : (
+                    <ul className={s.draftList}>
+                      {paidItems.map((inv) => (
+                        <li key={inv.id}>
+                          <div className={s.iconTile}><Check size={18} /></div>
+                          <div className={s.draftDetail}>
+                            <strong>
+                              {inv.vendorName ?? "Vendor"} · {inv.currency} {inv.amount.toFixed(2)}
+                            </strong>
+                            <p>
+                              {inv.invoiceNumber ?? inv.id.slice(0, 8)} · PAYOUT_SUBMITTED
+                              {inv.matchNotes ? ` · ${inv.matchNotes}` : ""}
+                            </p>
+                          </div>
+                          <span className={s.draftBadge}>PAID</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          </>
         )}
       </section>
 
