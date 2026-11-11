@@ -3,7 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   ArrowRight, ArrowUpRight, Bot, Check, ChevronDown, ChevronRight,
-  CircleHelp, CreditCard, FileText, Layers3, LayoutDashboard, LogOut, X,
+  CircleHelp, CreditCard, FileText, Layers3, LayoutDashboard, LogOut,
   Maximize2, Menu, Minimize2, Package, PackageSearch, Plus,
   RefreshCw, Search, Send, ShieldCheck, Sparkles, UserRound, Wallet, X,
 } from "lucide-react";
