@@ -119,15 +119,34 @@ export function DisputePanel({
     return openItems[openItems.length - 1] ?? null;
   }, [openItems, selected, capturedClaim]);
 
-  const latestRefund = closedItems.find(
-    (item) => item.status.toUpperCase() === "REFUND_RECEIVED" || item.status.toUpperCase() === "RESOLVED",
-  ) ?? null;
+  /** Only the active case's refund — never an older closed dispute. */
+  const activeCaseId = activeOpen?.disputeId ?? capturedClaim?.disputeId ?? selected;
+  const activeRefund = useMemo(() => {
+    if (!activeCaseId) return null;
+    return closedItems.find((item) => {
+      if (item.disputeId !== activeCaseId) return false;
+      const status = item.status.toUpperCase();
+      return (
+        Boolean(item.acceptApprovedBy)
+        || status === "REFUND_RECEIVED"
+        || status === "RESOLVED"
+        || status === "ACCEPTED"
+      );
+    }) ?? null;
+  }, [closedItems, activeCaseId]);
+
+  const waitingOnSeller = Boolean(activeOpen?.agentDraft) && !activeRefund;
 
   const refundPayments = useMemo(
     () => closedItems
       .filter((item) => {
         const status = item.status.toUpperCase();
-        return status === "REFUND_RECEIVED" || status === "RESOLVED" || status === "ACCEPTED";
+        return (
+          Boolean(item.acceptApprovedBy)
+          || status === "REFUND_RECEIVED"
+          || status === "RESOLVED"
+          || status === "ACCEPTED"
+        );
       })
       .map((item): PaypalRefundPayment => ({
         disputeId: item.disputeId,
@@ -463,19 +482,19 @@ export function DisputePanel({
         </div>
       </div>
 
-      {latestRefund && (
+      {activeRefund && (
         <div className={s.agentCaptureCard} style={{ marginBottom: 12 }} role="status">
           <p className={s.agentCaptureBanner}>PayPal refund payment</p>
           <dl className={s.summaryList}>
             <div><dt>Type</dt><dd>REFUND (back to buyer)</dd></div>
             <div><dt>Status</dt><dd>COMPLETED</dd></div>
-            <div><dt>Dispute</dt><dd>{latestRefund.disputeId}</dd></div>
-            {latestRefund.amount && <div><dt>Amount</dt><dd>${latestRefund.amount} USD</dd></div>}
-            {latestRefund.orderId && <div><dt>Order</dt><dd>{latestRefund.orderId}</dd></div>}
-            {latestRefund.acceptApprovedBy && <div><dt>Accepted by</dt><dd>{latestRefund.acceptApprovedBy}</dd></div>}
+            <div><dt>Dispute</dt><dd>{activeRefund.disputeId}</dd></div>
+            {activeRefund.amount && <div><dt>Amount</dt><dd>${activeRefund.amount} USD</dd></div>}
+            {activeRefund.orderId && <div><dt>Order</dt><dd>{activeRefund.orderId}</dd></div>}
+            {activeRefund.acceptApprovedBy && <div><dt>Accepted by</dt><dd>{activeRefund.acceptApprovedBy}</dd></div>}
           </dl>
           <p className={s.description} style={{ margin: 0 }}>
-            Seller accepted on the Seller desk — this is the PayPal refund payment you should see returned.
+            Seller accepted on the Seller desk — this is the PayPal refund for this case.
           </p>
         </div>
       )}
@@ -508,85 +527,79 @@ export function DisputePanel({
                 {inboundPhase === "waiting" && (
                   <p className={s.description}>Filing claim with PayPal (~4s)…</p>
                 )}
-                {caseVisible && caseText ? (
-                  <pre className={s.shipInboxBody} aria-live="polite">{caseText}</pre>
-                ) : inboundPhase !== "waiting" ? (
-                  <p className={s.tableNote}>Use <strong>Recently captured → Raise dispute</strong> on any completed order.</p>
-                ) : null}
-                {capturedClaim && (
+                {!caseVisible && inboundPhase !== "waiting" && (
+                  <p className={s.tableNote}>Use <strong>Recently captured → Raise with PayPal</strong>.</p>
+                )}
+                {(capturedClaim || activeOpen) && (
                   <div className={s.agentCaptureCard} style={{ marginTop: 10 }}>
-                    <p className={s.agentCaptureBanner}>PayPal case fields</p>
+                    <p className={s.agentCaptureBanner}>Your case</p>
                     <dl className={s.summaryList}>
-                      <div><dt>Dispute</dt><dd>{capturedClaim.disputeId}</dd></div>
-                      <div><dt>Reason</dt><dd>{capturedClaim.reason}</dd></div>
-                      {capturedClaim.supplierId && <div><dt>Seller</dt><dd>{capturedClaim.supplierId}</dd></div>}
-                      {capturedClaim.amount && <div><dt>Amount</dt><dd>${capturedClaim.amount}</dd></div>}
+                      <div><dt>Dispute</dt><dd>{capturedClaim?.disputeId ?? activeOpen?.disputeId}</dd></div>
+                      <div><dt>Reason</dt><dd>{capturedClaim?.reason ?? activeOpen?.reason}</dd></div>
+                      {capturedClaim?.supplierId && <div><dt>Seller</dt><dd>{capturedClaim.supplierId}</dd></div>}
+                      {(capturedClaim?.amount ?? activeOpen?.amount) && (
+                        <div><dt>Amount</dt><dd>${capturedClaim?.amount ?? activeOpen?.amount}</dd></div>
+                      )}
                     </dl>
                   </div>
                 )}
               </div>
 
-              <div className={`${s.disputeStep} ${raisedToPaypal ? s.disputeStepActive : ""}`}>
+              <div className={`${s.disputeStep} ${waitingOnSeller ? s.disputeStepActive : ""}`}>
                 <div className={s.disputeStepHead}>
                   <span className={s.stepNumber}>2</span>
-                  <strong>PayPal → Seller</strong>
+                  <strong>Waiting on Seller</strong>
                   <span className={s.pending}>
-                    {raisedToPaypal ? "Sent to Seller" : activeOpen ? "Needs raise" : "—"}
+                    {waitingOnSeller ? "Pending Seller accept" : raisedToPaypal ? "Sent" : activeOpen ? "Needs raise" : "—"}
                   </span>
                 </div>
                 {activeOpen ? (
                   <>
-                    <p className={s.description}>
-                      Status: {buyerStatusLabel(activeOpen)}
-                    </p>
                     {activeOpen.agentDraft ? (
-                      <div className={s.agentCaptureCard}>
-                        <p className={s.agentCaptureBanner}>Filed with PayPal (Seller will see this)</p>
-                        <p className={s.description} style={{ margin: 0 }}>{activeOpen.agentDraft}</p>
-                      </div>
+                      <p className={s.description} style={{ margin: 0 }}>
+                        PayPal notified the Seller desk. Claim details stay on the <strong>Seller</strong> page — not here.
+                        Switch to Seller desk to Accept.
+                      </p>
                     ) : (
-                      <p className={s.tableNote}>
-                        Click below so PayPal notifies the Seller with your claim.
-                      </p>
-                    )}
-                    <div className={s.reviewActions}>
-                      <button
-                        type="button"
-                        className={s.primary}
-                        disabled={busy || Boolean(activeOpen.agentDraft)}
-                        onClick={() => void raiseToPaypal(activeOpen.disputeId)}
-                      >
-                        {activeOpen.agentDraft ? "Raised to PayPal" : "Raise to PayPal (notify Seller)"} <ArrowRight size={15} />
-                      </button>
-                    </div>
-                    {activeOpen.agentDraft && (
-                      <p className={s.summaryNote}>
-                        Next: sidebar → <strong>Seller</strong> (`seller` / `seller`) → Accept. Then come back here for Refund received.
-                      </p>
+                      <>
+                        <p className={s.tableNote}>Confirm raise so PayPal notifies the Seller.</p>
+                        <div className={s.reviewActions}>
+                          <button
+                            type="button"
+                            className={s.primary}
+                            disabled={busy}
+                            onClick={() => void raiseToPaypal(activeOpen.disputeId)}
+                          >
+                            Raise with PayPal <ArrowRight size={15} />
+                          </button>
+                        </div>
+                      </>
                     )}
                   </>
                 ) : (
-                  <p className={s.tableNote}>Open a case in step 1 first.</p>
+                  <p className={s.tableNote}>Raise a case from Recently captured first.</p>
                 )}
               </div>
 
-              <div className={`${s.disputeStep} ${latestRefund ? s.disputeStepActive : ""}`}>
+              <div className={`${s.disputeStep} ${activeRefund ? s.disputeStepActive : ""}`}>
                 <div className={s.disputeStepHead}>
                   <span className={s.stepNumber}>3</span>
                   <strong>Refund received</strong>
-                  <span className={s.pending}>{latestRefund ? "Yes" : "Waiting for Seller accept"}</span>
+                  <span className={s.pending}>{activeRefund ? "Yes" : "Pending"}</span>
                 </div>
-                {latestRefund ? (
+                {activeRefund ? (
                   <div className={s.agentCaptureCard}>
                     <p className={s.agentCaptureBanner}>PayPal refund payment · COMPLETED</p>
                     <p className={s.description} style={{ margin: 0 }}>
-                      {latestRefund.disputeId}
-                      {latestRefund.amount ? ` · $${latestRefund.amount}` : ""}
-                      {latestRefund.acceptApprovedBy ? ` · ${latestRefund.acceptApprovedBy}` : ""}
+                      {activeRefund.disputeId}
+                      {activeRefund.amount ? ` · $${activeRefund.amount}` : ""}
+                      {activeRefund.acceptApprovedBy ? ` · ${activeRefund.acceptApprovedBy}` : ""}
                     </p>
                   </div>
                 ) : (
-                  <p className={s.tableNote}>After Seller accepts, a PayPal refund payment appears here (Refresh or wait ~4s).</p>
+                  <p className={s.tableNote}>
+                    Stays <strong>Pending</strong> until the Seller accepts this claim on the Seller desk.
+                  </p>
                 )}
               </div>
             </div>
@@ -614,11 +627,11 @@ export function DisputePanel({
               </div>
             )}
 
-            {openItems.length === 0 && inboundPhase === "idle" && !caseText && !latestRefund && (
+            {openItems.length === 0 && inboundPhase === "idle" && !caseText && !activeRefund && (
               <div className={s.empty}>
                 <span className={s.emptyIcon}><UserRound size={26} /></span>
                 <h3>No open disputes</h3>
-                <p>After capture: Dispute? Yes → Raise with PayPal. No or 48h → healthy.</p>
+                <p>After capture: Satisfied / Leave open / Raise with PayPal.</p>
               </div>
             )}
           </div>
@@ -629,7 +642,7 @@ export function DisputePanel({
         open={closedOpen}
         setOpen={setClosedOpen}
         items={closedItems}
-        emptyHint="PayPal refund payments appear here after Seller accepts."
+        emptyHint="Past PayPal refunds appear here after Seller accepts."
         buyerView
       />
 
