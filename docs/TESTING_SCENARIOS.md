@@ -139,14 +139,18 @@ Buyer / Supervisor desk          PayPal            Seller desk (separate app chr
 
 ## Then — “Pay the supplier invoice” (Payables)
 
-**Goal:** AP track after the buying stories.
+**Goal:** AP track — three intake paths, one extract → match → payout.
 
 1. Open **Payables**.  
-2. Keep (or paste) the sample invoice text → **Extract invoice**.  
-3. Set PO and receipt amounts to the **same** invoice amount → **Match**.  
-4. When matched, optionally run **Payout** to the sandbox seller email.  
-5. Optional: create/send a **client invoice**.  
-6. Optional: **Automation** → paste a public invoice page URL → **Fetch page text** (loads Payables for extract).
+2. Pick an intake channel:
+   - **Storage vault** → Agent read & extract a demo PDF  
+   - **From email** → Simulate supplier invoice email (~3s) → auto extract  
+   - **Upload PDF** → Choose a file (or paste text)  
+3. Set PO and receipt to the **same** invoice amount → **Match**.  
+4. When MATCHED → **Payout**.  
+5. Optional: **Client invoice** via Toolkit.  
+
+**Render note:** PDF bytes are not kept on disk (ephemeral FS). Demo vault + extract results live in the API/Postgres. Real Azure Blob/S3 can replace the vault later.
 
 **You should see:** Extracted vendor/amount → **MATCHED** → payout available when matched.
 

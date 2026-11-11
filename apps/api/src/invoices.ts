@@ -15,8 +15,71 @@ import {
 import { paypalRequest } from "paypal";
 import { parseToolJson, runPayPalTool } from "./paypal-toolkit";
 import { assertDemoAmount } from "./demo-cap";
+import {
+  INVOICE_STORAGE_SAMPLES,
+  buildSupplierInvoiceEmail,
+  getInvoiceSample,
+} from "./invoice-samples";
 
 export const invoicesRouter = Router();
+
+async function extractAndSaveInvoice(opts: {
+  ownerId: string;
+  text: string;
+  source: string;
+}) {
+  const extracted = await chat("extractor", [
+    {
+      role: "system",
+      content:
+        "Extract supplier invoice fields as JSON with keys: vendorName, invoiceNumber, currency, amount (number), dueDate (YYYY-MM-DD or null), lineItems (array of {description, quantity, unitPrice}), confidence (0-100). "
+        + "If unsure, lower confidence. No markdown.",
+    },
+    { role: "user", content: opts.text.slice(0, 12_000) },
+  ], { json: true, timeoutMs: 60_000 });
+
+  const parsed = JSON.parse(extracted.content) as {
+    vendorName?: string;
+    invoiceNumber?: string;
+    currency?: string;
+    amount?: number;
+    dueDate?: string | null;
+    lineItems?: unknown;
+    confidence?: number;
+  };
+
+  const confidence = Math.round(Number(parsed.confidence) || 0);
+  const amount = Number(parsed.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw Object.assign(new Error("Could not extract a positive amount"), { status: 422, raw: parsed });
+  }
+  const capped = assertDemoAmount(amount, "extracted invoice amount");
+  if (!capped.ok) {
+    throw Object.assign(new Error(capped.error ?? "Amount rejected"), {
+      status: 400,
+      hint: "Use a smaller invoice amount for this environment.",
+    });
+  }
+
+  const invoice = await saveSupplierInvoice({
+    id: randomUUID(),
+    ownerId: opts.ownerId,
+    source: opts.source,
+    vendorName: parsed.vendorName,
+    invoiceNumber: parsed.invoiceNumber,
+    currency: parsed.currency === "USD" ? "USD" : "USD",
+    amount,
+    dueDate: parsed.dueDate ?? undefined,
+    lineItems: parsed.lineItems,
+    confidence,
+    lowConfidence: confidence < 70,
+    rawText: opts.text.slice(0, 8000),
+    status: "EXTRACTED",
+    matchStatus: "UNMATCHED",
+  });
+
+  return { invoice, model: extracted.model };
+}
 
 function requireOwner(req: { header: (name: string) => string | undefined }): string | null {
   const ownerKey = process.env.OWNER_API_KEY;
@@ -107,6 +170,142 @@ invoicesRouter.get("/extracted", async (req, res) => {
   }
 });
 
+invoicesRouter.get("/storage", async (req, res) => {
+  const ownerId = requireOwner(req);
+  if (!ownerId) return res.sendStatus(404);
+  return res.json({
+    note: "Demo vault — PDF text layers shipped in the API (Render-safe; no ephemeral disk / Azure blob required).",
+    items: INVOICE_STORAGE_SAMPLES.map((doc) => ({
+      id: doc.id,
+      filename: doc.filename,
+      vendor: doc.vendor,
+      amountLabel: doc.amountLabel,
+      summary: doc.summary,
+    })),
+  });
+});
+
+invoicesRouter.post("/ingest/storage", async (req, res) => {
+  const ownerId = requireOwner(req);
+  if (!ownerId) return res.sendStatus(404);
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: "Database unavailable" });
+
+  const sampleId = typeof req.body?.sampleId === "string" ? req.body.sampleId.trim() : "";
+  const doc = getInvoiceSample(sampleId);
+  if (!doc) {
+    return res.status(404).json({ error: "Unknown storage document", hint: "GET /api/invoices/storage" });
+  }
+
+  try {
+    const result = await extractAndSaveInvoice({
+      ownerId,
+      text: doc.text,
+      source: `storage:${doc.filename}`,
+    });
+    return res.status(201).json({
+      ...result,
+      channel: "storage",
+      filename: doc.filename,
+      note: `Agent read ${doc.filename} from demo vault and extracted fields.`,
+    });
+  } catch (err) {
+    const status = typeof (err as { status?: number })?.status === "number"
+      ? (err as { status: number }).status
+      : 500;
+    console.error("[invoices] storage ingest failed", err);
+    return res.status(status).json({
+      error: err instanceof Error ? err.message : String(err),
+      hint: (err as { hint?: string })?.hint,
+      raw: (err as { raw?: unknown })?.raw,
+    });
+  }
+});
+
+invoicesRouter.post("/ingest/email", async (req, res) => {
+  const ownerId = requireOwner(req);
+  if (!ownerId) return res.sendStatus(404);
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: "Database unavailable" });
+
+  const sampleId = typeof req.body?.sampleId === "string" && req.body.sampleId.trim()
+    ? req.body.sampleId.trim()
+    : INVOICE_STORAGE_SAMPLES[0]?.id;
+  const doc = sampleId ? getInvoiceSample(sampleId) : undefined;
+  if (!doc) return res.status(404).json({ error: "No invoice sample for email demo" });
+
+  const emailText = buildSupplierInvoiceEmail(doc);
+  try {
+    const result = await extractAndSaveInvoice({
+      ownerId,
+      text: emailText,
+      source: `email:${doc.filename}`,
+    });
+    return res.status(201).json({
+      ...result,
+      channel: "email",
+      filename: doc.filename,
+      emailText,
+      note: `Supplier email received with ${doc.filename} — agent extracted invoice fields.`,
+    });
+  } catch (err) {
+    const status = typeof (err as { status?: number })?.status === "number"
+      ? (err as { status: number }).status
+      : 500;
+    console.error("[invoices] email ingest failed", err);
+    return res.status(status).json({
+      error: err instanceof Error ? err.message : String(err),
+      emailText,
+      hint: (err as { hint?: string })?.hint,
+    });
+  }
+});
+
+invoicesRouter.post("/ingest/upload", async (req, res) => {
+  const ownerId = requireOwner(req);
+  if (!ownerId) return res.sendStatus(404);
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: "Database unavailable" });
+
+  const filename = typeof req.body?.filename === "string" ? req.body.filename.trim() : "upload.pdf";
+  let text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+
+  // Binary PDFs on Render: map to a vault sample by name, or default first sample.
+  if (!text) {
+    const matched = INVOICE_STORAGE_SAMPLES.find(
+      (doc) => doc.filename.toLowerCase() === filename.toLowerCase()
+        || filename.toLowerCase().includes(doc.id.replace("inv-", "")),
+    ) ?? INVOICE_STORAGE_SAMPLES[0];
+    if (!matched) {
+      return res.status(400).json({ error: "No text and no demo PDF mapping available" });
+    }
+    text = matched.text;
+  }
+  if (text.length > 20_000) {
+    return res.status(400).json({ error: "text must be ≤20000 characters" });
+  }
+
+  try {
+    const result = await extractAndSaveInvoice({
+      ownerId,
+      text,
+      source: `upload:${filename}`,
+    });
+    return res.status(201).json({
+      ...result,
+      channel: "upload",
+      filename,
+      note: `Agent read uploaded ${filename} and extracted fields.`,
+    });
+  } catch (err) {
+    const status = typeof (err as { status?: number })?.status === "number"
+      ? (err as { status: number }).status
+      : 500;
+    console.error("[invoices] upload ingest failed", err);
+    return res.status(status).json({
+      error: err instanceof Error ? err.message : String(err),
+      hint: (err as { hint?: string })?.hint,
+    });
+  }
+});
+
 invoicesRouter.post("/extract", async (req, res) => {
   const ownerId = requireOwner(req);
   if (!ownerId) return res.sendStatus(404);
@@ -118,57 +317,22 @@ invoicesRouter.post("/extract", async (req, res) => {
   }
 
   try {
-    const extracted = await chat("extractor", [
-      {
-        role: "system",
-        content:
-          "Extract supplier invoice fields as JSON with keys: vendorName, invoiceNumber, currency, amount (number), dueDate (YYYY-MM-DD or null), lineItems (array of {description, quantity, unitPrice}), confidence (0-100). "
-          + "If unsure, lower confidence. No markdown.",
-      },
-      { role: "user", content: text.slice(0, 12_000) },
-    ], { json: true, timeoutMs: 60_000 });
-
-    const parsed = JSON.parse(extracted.content) as {
-      vendorName?: string;
-      invoiceNumber?: string;
-      currency?: string;
-      amount?: number;
-      dueDate?: string | null;
-      lineItems?: unknown;
-      confidence?: number;
-    };
-
-    const confidence = Math.round(Number(parsed.confidence) || 0);
-    const amount = Number(parsed.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return res.status(422).json({ error: "Could not extract a positive amount", raw: parsed });
-    }
-    const capped = assertDemoAmount(amount, "extracted invoice amount");
-    if (!capped.ok) {
-      return res.status(400).json({ error: capped.error, hint: "Use a smaller invoice amount for this environment." });
-    }
-
-    const invoice = await saveSupplierInvoice({
-      id: randomUUID(),
+    const result = await extractAndSaveInvoice({
       ownerId,
+      text,
       source: "llm-extract",
-      vendorName: parsed.vendorName,
-      invoiceNumber: parsed.invoiceNumber,
-      currency: parsed.currency === "USD" ? "USD" : "USD",
-      amount,
-      dueDate: parsed.dueDate ?? undefined,
-      lineItems: parsed.lineItems,
-      confidence,
-      lowConfidence: confidence < 70,
-      rawText: text.slice(0, 8000),
-      status: "EXTRACTED",
-      matchStatus: "UNMATCHED",
     });
-
-    return res.status(201).json({ invoice, model: extracted.model });
+    return res.status(201).json(result);
   } catch (err) {
+    const status = typeof (err as { status?: number })?.status === "number"
+      ? (err as { status: number }).status
+      : 500;
     console.error("[invoices] extract failed", err);
-    return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    return res.status(status).json({
+      error: err instanceof Error ? err.message : String(err),
+      hint: (err as { hint?: string })?.hint,
+      raw: (err as { raw?: unknown })?.raw,
+    });
   }
 });
 

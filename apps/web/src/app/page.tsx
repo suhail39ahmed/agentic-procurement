@@ -2304,7 +2304,7 @@ export default function Dashboard() {
 
                     <strong>What to click — payables &amp; automation</strong>
                     <ol>
-                      <li><em>Payables</em> → Extract → Match → optional Payout.</li>
+                      <li><em>Payables</em> → Upload / Email / Storage vault → Match → Payout.</li>
                       <li><em>Automation</em> → KERNEL URL → Fetch page text. Stretch tools optional.</li>
                     </ol>
 
@@ -2366,7 +2366,7 @@ export default function Dashboard() {
             <div className={s.previewNotice}>
               <ShieldCheck size={17} />
               <p>
-                Payables track — extract supplier invoices, three-way match, payout, client invoice. Separate from marketplace Requests.
+                Payables track — ingest via Upload PDF, supplier email, or storage vault → match → payout.
               </p>
             </div>
           )}
@@ -2402,11 +2402,11 @@ export default function Dashboard() {
               >
                 <span className={s.iconTile}><Wallet size={20} /></span>
                 <h3>2 · Payables agent</h3>
-                <p>Read supplier invoices, three-way match, payout suppliers, invoice clients, handle disputes.</p>
+                <p>Upload PDF, email, or storage vault → extract → match → payout.</p>
                 <ul className={s.trackSteps}>
-                  <li><ArrowRight size={12} aria-hidden /> Extract the $1.50 sample invoice</li>
+                  <li><ArrowRight size={12} aria-hidden /> Intake via Upload / Email / Storage</li>
                   <li><ArrowRight size={12} aria-hidden /> Match PO + receipt → payout</li>
-                  <li><ArrowRight size={12} aria-hidden /> Capture → buyer dispute inbox → Supervisor accept</li>
+                  <li><ArrowRight size={12} aria-hidden /> Optional client invoice via Toolkit</li>
                 </ul>
                 <span className={s.trackCta}>
                   <span className={s.trackRadio} aria-hidden />
@@ -2919,7 +2919,7 @@ export default function Dashboard() {
                 onKernelInvoiceText={(text) => {
                   setPayablesSeed(text);
                   setView("Payables");
-                  setNotice("KERNEL page text loaded in Payables — click Extract invoice.");
+                  setNotice("KERNEL page text loaded in Payables — use Upload → Extract pasted text.");
                 }}
               />
             </>

@@ -80,11 +80,11 @@ Negative case:
 
 ## 5b. Payables agent (UI)
 
-- [ ] **Payables** → extract sample $1.50 invoice text
-- [ ] Match with PO/receipt `$1.50` → MATCHED
+- [ ] **Payables** intake: Storage vault / Email / Upload PDF → extract
+- [ ] Match with PO/receipt ≈ invoice → MATCHED
 - [ ] Payout to sandbox seller email
 - [ ] Create & send client invoice `$1.50`
-- [ ] Disputes: capture/Replay buyer claim → inbox email (~4s) → agent captures fields → draft → Supervisor accept
+- [ ] Marketplace Disputes: Raise with PayPal → Seller accept → refund payment
 
 ## 5c. PayPal Agent Toolkit surfaces
 
